@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+:root {
+  --background: oklch(0.16 0.015 258);
+  --foreground: oklch(0.95 0.01 255);
+  --card: oklch(0.22 0.015 258);
+  --card-foreground: oklch(0.95 0.01 255);
+  --primary: oklch(0.72 0.12 245);
+  --primary-foreground: oklch(0.18 0.01 258);
+  --secondary: oklch(0.29 0.013 258);
+  --secondary-foreground: oklch(0.92 0.01 255);
+  --muted: oklch(0.27 0.01 258);
+  --muted-foreground: oklch(0.75 0.01 255);
+  --border: oklch(0.35 0.01 258);
+  --ring: oklch(0.52 0.17 259);
+  --radius: 0.65rem;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --background: oklch(0.98 0.004 255);
+  --foreground: oklch(0.2 0.02 257);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.02 257);
+  --primary: oklch(0.52 0.17 259);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.93 0.01 255);
+  --secondary-foreground: oklch(0.3 0.02 257);
+  --muted: oklch(0.94 0.008 255);
+  --muted-foreground: oklch(0.45 0.02 257);
+  --border: oklch(0.86 0.01 255);
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), sans-serif;
+}
+
+* {
+  border-color: var(--border);
+}
+
+input,
+textarea,
+select {
+  background: var(--card);
+  color: var(--card-foreground);
+}

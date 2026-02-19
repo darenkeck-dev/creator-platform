@@ -37,12 +37,12 @@ apps/
 infra/
   cdk/                # AWS CDK stacks
 packages/
-  shared/             # shared types/constants
+  contracts/          # shared schemas/types/contracts
 ```
 
 Tasks:
 
-- [x] Initialize repo and create folders: `apps/web`, `infra/cdk`, `packages/shared`
+- [x] Initialize repo and create folders: `apps/web`, `infra/cdk`, `packages/contracts`
 - [x] Create root `package.json` with:
   - [x] `workspaces: ["apps/*", "infra/*", "packages/*"]`
   - [x] scripts: `dev`, `build`, `lint`, `typecheck` (all via `turbo run ...`)
@@ -59,7 +59,7 @@ Tasks:
   - [x] `.prettierrc`
   - [x] `.prettierignore`
 - [x] Add `.env.example` at repo root with shared vars placeholder
-- [ ] Run `bun install` and confirm `bun.lock` is generated and committed (blocked here: `bun` not installed in this shell)
+- [x] Run `bun install` and confirm `bun.lock` is generated and committed
 
 Done when:
 
@@ -73,17 +73,17 @@ Done when:
 
 Tasks:
 
-- [ ] Create Next.js app in `apps/web` (TypeScript + App Router)
-- [ ] Ensure `apps/web/package.json` scripts exist: `dev`, `build`, `lint`, `typecheck`
-- [ ] Install and initialize shadcn/ui in `apps/web`
-- [ ] Configure Tailwind and `components.json`
-- [ ] Add baseline UI shell (`Header`, page container, navigation)
-- [ ] Create base routes:
+- [x] Create Next.js app in `apps/web` (TypeScript + App Router)
+- [x] Ensure `apps/web/package.json` scripts exist: `dev`, `build`, `lint`, `typecheck`
+- [x] Install and initialize shadcn/ui in `apps/web`
+- [x] Configure Tailwind and `components.json`
+- [x] Add baseline UI shell (`Header`, page container, navigation)
+- [x] Create base routes:
   - `/login`
   - `/library`
   - `/upload`
   - `/asset/[id]`
-- [ ] Add placeholder route guards/middleware stub for protected pages
+- [x] Add placeholder route guards/middleware stub for protected pages
 
 Done when:
 
@@ -93,24 +93,24 @@ Done when:
 
 ---
 
-## 0.3 Shared Package + Infra Workspace Wiring
+## 0.3 Contracts Package + Infra Workspace Wiring
 
 Tasks:
 
-- [ ] Initialize `packages/shared` with `package.json`, `tsconfig.json`, and `src/index.ts`
-- [ ] Add initial shared exports:
-  - [ ] `AssetType` enum/union (`video | audio | image`)
-  - [ ] basic asset status constants (`draft`, `uploaded`, `processing`, `ready`, `error`)
-- [ ] Initialize `infra/cdk` workspace with `package.json` and TypeScript config
-- [ ] Ensure `infra/cdk` has scripts: `build`, `typecheck`, `synth`
-- [ ] Add workspace dependency usage test:
-  - [ ] import one type from `packages/shared` in `apps/web`
-  - [ ] import one type from `packages/shared` in `infra/cdk`
+- [x] Initialize `packages/contracts` with `package.json`, `tsconfig.json`, and `src/index.ts`
+- [x] Add initial shared exports:
+  - [x] `AssetType` enum/union (`video | audio | image`)
+  - [x] basic asset status constants (`draft`, `uploaded`, `processing`, `ready`, `error`)
+- [x] Initialize `infra/cdk` workspace with `package.json` and TypeScript config
+- [x] Ensure `infra/cdk` has scripts: `build`, `typecheck`, `synth`
+- [x] Add workspace dependency usage test:
+  - [x] import one type from `packages/contracts` in `apps/web`
+  - [x] import one type from `packages/contracts` in `infra/cdk`
 
 Done when:
 
 - `bun run typecheck` validates shared imports in both app and infra workspaces
-- `bun run build --filter=shared` succeeds
+- `bun run build --filter=@media-manager/contracts` succeeds
 
 ---
 

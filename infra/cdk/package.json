@@ -2,9 +2,13 @@
   "name": "cdk",
   "private": true,
   "version": "0.0.0",
+  "dependencies": {
+    "@media-manager/contracts": "workspace:*"
+  },
   "scripts": {
     "build": "bunx tsc -p tsconfig.json",
-    "lint": "bunx eslint .",
-    "typecheck": "bunx tsc -p tsconfig.json"
+    "lint": "bunx prettier --check \"src/**/*.ts\"",
+    "typecheck": "bunx tsc -p tsconfig.json",
+    "synth": "bunx cdk synth"
   }
 }

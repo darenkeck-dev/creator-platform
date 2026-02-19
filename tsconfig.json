@@ -8,7 +8,7 @@
       "path": "./infra/cdk"
     },
     {
-      "path": "./packages/shared"
+      "path": "./packages/contracts"
     }
   ]
 }
