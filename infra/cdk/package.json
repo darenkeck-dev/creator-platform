@@ -1,0 +1,10 @@
+{
+  "name": "cdk",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "build": "bunx tsc -p tsconfig.json",
+    "lint": "bunx eslint .",
+    "typecheck": "bunx tsc -p tsconfig.json"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "web",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "bun --watch src/dev.ts",
+    "build": "bunx tsc -p tsconfig.json",
+    "lint": "bunx eslint .",
+    "typecheck": "bunx tsc -p tsconfig.json"
+  }
+}

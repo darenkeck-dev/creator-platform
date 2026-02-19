@@ -1,0 +1,14 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./apps/web"
+    },
+    {
+      "path": "./infra/cdk"
+    },
+    {
+      "path": "./packages/shared"
+    }
+  ]
+}
