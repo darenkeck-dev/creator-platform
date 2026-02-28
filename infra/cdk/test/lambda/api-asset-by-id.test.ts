@@ -1,0 +1,676 @@
+/// <reference types="bun-types" />
+
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import {
+  DynamoDBDocumentClient,
+  DeleteCommand,
+  GetCommand,
+  QueryCommand,
+  UpdateCommand,
+} from "@aws-sdk/lib-dynamodb";
+import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
+  DeleteObjectCommand,
+  DeleteObjectsCommand,
+  HeadObjectCommand,
+  ListObjectsV2Command,
+  S3Client,
+} from "@aws-sdk/client-s3";
+
+import { handler } from "../../lambda/api-asset-by-id";
+
+type HttpEvent = {
+  requestContext?: {
+    http?: { method?: string };
+    routeKey?: string;
+    authorizer?: {
+      jwt?: {
+        claims?: Record<string, string>;
+      };
+    };
+  };
+  pathParameters?: {
+    id?: string;
+  };
+  body?: string | null;
+};
+
+const originalTableName = process.env.ASSETS_TABLE_NAME;
+const originalOriginalsBucketName = process.env.ASSETS_ORIGINALS_BUCKET_NAME;
+const originalDerivedBucketName = process.env.ASSETS_DERIVED_BUCKET_NAME;
+const originalAwsRegion = process.env.AWS_REGION;
+const originalAwsAccessKeyId = process.env.AWS_ACCESS_KEY_ID;
+const originalAwsSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+const originalDdbSend = DynamoDBDocumentClient.prototype.send;
+const originalS3Send = S3Client.prototype.send;
+
+function parseBody(result: { statusCode: number; body: string }): unknown {
+  return JSON.parse(result.body);
+}
+
+function withOwnerClaims(event: HttpEvent, email = "owner@example.com"): HttpEvent {
+  return {
+    ...event,
+    requestContext: {
+      ...event.requestContext,
+      authorizer: {
+        jwt: {
+          claims: {
+            email,
+          },
+        },
+      },
+    },
+  };
+}
+
+function validAsset(id: string) {
+  return {
+    id,
+    schemaVersion: 1,
+    ownerEmail: "owner@example.com",
+    type: "video",
+    title: "Title",
+    description: "Desc",
+    status: "draft",
+    original: {
+      bucket: "media-originals-test",
+      key: `incoming/${id}`,
+      size: 42,
+      contentType: "video/mp4",
+    },
+    tags: [],
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+}
+
+function stubDdbSend(
+  impl: (
+    command: GetCommand | UpdateCommand | QueryCommand | DeleteCommand
+  ) => Promise<Record<string, unknown>>
+): { calls: Array<GetCommand | UpdateCommand | QueryCommand | DeleteCommand> } {
+  const calls: Array<GetCommand | UpdateCommand | QueryCommand | DeleteCommand> = [];
+
+  DynamoDBDocumentClient.prototype.send = async function (command: unknown) {
+    if (
+      !(command instanceof GetCommand) &&
+      !(command instanceof UpdateCommand) &&
+      !(command instanceof QueryCommand) &&
+      !(command instanceof DeleteCommand)
+    ) {
+      throw new Error("Unexpected command");
+    }
+
+    calls.push(command);
+    return impl(command);
+  } as typeof DynamoDBDocumentClient.prototype.send;
+
+  return { calls };
+}
+
+function stubS3Send(
+  impl: (
+    command:
+      | HeadObjectCommand
+      | DeleteObjectCommand
+      | ListObjectsV2Command
+      | DeleteObjectsCommand
+      | CreateMultipartUploadCommand
+      | CompleteMultipartUploadCommand
+      | AbortMultipartUploadCommand
+  ) => Promise<Record<string, unknown>>
+): {
+  calls: Array<
+    | HeadObjectCommand
+    | DeleteObjectCommand
+    | ListObjectsV2Command
+    | DeleteObjectsCommand
+    | CreateMultipartUploadCommand
+    | CompleteMultipartUploadCommand
+    | AbortMultipartUploadCommand
+  >;
+} {
+  const calls: Array<
+    | HeadObjectCommand
+    | DeleteObjectCommand
+    | ListObjectsV2Command
+    | DeleteObjectsCommand
+    | CreateMultipartUploadCommand
+    | CompleteMultipartUploadCommand
+    | AbortMultipartUploadCommand
+  > = [];
+
+  S3Client.prototype.send = async function (command: unknown) {
+    if (
+      !(command instanceof HeadObjectCommand) &&
+      !(command instanceof DeleteObjectCommand) &&
+      !(command instanceof ListObjectsV2Command) &&
+      !(command instanceof DeleteObjectsCommand) &&
+      !(command instanceof CreateMultipartUploadCommand) &&
+      !(command instanceof CompleteMultipartUploadCommand) &&
+      !(command instanceof AbortMultipartUploadCommand)
+    ) {
+      throw new Error("Unexpected S3 command");
+    }
+
+    calls.push(command);
+    return impl(command);
+  } as typeof S3Client.prototype.send;
+
+  return { calls };
+}
+
+describe("api-asset-by-id lambda", () => {
+  beforeEach(() => {
+    process.env.ASSETS_TABLE_NAME = "Assets";
+    process.env.ASSETS_ORIGINALS_BUCKET_NAME = "media-originals-test";
+    process.env.ASSETS_DERIVED_BUCKET_NAME = "media-derived-test";
+    process.env.AWS_REGION = "us-west-2";
+    process.env.AWS_ACCESS_KEY_ID = "test-access-key";
+    process.env.AWS_SECRET_ACCESS_KEY = "test-secret-key";
+  });
+
+  afterEach(() => {
+    DynamoDBDocumentClient.prototype.send = originalDdbSend;
+    S3Client.prototype.send = originalS3Send;
+
+    if (originalTableName === undefined) {
+      delete process.env.ASSETS_TABLE_NAME;
+    } else {
+      process.env.ASSETS_TABLE_NAME = originalTableName;
+    }
+
+    if (originalOriginalsBucketName === undefined) {
+      delete process.env.ASSETS_ORIGINALS_BUCKET_NAME;
+    } else {
+      process.env.ASSETS_ORIGINALS_BUCKET_NAME = originalOriginalsBucketName;
+    }
+
+    if (originalDerivedBucketName === undefined) {
+      delete process.env.ASSETS_DERIVED_BUCKET_NAME;
+    } else {
+      process.env.ASSETS_DERIVED_BUCKET_NAME = originalDerivedBucketName;
+    }
+
+    if (originalAwsRegion === undefined) {
+      delete process.env.AWS_REGION;
+    } else {
+      process.env.AWS_REGION = originalAwsRegion;
+    }
+
+    if (originalAwsAccessKeyId === undefined) {
+      delete process.env.AWS_ACCESS_KEY_ID;
+    } else {
+      process.env.AWS_ACCESS_KEY_ID = originalAwsAccessKeyId;
+    }
+
+    if (originalAwsSecretAccessKey === undefined) {
+      delete process.env.AWS_SECRET_ACCESS_KEY;
+    } else {
+      process.env.AWS_SECRET_ACCESS_KEY = originalAwsSecretAccessKey;
+    }
+  });
+
+  it("returns asset for GET /assets/{id}", async () => {
+    const { calls } = stubDdbSend(async (command) => {
+      if (!(command instanceof GetCommand)) {
+        throw new Error("Expected GetCommand");
+      }
+
+      return { Item: validAsset("asset-1") };
+    });
+
+    const result = await handler({
+      requestContext: { http: { method: "GET" } },
+      pathParameters: { id: "asset-1" },
+    });
+
+    expect(result.statusCode).toBe(200);
+    const body = parseBody(result) as { asset: { id: string } };
+    expect(body.asset.id).toBe("asset-1");
+    expect(calls).toHaveLength(1);
+  });
+
+  it("includes stream info for GET /assets/{id}", async () => {
+    stubDdbSend(async (command) => {
+      if (!(command instanceof GetCommand)) {
+        throw new Error("Expected GetCommand");
+      }
+
+      return {
+        Item: {
+          ...validAsset("asset-stream-1"),
+          status: "ready",
+          stream: {
+            hlsMasterUrl: "https://cdn.example.com/derived/asset-stream-1/hls/master.m3u8",
+            posterUrl: "https://cdn.example.com/derived/asset-stream-1/thumbs/poster.jpg",
+          },
+        },
+      };
+    });
+
+    const result = await handler({
+      requestContext: { http: { method: "GET" } },
+      pathParameters: { id: "asset-stream-1" },
+    });
+
+    expect(result.statusCode).toBe(200);
+    const body = parseBody(result) as {
+      asset: {
+        stream?: {
+          hlsMasterUrl?: string;
+        };
+      };
+    };
+    expect(body.asset.stream?.hlsMasterUrl).toBe(
+      "https://cdn.example.com/derived/asset-stream-1/hls/master.m3u8"
+    );
+  });
+
+  it("patches asset fields on PATCH /assets/{id}", async () => {
+    const { calls } = stubDdbSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return { Item: validAsset("asset-9") };
+      }
+
+      if (!(command instanceof UpdateCommand)) {
+        throw new Error("Expected UpdateCommand");
+      }
+
+      return {
+        Attributes: {
+          ...validAsset("asset-9"),
+          title: "Updated",
+          tags: [{ facet: "campaign", value: "launch", weight: "strong", source: "user" }],
+        },
+      };
+    });
+
+    const result = await handler({
+      requestContext: { http: { method: "PATCH" } },
+      pathParameters: { id: "asset-9" },
+      body: JSON.stringify({ title: "Updated", tags: [{ facet: "campaign", value: "launch" }] }),
+    });
+
+    expect(result.statusCode).toBe(200);
+    const body = parseBody(result) as { asset: { title: string } };
+    expect(body.asset.title).toBe("Updated");
+    expect(calls).toHaveLength(2);
+  });
+
+  it("returns pre-signed URL for POST /assets/{id}/upload-url without marking uploaded", async () => {
+    const { calls } = stubDdbSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return { Item: validAsset("asset-5") };
+      }
+
+      if (!(command instanceof UpdateCommand)) {
+        throw new Error("Expected UpdateCommand");
+      }
+
+      expect(command.input.ExpressionAttributeValues?.[":status"]).toBe("draft");
+      return {
+        Attributes: {
+          ...validAsset("asset-5"),
+          updatedAt: "2026-01-02T00:00:00.000Z",
+        },
+      };
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: {
+          http: { method: "POST" },
+          routeKey: "POST /assets/{id}/upload-url",
+        },
+        pathParameters: { id: "asset-5" },
+        body: JSON.stringify({ contentType: "video/mp4" }),
+      })
+    );
+
+    expect(result.statusCode).toBe(200);
+    const body = parseBody(result) as { uploadUrl: string; expiresIn: number };
+    expect(body.uploadUrl).toContain("media-originals-test");
+    expect(body.expiresIn).toBe(900);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("returns pre-signed playback URL for GET /assets/{id}/playback-url", async () => {
+    const { calls } = stubDdbSend(async (command) => {
+      if (!(command instanceof GetCommand)) {
+        throw new Error("Expected GetCommand");
+      }
+
+      return { Item: validAsset("asset-playback-1") };
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: {
+          http: { method: "GET" },
+          routeKey: "GET /assets/{id}/playback-url",
+        },
+        pathParameters: { id: "asset-playback-1" },
+      })
+    );
+
+    expect(result.statusCode).toBe(200);
+    const body = parseBody(result) as {
+      playbackUrl: string;
+      contentType: string;
+      id: string;
+    };
+    expect(body.playbackUrl).toContain("X-Amz-Signature");
+    expect(body.contentType).toBe("video/mp4");
+    expect(body.id).toBe("asset-playback-1");
+    expect(calls).toHaveLength(1);
+  });
+
+  it("initializes multipart upload and returns upload id", async () => {
+    const s3 = stubS3Send(async (command) => {
+      if (!(command instanceof CreateMultipartUploadCommand)) {
+        throw new Error("Expected CreateMultipartUploadCommand");
+      }
+
+      return { UploadId: "upload-123" };
+    });
+
+    const ddb = stubDdbSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return { Item: validAsset("asset-mp-1") };
+      }
+
+      if (!(command instanceof UpdateCommand)) {
+        throw new Error("Expected UpdateCommand");
+      }
+
+      return {
+        Attributes: {
+          ...validAsset("asset-mp-1"),
+          updatedAt: "2026-01-02T00:00:00.000Z",
+        },
+      };
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: {
+          http: { method: "POST" },
+          routeKey: "POST /assets/{id}/multipart/init",
+        },
+        pathParameters: { id: "asset-mp-1" },
+        body: JSON.stringify({ contentType: "video/mp4" }),
+      })
+    );
+
+    expect(result.statusCode).toBe(200);
+    const body = parseBody(result) as { uploadId: string; partSize: number };
+    expect(body.uploadId).toBe("upload-123");
+    expect(body.partSize).toBe(32 * 1024 * 1024);
+    expect(ddb.calls).toHaveLength(2);
+    expect(s3.calls).toHaveLength(1);
+  });
+
+  it("signs multipart part URL", async () => {
+    const { calls } = stubDdbSend(async (command) => {
+      if (!(command instanceof GetCommand)) {
+        throw new Error("Expected GetCommand");
+      }
+
+      return { Item: validAsset("asset-mp-2") };
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: {
+          http: { method: "POST" },
+          routeKey: "POST /assets/{id}/multipart/sign",
+        },
+        pathParameters: { id: "asset-mp-2" },
+        body: JSON.stringify({ uploadId: "upload-xyz", partNumber: 1 }),
+      })
+    );
+
+    expect(result.statusCode).toBe(200);
+    const body = parseBody(result) as { uploadUrl: string; partNumber: number };
+    expect(body.uploadUrl).toContain("X-Amz-Signature");
+    expect(body.partNumber).toBe(1);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("completes multipart upload and marks uploaded", async () => {
+    const s3 = stubS3Send(async (command) => {
+      if (command instanceof CompleteMultipartUploadCommand) {
+        return {};
+      }
+
+      if (command instanceof HeadObjectCommand) {
+        return {
+          ContentLength: 123456789,
+          ContentType: "video/mp4",
+        };
+      }
+
+      throw new Error("Unexpected S3 command");
+    });
+
+    const ddb = stubDdbSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return { Item: validAsset("asset-mp-3") };
+      }
+
+      if (!(command instanceof UpdateCommand)) {
+        throw new Error("Expected UpdateCommand");
+      }
+
+      return {
+        Attributes: {
+          ...validAsset("asset-mp-3"),
+          status: "uploaded",
+          original: {
+            ...validAsset("asset-mp-3").original,
+            size: 123456789,
+            contentType: "video/mp4",
+          },
+        },
+      };
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: {
+          http: { method: "POST" },
+          routeKey: "POST /assets/{id}/multipart/complete",
+        },
+        pathParameters: { id: "asset-mp-3" },
+        body: JSON.stringify({
+          uploadId: "upload-final",
+          parts: [
+            { partNumber: 1, etag: "etag-1" },
+            { partNumber: 2, etag: "etag-2" },
+          ],
+        }),
+      })
+    );
+
+    expect(result.statusCode).toBe(200);
+    const body = parseBody(result) as { asset: { status: string } };
+    expect(body.asset.status).toBe("uploaded");
+    expect(ddb.calls.length).toBeGreaterThanOrEqual(2);
+    expect(s3.calls.some((command) => command instanceof CompleteMultipartUploadCommand)).toBe(
+      true
+    );
+  });
+
+  it("aborts multipart upload", async () => {
+    const s3 = stubS3Send(async (command) => {
+      if (!(command instanceof AbortMultipartUploadCommand)) {
+        throw new Error("Expected AbortMultipartUploadCommand");
+      }
+
+      return {};
+    });
+
+    const ddb = stubDdbSend(async (command) => {
+      if (!(command instanceof GetCommand)) {
+        throw new Error("Expected GetCommand");
+      }
+
+      return { Item: validAsset("asset-mp-4") };
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: {
+          http: { method: "POST" },
+          routeKey: "POST /assets/{id}/multipart/abort",
+        },
+        pathParameters: { id: "asset-mp-4" },
+        body: JSON.stringify({ uploadId: "upload-abort" }),
+      })
+    );
+
+    expect(result.statusCode).toBe(200);
+    const body = parseBody(result) as { aborted: boolean; uploadId: string };
+    expect(body.aborted).toBe(true);
+    expect(body.uploadId).toBe("upload-abort");
+    expect(ddb.calls).toHaveLength(1);
+    expect(s3.calls).toHaveLength(1);
+  });
+
+  it("confirms upload and marks asset uploaded", async () => {
+    stubS3Send(async (command) => {
+      if (!(command instanceof HeadObjectCommand)) {
+        throw new Error("Expected HeadObjectCommand");
+      }
+
+      return {
+        ContentLength: 6000000,
+        ContentType: "audio/mpeg",
+      };
+    });
+
+    const { calls } = stubDdbSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return { Item: validAsset("asset-6") };
+      }
+
+      if (!(command instanceof UpdateCommand)) {
+        throw new Error("Expected UpdateCommand");
+      }
+
+      expect(command.input.ExpressionAttributeValues?.[":status"]).toBe("uploaded");
+      expect(command.input.ExpressionAttributeValues?.[":size"]).toBe(6000000);
+      return {
+        Attributes: {
+          ...validAsset("asset-6"),
+          status: "uploaded",
+          original: {
+            ...validAsset("asset-6").original,
+            size: 6000000,
+            contentType: "audio/mpeg",
+          },
+        },
+      };
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: {
+          http: { method: "POST" },
+          routeKey: "POST /assets/{id}/upload-complete",
+        },
+        pathParameters: { id: "asset-6" },
+        body: "{}",
+      })
+    );
+
+    expect(result.statusCode).toBe(200);
+    const body = parseBody(result) as { asset: { status: string } };
+    expect(body.asset.status).toBe("uploaded");
+    expect(calls).toHaveLength(2);
+  });
+
+  it("deletes asset metadata and S3 objects for owner", async () => {
+    const s3 = stubS3Send(async (command) => {
+      if (command instanceof DeleteObjectCommand) {
+        return {};
+      }
+
+      if (command instanceof ListObjectsV2Command) {
+        return {
+          Contents: [{ Key: "derived/asset-7/hls/master.m3u8" }],
+          IsTruncated: false,
+        };
+      }
+
+      if (command instanceof DeleteObjectsCommand) {
+        return {};
+      }
+
+      throw new Error("Unexpected S3 command");
+    });
+
+    const ddb = stubDdbSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return { Item: validAsset("asset-7") };
+      }
+
+      if (command instanceof QueryCommand) {
+        return {
+          Items: [
+            { pk: "ASSET#asset-7", sk: "META" },
+            { pk: "ASSET#asset-7", sk: "TAG#campaign#launch" },
+          ],
+        };
+      }
+
+      if (command instanceof DeleteCommand) {
+        return {};
+      }
+
+      throw new Error("Unexpected DDB command");
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: { http: { method: "DELETE" } },
+        pathParameters: { id: "asset-7" },
+      })
+    );
+
+    expect(result.statusCode).toBe(200);
+    const body = parseBody(result) as { id: string; deleted: boolean };
+    expect(body.id).toBe("asset-7");
+    expect(body.deleted).toBe(true);
+    expect(ddb.calls.some((command) => command instanceof DeleteCommand)).toBe(true);
+    expect(s3.calls.some((command) => command instanceof DeleteObjectCommand)).toBe(true);
+  });
+
+  it("returns 403 when deleting non-owner asset", async () => {
+    stubDdbSend(async (command) => {
+      if (!(command instanceof GetCommand)) {
+        throw new Error("Expected GetCommand");
+      }
+
+      return {
+        Item: {
+          ...validAsset("asset-8"),
+          ownerEmail: "someone-else@example.com",
+        },
+      };
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: { http: { method: "DELETE" } },
+        pathParameters: { id: "asset-8" },
+      })
+    );
+
+    expect(result.statusCode).toBe(403);
+  });
+});
