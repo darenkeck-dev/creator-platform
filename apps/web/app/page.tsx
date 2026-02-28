@@ -1,5 +1,11 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-export default function Home() {
-  redirect("/library");
+import { AUTH_COOKIE_NAME } from "@/lib/auth";
+
+export default async function Home() {
+  const cookieStore = await cookies();
+  const isAuthenticated = Boolean(cookieStore.get(AUTH_COOKIE_NAME)?.value);
+
+  redirect(isAuthenticated ? "/library" : "/login");
 }

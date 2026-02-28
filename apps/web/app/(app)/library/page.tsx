@@ -1,36 +1,9 @@
-import {
-  AssetListResponseSchema,
-  type AssetListResponse,
-} from "@media-manager/contracts";
+import type { AssetListResponse } from "@media-manager/contracts";
 import Link from "next/link";
-import { headers } from "next/headers";
+import { fetchAssetsFromApi } from "@/lib/assets-api";
 
 async function fetchAssets(): Promise<AssetListResponse["assets"]> {
-  const headerStore = await headers();
-  const host = headerStore.get("host");
-  const protocol = headerStore.get("x-forwarded-proto") ?? "http";
-
-  if (!host) {
-    return [];
-  }
-
-  const response = await fetch(`${protocol}://${host}/api/assets`, {
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to load assets");
-  }
-
-  const json = (await response.json()) as unknown;
-  const parsed = AssetListResponseSchema.safeParse(json);
-
-  if (!parsed.success) {
-    throw new Error("Asset list response failed validation");
-  }
-
-  const data: AssetListResponse = parsed.data;
-  return data.assets;
+  return fetchAssetsFromApi();
 }
 
 export default async function LibraryPage() {
@@ -53,6 +26,9 @@ export default async function LibraryPage() {
               <h2 className="mt-2 text-base font-medium">{asset.title}</h2>
               <p className="mt-3 text-xs text-muted-foreground">ID: {asset.id}</p>
               <p className="mt-1 text-xs text-muted-foreground">Status: {asset.status}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Conversion: {(asset.conversion?.status ?? "not_started").replaceAll("_", " ")}
+              </p>
             </article>
           </Link>
         ))}

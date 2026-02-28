@@ -1,6 +1,8 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+import { AUTH_COOKIE_NAME } from "@/lib/auth";
+
 const protectedPaths = ["/library", "/upload", "/asset"];
 
 function isProtectedPath(pathname: string) {
@@ -17,7 +19,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const authToken = request.cookies.get("mm_auth_token")?.value;
+  const authToken = request.cookies.get(AUTH_COOKIE_NAME)?.value;
   if (authToken) {
     return NextResponse.next();
   }

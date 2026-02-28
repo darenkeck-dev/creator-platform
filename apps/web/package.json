@@ -2,6 +2,9 @@
   "name": "web",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22 <23"
+  },
   "scripts": {
     "dev": "bunx --bun next dev",
     "build": "bunx --bun next build",
@@ -10,9 +13,12 @@
     "typecheck": "bunx tsc --noEmit"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-select": "^2.2.6",
     "@media-manager/contracts": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "hls.js": "^1.6.10",
     "lucide-react": "^0.542.0",
     "next": "16.1.6",
     "react": "19.2.3",
