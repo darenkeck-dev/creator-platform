@@ -12,7 +12,19 @@
     "dev:web": "turbo run dev --filter=web",
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:infra": "bun run --cwd infra/cdk test",
+    "deploy:auth": "set -a && . ./.env && set +a && bun run --cwd infra/cdk deploy:auth",
+    "deploy:data": "set -a && . ./.env && set +a && bun run --cwd infra/cdk deploy:data",
+    "deploy:api": "set -a && . ./.env && set +a && bun run --cwd infra/cdk deploy:api",
+    "allowlist:add-email": "bun run --cwd infra/cdk allowlist:add-email",
+    "allowlist:remove-email": "bun run --cwd infra/cdk allowlist:remove-email",
+    "allowlist:add-domain": "bun run --cwd infra/cdk allowlist:add-domain",
+    "allowlist:remove-domain": "bun run --cwd infra/cdk allowlist:remove-domain"
+  },
+  "engines": {
+    "node": ">=22 <23"
   },
   "devDependencies": {
     "@eslint/js": "^9.22.0",

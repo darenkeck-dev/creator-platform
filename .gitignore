@@ -4,11 +4,16 @@ node_modules/
 dist/
 coverage/
 *.tsbuildinfo
+cdk.out/
+infra/cdk/.dist/
+infra/cdk/lambda-dist/
 
 .DS_Store
 
 .env
+.env.*
 .env.local
 .env.*.local
+!.env.example
 
 bun.lockb
