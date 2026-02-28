@@ -2,8 +2,12 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
-    "rootDir": "src",
-    "outDir": "dist"
+    "outDir": ".dist/cdk",
+    "rootDirs": ["bin", "lib", "src"],
+    "types": ["node"],
+    "noEmit": false,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext"
   },
-  "include": ["src"]
+  "include": ["bin/**/*.ts", "lib/**/*.ts", "src/**/*.ts"]
 }
