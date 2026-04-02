@@ -192,14 +192,12 @@ export function App() {
       <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(0,0,0,0.1),rgba(0,0,0,0.68))]" />
 
       <section className="relative z-20 mx-auto flex h-full w-full max-w-xl items-end py-4 sm:py-8">
-        <div
-          className={`glass-card rounded-2xl border transition-all duration-300 ease-in-out ${
-            isBulletinOpen
-              ? "w-full p-4 shadow-2xl shadow-black/35 sm:p-5"
-              : "w-auto p-2 shadow-none"
-          }`}
-        >
-          <div className="flex items-center justify-between">
+        <div className="w-full">
+          <div
+            className={`relative z-10 flex items-center justify-between px-1 transition-all duration-300 ease-in-out ${
+              isBulletinOpen ? "mb-1" : "mb-0 translate-y-1"
+            }`}
+          >
             <div className="relative inline-flex items-center">
               <img
                 alt="Daren Keck"
@@ -211,7 +209,7 @@ export function App() {
                 src="/images/written_title_700.webp"
               />
               <span
-                className="m-2 absolute inset-0 select-text text-transparent text-4xl text-center"
+                className="absolute inset-0 select-text text-transparent"
                 style={{ userSelect: "text" }}
               >
                 Daren Keck
@@ -219,7 +217,7 @@ export function App() {
             </div>
             <button
               aria-label={isBulletinOpen ? "Minimize bulletin" : "Maximize bulletin"}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/90 transition-all duration-200 ease-in-out hover:bg-black/50"
+              className="inline-flex h-8 w-8 items-center rounded-lg justify-center text-white transition-all duration-200 ease-in-out hover:bg-black/35"
               onClick={() => {
                 setIsBulletinOpen((previous) => !previous);
               }}
@@ -230,13 +228,13 @@ export function App() {
                 <svg
                   aria-hidden="true"
                   fill="none"
-                  height="16"
+                  height="20"
                   stroke="currentColor"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth="1.8"
                   viewBox="0 0 24 24"
-                  width="16"
+                  width="20"
                 >
                   <rect height="16" rx="2.5" width="16" x="4" y="4" />
                   <path d="M8 12h8" />
@@ -245,13 +243,13 @@ export function App() {
                 <svg
                   aria-hidden="true"
                   fill="none"
-                  height="16"
+                  height="20"
                   stroke="currentColor"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth="1.8"
                   viewBox="0 0 24 24"
-                  width="16"
+                  width="20"
                 >
                   <rect height="16" rx="2.5" width="16" x="4" y="4" />
                   <path d="M12 8v8" />
@@ -262,32 +260,40 @@ export function App() {
           </div>
 
           <div
-            className={`grid overflow-hidden transition-all duration-300 ease-in-out ${
-              isBulletinOpen ? "mt-4 grid-rows-[1fr] opacity-100" : "mt-0 grid-rows-[0fr] opacity-0"
+            className={`glass-card overflow-hidden border transition-all duration-300 ease-in-out ${
+              isBulletinOpen
+                ? "rounded-2xl p-4 shadow-2xl shadow-black/35 sm:p-5"
+                : "h-[2px] rounded-none border-x-0 border-b-0 p-0 shadow-none"
             }`}
           >
-            <div className="min-h-0 space-y-5">
-              <header className="space-y-2">
-                <h1 className="text-3xl font-bold text-white">Hey!</h1>
-                <p className="text-sm leading-relaxed text-white/85">
-                  This is my personal page. I program at DEPT and write music at Wayfarer Records!
+            <div
+              className={`grid overflow-hidden transition-all duration-300 ease-in-out ${
+                isBulletinOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+              }`}
+            >
+              <div className="min-h-0 space-y-5">
+                <header className="space-y-2">
+                  <h1 className="text-3xl font-bold text-white">Hey!</h1>
+                  <p className="text-sm leading-relaxed text-white/85">
+                    This is my personal page. I program at DEPT and write music at Wayfarer Records!
+                  </p>
+                  <p className="text-sm leading-relaxed text-white/80">
+                    I'll occasionally link up fun projects here as well.
+                  </p>
+                </header>
+                <BulletinSection items={bulletinItems} />
+                <LinksSection links={linkItems} />
+                {!slotAssignment ? (
+                  <p className="text-xs text-white/70">
+                    {comboLoading
+                      ? "Loading combo player..."
+                      : (comboError ?? "Combo playback unavailable. Set VITE_COMBO_API_BASE_URL.")}
+                  </p>
+                ) : null}
+                <p className="text-[11px] text-white/65">
+                  manager: {managerState} | slot: {slotState} | combos played: {combosPlayedCount}
                 </p>
-                <p className="text-sm leading-relaxed text-white/80">
-                  I'll occasionally link up fun projects here as well.
-                </p>
-              </header>
-              <BulletinSection items={bulletinItems} />
-              <LinksSection links={linkItems} />
-              {!slotAssignment ? (
-                <p className="text-xs text-white/70">
-                  {comboLoading
-                    ? "Loading combo player..."
-                    : (comboError ?? "Combo playback unavailable. Set VITE_COMBO_API_BASE_URL.")}
-                </p>
-              ) : null}
-              <p className="text-[11px] text-white/65">
-                manager: {managerState} | slot: {slotState} | combos played: {combosPlayedCount}
-              </p>
+              </div>
             </div>
           </div>
         </div>
