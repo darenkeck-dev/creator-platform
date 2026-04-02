@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 
 import { BulletinSection } from "./components/BulletinSection";
 import { LinksSection } from "./components/LinksSection";
-import { ProfileHeader } from "./components/ProfileHeader";
 import { SingleComboSlot } from "./components/SingleComboSlot";
 import {
   SingleSlotKey,
@@ -80,7 +79,7 @@ export function App() {
         },
         onCombosPlayedChange: setCombosPlayedCount,
         onDebug: (event, data) => {
-          console.log("[darenkeck-v2][SlotManager]", event, data ?? {});
+          console.log("[darenkeck][SlotManager]", event, data ?? {});
         },
       },
     });
@@ -201,7 +200,7 @@ export function App() {
           }`}
         >
           <div className="flex items-center justify-between gap-3">
-            <p className="text-xs uppercase tracking-[0.22em] text-white/75">darenkeck-v2</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-white/75">darenkeck</p>
             <button
               aria-label={isBulletinOpen ? "Minimize bulletin" : "Maximize bulletin"}
               className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/90 transition-all duration-200 ease-in-out hover:bg-black/50"

@@ -1,14 +1,24 @@
 # darenkeck
 
-Personal site app for the public landing page and combo-player-driven background experience.
+Frontend-only Vite + React + TypeScript app for the next version of the darenkeck landing page.
 
 ## Local development
 
-1. Copy `.env.example` to `.env.local` and fill values as needed.
-2. Run `bun run --cwd apps/darenkeck dev`.
+1. Create `apps/darenkeck/.env` with:
 
-## Scripts
+   ```bash
+   VITE_COMBO_API_BASE_URL=<your-api-base-url>
+   ```
 
-- `bun run --cwd apps/darenkeck dev`
-- `bun run --cwd apps/darenkeck build`
-- `bun run --cwd apps/darenkeck typecheck`
+2. Start dev server:
+
+   ```bash
+   bun run --cwd apps/darenkeck dev
+   ```
+
+## Dev proxy note (important)
+
+- In development, Vite proxies requests from `/public/*` to `VITE_COMBO_API_BASE_URL`.
+- This avoids browser CORS errors from `http://localhost:3002`.
+- This proxy behavior is **dev-only** and does not exist in production builds.
+- If you change `.env` or `vite.config.ts`, restart the dev server.
