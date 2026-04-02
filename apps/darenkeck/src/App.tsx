@@ -191,7 +191,7 @@ export function App() {
 
       <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(0,0,0,0.1),rgba(0,0,0,0.68))]" />
 
-      <section className="relative z-20 mx-auto flex h-full w-full max-w-xl items-end py-6 sm:py-8">
+      <section className="relative z-20 mx-auto flex h-full w-full max-w-xl items-end py-4 sm:py-8">
         <div
           className={`glass-card rounded-2xl border transition-all duration-300 ease-in-out ${
             isBulletinOpen
@@ -199,8 +199,24 @@ export function App() {
               : "w-auto p-2 shadow-none"
           }`}
         >
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs uppercase tracking-[0.22em] text-white/75">darenkeck</p>
+          <div className="flex items-center justify-between">
+            <div className="relative inline-flex items-center">
+              <img
+                alt="Daren Keck"
+                className="h-12 w-auto"
+                draggable={false}
+                onDragStart={(event) => {
+                  event.preventDefault();
+                }}
+                src="/images/written_title_700.webp"
+              />
+              <span
+                className="m-2 absolute inset-0 select-text text-transparent text-4xl text-center"
+                style={{ userSelect: "text" }}
+              >
+                Daren Keck
+              </span>
+            </div>
             <button
               aria-label={isBulletinOpen ? "Minimize bulletin" : "Maximize bulletin"}
               className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/90 transition-all duration-200 ease-in-out hover:bg-black/50"
