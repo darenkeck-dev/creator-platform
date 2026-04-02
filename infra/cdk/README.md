@@ -110,6 +110,7 @@ Creates:
 - `api-assets` Lambda (list/create assets).
 - `api-asset-by-id` Lambda (get/update/delete, upload URL, multipart, playback URL, upload-complete).
 - API Gateway HTTP API + JWT authorizer.
+- API Gateway access log group for the `$default` stage.
 - Route mappings for all `/assets` endpoints.
 
 Imports:
@@ -133,9 +134,20 @@ Creates:
 - MediaConvert service role.
 - `upload-trigger` Lambda (responds to original uploads, submits MediaConvert jobs or passthrough updates).
 - `mediaconvert-status` Lambda (updates asset status/stream metadata from MediaConvert events).
-- SQS queue for upload events.
+- SQS queue for upload events + DLQ.
 - EventBridge rule: S3 Object Created -> SQS.
 - EventBridge rule: MediaConvert state changes -> status updater Lambda.
+
+### `MediaManagerObservabilityStack` (`lib/observability-stack.ts`)
+
+Responsibility:
+
+- Cost and alerting baseline.
+
+Creates:
+
+- AWS Budget (monthly cost budget).
+- Email notification subscriber for budget threshold alerting.
 
 Imports:
 
@@ -154,4 +166,5 @@ Imports:
   5. `AuthStack`
   6. `ApiStack`
   7. `ProcessingStack`
+  8. `ObservabilityStack`
 - Project scripts in `infra/cdk/package.json` wrap these (for example `bun run deploy:api`).

@@ -26,7 +26,7 @@
   },
   "scripts": {
     "build": "bunx tsc -p tsconfig.json",
-    "build:lambda": "bunx esbuild lambda/pre-token-allowlist/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/pre-token-allowlist/index.js && bunx esbuild lambda/api-assets/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/api-assets/index.js && bunx esbuild lambda/api-asset-by-id/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/api-asset-by-id/index.js && bunx esbuild lambda/mediaconvert-status/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/mediaconvert-status/index.js && bunx esbuild lambda/upload-trigger/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/upload-trigger/index.js",
+    "build:lambda": "bunx esbuild lambda/pre-token-allowlist/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/pre-token-allowlist/index.js && bunx esbuild lambda/api-assets/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/api-assets/index.js && bunx esbuild lambda/api-asset-by-id/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/api-asset-by-id/index.js && bunx esbuild lambda/api-combos/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/api-combos/index.js && bunx esbuild lambda/mediaconvert-status/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/mediaconvert-status/index.js && bunx esbuild lambda/upload-trigger/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/upload-trigger/index.js",
     "lint": "bunx prettier --check \"{bin,lib,src,lambda}/**/*.ts\"",
     "typecheck": "bunx tsc -p tsconfig.json && bunx tsc -p lambda/tsconfig.json --noEmit",
     "test": "bun test test/**/*.test.ts",
@@ -37,6 +37,7 @@
     "deploy:streaming": "bun run build && bun run build:lambda && node ./node_modules/aws-cdk/bin/cdk deploy MediaManagerStreamingStack --require-approval never",
     "deploy:api": "bun run build && bun run build:lambda && node ./node_modules/aws-cdk/bin/cdk deploy MediaManagerApiStack --require-approval never",
     "deploy:processing": "bun run build && bun run build:lambda && node ./node_modules/aws-cdk/bin/cdk deploy MediaManagerProcessingStack --require-approval never",
+    "deploy:observability": "bun run build && bun run build:lambda && node ./node_modules/aws-cdk/bin/cdk deploy MediaManagerObservabilityStack --require-approval never --parameters BudgetAlertEmail=$BUDGET_ALERT_EMAIL --parameters MonthlyBudgetUsd=$MONTHLY_BUDGET_USD",
     "allowlist:add-email": "bunx ts-node src/allowlist-cli.ts add email",
     "allowlist:remove-email": "bunx ts-node src/allowlist-cli.ts remove email",
     "allowlist:add-domain": "bunx ts-node src/allowlist-cli.ts add domain",

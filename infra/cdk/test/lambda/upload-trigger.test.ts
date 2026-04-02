@@ -7,6 +7,7 @@ import {
   DescribeEndpointsCommand,
   MediaConvertClient,
 } from "@aws-sdk/client-mediaconvert";
+import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 import { handler } from "../../lambda/upload-trigger";
 
@@ -16,6 +17,7 @@ const originalDerivedBucketName = process.env.ASSETS_DERIVED_BUCKET_NAME;
 const originalMediaConvertRole = process.env.MEDIACONVERT_ROLE_ARN;
 const originalDdbSend = DynamoDBDocumentClient.prototype.send;
 const originalMcSend = MediaConvertClient.prototype.send;
+const originalS3Send = S3Client.prototype.send;
 
 function stubDdbSend(
   impl: (command: GetCommand | UpdateCommand) => Promise<Record<string, unknown>>
@@ -67,6 +69,21 @@ function stubMediaConvertSend(
   return { calls };
 }
 
+function stubS3Send(impl: (command: HeadObjectCommand) => Promise<Record<string, unknown>>) {
+  const calls: HeadObjectCommand[] = [];
+
+  S3Client.prototype.send = async function (command: unknown) {
+    if (!(command instanceof HeadObjectCommand)) {
+      throw new Error("Unexpected S3 command");
+    }
+
+    calls.push(command);
+    return impl(command);
+  } as typeof S3Client.prototype.send;
+
+  return { calls };
+}
+
 describe("upload-trigger lambda", () => {
   beforeEach(() => {
     process.env.ASSETS_TABLE_NAME = "Assets";
@@ -78,6 +95,7 @@ describe("upload-trigger lambda", () => {
   afterEach(() => {
     DynamoDBDocumentClient.prototype.send = originalDdbSend;
     MediaConvertClient.prototype.send = originalMcSend;
+    S3Client.prototype.send = originalS3Send;
 
     if (originalTableName === undefined) {
       delete process.env.ASSETS_TABLE_NAME;
@@ -135,6 +153,12 @@ describe("upload-trigger lambda", () => {
 
       return { Job: { Id: "job-1" } };
     });
+    const s3 = stubS3Send(async () => ({
+      Metadata: {
+        "video-width": "1920",
+        "video-height": "1080",
+      },
+    }));
 
     const result = await handler({
       Records: [
@@ -175,12 +199,89 @@ describe("upload-trigger lambda", () => {
 
     expect(mc.calls.some((command) => command instanceof DescribeEndpointsCommand)).toBe(true);
     expect(mc.calls.some((command) => command instanceof CreateJobCommand)).toBe(true);
+    expect(s3.calls).toHaveLength(1);
     const createJobCall = mc.calls.find((command) => command instanceof CreateJobCommand) as
       | CreateJobCommand
       | undefined;
     expect(createJobCall?.input.UserMetadata).toMatchObject({
       assetId: "asset-123",
       processingProfile: "video-standard-v1",
+      orientation: "landscape",
+    });
+    expect(
+      createJobCall?.input.Settings?.OutputGroups?.[0]?.Outputs?.[0]?.VideoDescription
+    ).toMatchObject({
+      Width: 1920,
+      Height: 1080,
+    });
+  });
+
+  it("uses portrait ladder when video metadata indicates portrait", async () => {
+    stubDdbSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return {
+          Item: {
+            id: "asset-p1",
+            type: "video",
+            status: "uploaded",
+            original: {
+              bucket: "pending",
+              key: "incoming/asset-p1",
+              size: 0,
+              contentType: "video/mp4",
+            },
+            processingProfile: "video-standard-v1",
+          },
+        };
+      }
+
+      return {};
+    });
+
+    const mc = stubMediaConvertSend(async (command) => {
+      if (command instanceof DescribeEndpointsCommand) {
+        return {
+          Endpoints: [{ Url: "https://abcd.mediaconvert.us-west-2.amazonaws.com" }],
+        };
+      }
+
+      return { Job: { Id: "job-portrait" } };
+    });
+    stubS3Send(async () => ({
+      Metadata: {
+        "video-width": "1080",
+        "video-height": "1920",
+      },
+    }));
+
+    const result = await handler({
+      Records: [
+        {
+          body: JSON.stringify({
+            source: "aws.s3",
+            "detail-type": "Object Created",
+            detail: {
+              bucket: { name: "media-originals-test" },
+              object: { key: "incoming/asset-p1", size: 1024 },
+            },
+          }),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.processed).toBe(1);
+    const createJobCall = mc.calls.find((command) => command instanceof CreateJobCommand) as
+      | CreateJobCommand
+      | undefined;
+    expect(createJobCall?.input.UserMetadata).toMatchObject({
+      orientation: "portrait",
+    });
+    expect(
+      createJobCall?.input.Settings?.OutputGroups?.[0]?.Outputs?.[0]?.VideoDescription
+    ).toMatchObject({
+      Width: 1080,
+      Height: 1920,
     });
   });
 

@@ -1,11 +1,13 @@
 import { z } from "zod";
 
-export const ASSET_TYPES = ["video", "audio", "image"] as const;
+export const ASSET_TYPES = ["video", "audio", "image", "folder"] as const;
 export const ASSET_STATUSES = ["draft", "uploaded", "processing", "ready", "error"] as const;
+export const ASSET_ORIGINS = ["uploaded", "generated", "derived", "manual"] as const;
 export const PROCESSING_PROFILES = [
   "video-standard-v1",
   "audio-passthrough-v1",
   "image-passthrough-v1",
+  "folder-meta-v1",
 ] as const;
 export const ASSET_SCHEMA_VERSION = 1;
 export const ASSET_TAG_FACETS = [
@@ -17,12 +19,17 @@ export const ASSET_TAG_FACETS = [
   "genre",
 ] as const;
 export const ASSET_TAG_WEIGHTS = ["weak", "moderate", "strong"] as const;
+export const ASSET_VISIBILITIES = ["private", "public"] as const;
+export const COMBO_VOTE_VALUES = ["up", "down", "none"] as const;
 
 export const AssetTypeSchema = z.enum(ASSET_TYPES);
 export const AssetStatusSchema = z.enum(ASSET_STATUSES);
+export const AssetOriginSchema = z.enum(ASSET_ORIGINS);
 export const AssetTagFacetSchema = z.enum(ASSET_TAG_FACETS);
 export const AssetTagWeightSchema = z.enum(ASSET_TAG_WEIGHTS);
+export const AssetVisibilitySchema = z.enum(ASSET_VISIBILITIES);
 export const ProcessingProfileSchema = z.enum(PROCESSING_PROFILES);
+export const ComboVoteValueSchema = z.enum(COMBO_VOTE_VALUES);
 
 export const AssetOriginalSchema = z.object({
   bucket: z.string().min(1),
@@ -70,6 +77,15 @@ export const AssetConversionInfoSchema = z.object({
   errorMessage: z.string().min(1).optional(),
 });
 
+export const AssetGenerationInfoSchema = z.object({
+  provider: z.string().min(1),
+  model: z.string().min(1),
+  workflowId: z.string().min(1),
+  promptHash: z.string().min(1),
+  seed: z.union([z.number().int(), z.string().min(1)]).optional(),
+  createdBy: z.string().email(),
+});
+
 export const AssetRecordSchema = z.object({
   id: z.string().min(1),
   schemaVersion: z.number().int().min(1),
@@ -78,10 +94,18 @@ export const AssetRecordSchema = z.object({
   title: z.string().min(1),
   description: z.string(),
   status: AssetStatusSchema,
+  visibility: AssetVisibilitySchema.default("private"),
   original: AssetOriginalSchema,
   tags: z.array(AssetTagSchema),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
+  containerId: z.string().min(1).optional(),
+  parentId: z.string().min(1).optional(),
+  rootId: z.string().min(1).optional(),
+  depth: z.number().int().min(0).optional(),
+  sourceAssetIds: z.array(z.string().min(1)).optional(),
+  origin: AssetOriginSchema.optional(),
+  generation: AssetGenerationInfoSchema.optional(),
   searchText: z.string().optional(),
   stream: AssetStreamInfoSchema.optional(),
   processingProfile: ProcessingProfileSchema.optional(),
@@ -100,33 +124,82 @@ export const AssetIdParamSchema = z.object({
   id: z.string().min(1),
 });
 
-export const CreateAssetInputSchema = z.object({
-  type: AssetTypeSchema,
-  title: z.string().min(1),
-  description: z.string().default(""),
-  tags: z.array(AssetTagSchema).default([]),
-  processingProfile: ProcessingProfileSchema.optional(),
-  original: z
-    .object({
-      key: z.string().min(1).optional(),
-      size: z.number().nonnegative().optional(),
-      contentType: z.string().min(1).optional(),
-    })
-    .optional(),
-});
+export const CreateAssetInputSchema = z
+  .object({
+    type: AssetTypeSchema,
+    title: z.string().min(1),
+    description: z.string().default(""),
+    tags: z.array(AssetTagSchema).default([]),
+    visibility: AssetVisibilitySchema.default("private"),
+    containerId: z.string().min(1).optional(),
+    parentId: z.string().min(1).optional(),
+    sourceAssetIds: z.array(z.string().min(1)).max(20).optional(),
+    origin: AssetOriginSchema.optional(),
+    generation: AssetGenerationInfoSchema.optional(),
+    processingProfile: ProcessingProfileSchema.optional(),
+    original: z
+      .object({
+        key: z.string().min(1).optional(),
+        size: z.number().nonnegative().optional(),
+        contentType: z.string().min(1).optional(),
+      })
+      .optional(),
+  })
+  .superRefine((value, ctx) => {
+    const origin = value.origin ?? (value.type === "folder" ? "manual" : "uploaded");
+
+    if (origin === "generated" && !value.generation) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["generation"],
+        message: "generation metadata is required when origin is generated",
+      });
+    }
+
+    if (origin !== "generated" && value.generation) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["generation"],
+        message: "generation metadata is only allowed when origin is generated",
+      });
+    }
+
+    if (origin === "derived" && (!value.sourceAssetIds || value.sourceAssetIds.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["sourceAssetIds"],
+        message: "sourceAssetIds are required when origin is derived",
+      });
+    }
+
+    if (value.type === "folder" && origin !== "manual") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["origin"],
+        message: "folder assets must use manual origin",
+      });
+    }
+  });
 
 export const UpdateAssetInputSchema = z
   .object({
     title: z.string().min(1).optional(),
     description: z.string().optional(),
     tags: z.array(AssetTagSchema).optional(),
+    visibility: AssetVisibilitySchema.optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one field must be provided",
   });
 
+export const VideoUploadMetadataSchema = z.object({
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+});
+
 export const AssetUploadUrlInputSchema = z.object({
   contentType: z.string().min(1).optional(),
+  videoMetadata: VideoUploadMetadataSchema.optional(),
 });
 
 export const AssetUploadUrlResponseSchema = z.object({
@@ -145,6 +218,7 @@ export const AssetPlaybackUrlResponseSchema = z.object({
 
 export const MultipartInitInputSchema = z.object({
   contentType: z.string().min(1).optional(),
+  videoMetadata: VideoUploadMetadataSchema.optional(),
 });
 
 export const MultipartInitResponseSchema = z.object({
@@ -194,20 +268,115 @@ export const AssetDeleteResponseSchema = z.object({
   deleted: z.literal(true),
 });
 
+export const AssetChildrenResponseSchema = z.object({
+  parentId: z.string().min(1),
+  assets: z.array(AssetRecordSchema),
+});
+
+export const AssetLineageResponseSchema = z.object({
+  asset: AssetRecordSchema,
+  sources: z.array(AssetRecordSchema),
+});
+
+export const MoveAssetInputSchema = z
+  .object({
+    containerId: z.string().min(1).nullable().optional(),
+    parentId: z.string().min(1).nullable().optional(),
+  })
+  .refine((value) => value.containerId !== undefined || value.parentId !== undefined, {
+    message: "containerId or parentId must be provided",
+  });
+
+export const MoveAssetResponseSchema = z.object({
+  asset: AssetRecordSchema,
+});
+
+export const ComboPlaybackParamsSchema = z.object({
+  videoOffsetMs: z.number().int().min(0).optional(),
+  audioOffsetMs: z.number().int().min(0).optional(),
+  gainDb: z.number().min(-60).max(24).optional(),
+  trimStartMs: z.number().int().min(0).optional(),
+  trimEndMs: z.number().int().min(0).optional(),
+});
+
+export const ComboRecordSchema = z.object({
+  id: z.string().min(1),
+  schemaVersion: z.number().int().min(1),
+  ownerEmail: z.string().email(),
+  videoAssetId: z.string().min(1),
+  audioAssetId: z.string().min(1),
+  pairKey: z.string().min(1).optional(),
+  playback: ComboPlaybackParamsSchema.optional(),
+  upvotes: z.number().int().min(0),
+  downvotes: z.number().int().min(0),
+  score: z.number().int(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+export const ComboWithVoteSchema = ComboRecordSchema.extend({
+  userVote: ComboVoteValueSchema.default("none"),
+});
+
+export const ComboDetailResponseSchema = z.object({
+  combo: ComboWithVoteSchema,
+});
+
+export const ComboListResponseSchema = z.object({
+  combos: z.array(ComboWithVoteSchema),
+});
+
+export const CreateComboInputSchema = z.object({
+  videoAssetId: z.string().min(1),
+  audioAssetId: z.string().min(1),
+  playback: ComboPlaybackParamsSchema.optional(),
+});
+
+export const ComboVoteInputSchema = z.object({
+  action: z.enum(["up", "down", "clear"]),
+});
+
+export const ComboVoteByAssetsInputSchema = z.object({
+  videoAssetId: z.string().min(1),
+  audioAssetId: z.string().min(1),
+  action: z.enum(["up", "down", "clear"]),
+});
+
+export const ComboDeleteResponseSchema = z.object({
+  id: z.string().min(1),
+  deleted: z.literal(true),
+});
+
+export const PublicRandomComboResponseSchema = z.object({
+  source: z.enum(["derived", "existing"]),
+  selection: z.enum(["primary", "fallback"]),
+  comboId: z.string().min(1),
+  videoAssetId: z.string().min(1),
+  audioAssetId: z.string().min(1),
+  videoTitle: z.string().min(1),
+  audioTitle: z.string().min(1),
+  videoSrc: z.string().url(),
+  audioSrc: z.string().url(),
+});
+
 export type AssetType = z.infer<typeof AssetTypeSchema>;
 export type AssetStatus = z.infer<typeof AssetStatusSchema>;
+export type AssetOrigin = z.infer<typeof AssetOriginSchema>;
 export type AssetTagFacet = z.infer<typeof AssetTagFacetSchema>;
 export type AssetTagWeight = z.infer<typeof AssetTagWeightSchema>;
+export type AssetVisibility = z.infer<typeof AssetVisibilitySchema>;
 export type AssetOriginal = z.infer<typeof AssetOriginalSchema>;
 export type AssetTag = z.infer<typeof AssetTagSchema>;
 export type AssetRendition = z.infer<typeof AssetRenditionSchema>;
 export type AssetStreamInfo = z.infer<typeof AssetStreamInfoSchema>;
+export type AssetGenerationInfo = z.infer<typeof AssetGenerationInfoSchema>;
 export type AssetRecord = z.infer<typeof AssetRecordSchema>;
 export type AssetDetailResponse = z.infer<typeof AssetDetailResponseSchema>;
 export type AssetListResponse = z.infer<typeof AssetListResponseSchema>;
 export type AssetIdParam = z.infer<typeof AssetIdParamSchema>;
 export type CreateAssetInput = z.infer<typeof CreateAssetInputSchema>;
 export type UpdateAssetInput = z.infer<typeof UpdateAssetInputSchema>;
+export type VideoUploadMetadata = z.infer<typeof VideoUploadMetadataSchema>;
 export type AssetUploadUrlInput = z.infer<typeof AssetUploadUrlInputSchema>;
 export type AssetUploadUrlResponse = z.infer<typeof AssetUploadUrlResponseSchema>;
 export type AssetPlaybackUrlResponse = z.infer<typeof AssetPlaybackUrlResponseSchema>;
@@ -219,3 +388,18 @@ export type MultipartCompleteInput = z.infer<typeof MultipartCompleteInputSchema
 export type MultipartAbortInput = z.infer<typeof MultipartAbortInputSchema>;
 export type MultipartAbortResponse = z.infer<typeof MultipartAbortResponseSchema>;
 export type AssetDeleteResponse = z.infer<typeof AssetDeleteResponseSchema>;
+export type AssetChildrenResponse = z.infer<typeof AssetChildrenResponseSchema>;
+export type AssetLineageResponse = z.infer<typeof AssetLineageResponseSchema>;
+export type MoveAssetInput = z.infer<typeof MoveAssetInputSchema>;
+export type MoveAssetResponse = z.infer<typeof MoveAssetResponseSchema>;
+export type ComboVoteValue = z.infer<typeof ComboVoteValueSchema>;
+export type ComboPlaybackParams = z.infer<typeof ComboPlaybackParamsSchema>;
+export type ComboRecord = z.infer<typeof ComboRecordSchema>;
+export type ComboWithVote = z.infer<typeof ComboWithVoteSchema>;
+export type ComboDetailResponse = z.infer<typeof ComboDetailResponseSchema>;
+export type ComboListResponse = z.infer<typeof ComboListResponseSchema>;
+export type CreateComboInput = z.infer<typeof CreateComboInputSchema>;
+export type ComboVoteInput = z.infer<typeof ComboVoteInputSchema>;
+export type ComboVoteByAssetsInput = z.infer<typeof ComboVoteByAssetsInputSchema>;
+export type ComboDeleteResponse = z.infer<typeof ComboDeleteResponseSchema>;
+export type PublicRandomComboResponse = z.infer<typeof PublicRandomComboResponseSchema>;

@@ -14,7 +14,7 @@ export class CoreStack extends Stack {
     const stage = props.stage;
 
     new CfnOutput(this, "SupportedAssetTypes", {
-      value: ["video", "audio", "image"].join(","),
+      value: ["video", "audio", "image", "folder"].join(","),
       exportName: stageExportName("SUPPORTED-ASSET-TYPES", stage),
     });
   }

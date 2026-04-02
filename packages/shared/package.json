@@ -11,7 +11,16 @@
   },
   "scripts": {
     "build": "bunx tsc -p tsconfig.json",
-    "lint": "bunx prettier --check \"src/**/*.ts\"",
+    "lint": "bunx prettier --check \"src/**/*.{ts,tsx}\"",
     "typecheck": "bunx tsc -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "hls.js": "^1.6.10",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0"
   }
 }

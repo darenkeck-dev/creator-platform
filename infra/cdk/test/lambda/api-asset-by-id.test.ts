@@ -38,6 +38,8 @@ type HttpEvent = {
 };
 
 const originalTableName = process.env.ASSETS_TABLE_NAME;
+const originalCreatedAtIndex = process.env.ASSETS_CREATED_AT_INDEX;
+const originalContainerIndex = process.env.ASSETS_CONTAINER_INDEX;
 const originalOriginalsBucketName = process.env.ASSETS_ORIGINALS_BUCKET_NAME;
 const originalDerivedBucketName = process.env.ASSETS_DERIVED_BUCKET_NAME;
 const originalAwsRegion = process.env.AWS_REGION;
@@ -82,6 +84,7 @@ function validAsset(id: string) {
       contentType: "video/mp4",
     },
     tags: [],
+    origin: "uploaded",
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
   };
@@ -166,6 +169,8 @@ function stubS3Send(
 describe("api-asset-by-id lambda", () => {
   beforeEach(() => {
     process.env.ASSETS_TABLE_NAME = "Assets";
+    process.env.ASSETS_CREATED_AT_INDEX = "AssetByCreatedAt";
+    process.env.ASSETS_CONTAINER_INDEX = "AssetByContainer";
     process.env.ASSETS_ORIGINALS_BUCKET_NAME = "media-originals-test";
     process.env.ASSETS_DERIVED_BUCKET_NAME = "media-derived-test";
     process.env.AWS_REGION = "us-west-2";
@@ -181,6 +186,18 @@ describe("api-asset-by-id lambda", () => {
       delete process.env.ASSETS_TABLE_NAME;
     } else {
       process.env.ASSETS_TABLE_NAME = originalTableName;
+    }
+
+    if (originalCreatedAtIndex === undefined) {
+      delete process.env.ASSETS_CREATED_AT_INDEX;
+    } else {
+      process.env.ASSETS_CREATED_AT_INDEX = originalCreatedAtIndex;
+    }
+
+    if (originalContainerIndex === undefined) {
+      delete process.env.ASSETS_CONTAINER_INDEX;
+    } else {
+      process.env.ASSETS_CONTAINER_INDEX = originalContainerIndex;
     }
 
     if (originalOriginalsBucketName === undefined) {
@@ -270,6 +287,193 @@ describe("api-asset-by-id lambda", () => {
     );
   });
 
+  it("returns direct children for GET /assets/{id}/children", async () => {
+    stubDdbSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return { Item: validAsset("parent-1") };
+      }
+
+      if (!(command instanceof QueryCommand)) {
+        throw new Error("Expected QueryCommand");
+      }
+
+      expect(command.input.IndexName).toBe("AssetByContainer");
+      expect(command.input.KeyConditionExpression).toContain("gsi2pk");
+
+      return {
+        Items: [
+          {
+            ...validAsset("child-1"),
+            containerId: "parent-1",
+            parentId: "parent-1",
+            rootId: "parent-1",
+            depth: 1,
+          },
+          {
+            ...validAsset("other-1"),
+            containerId: "other-parent",
+          },
+        ],
+      };
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: {
+          http: { method: "GET" },
+          routeKey: "GET /assets/{id}/children",
+        },
+        pathParameters: { id: "parent-1" },
+      })
+    );
+
+    expect(result.statusCode).toBe(200);
+    const body = parseBody(result) as { parentId: string; assets: Array<{ id: string }> };
+    expect(body.parentId).toBe("parent-1");
+    expect(body.assets).toHaveLength(1);
+    expect(body.assets[0]?.id).toBe("child-1");
+  });
+
+  it("returns lineage sources for GET /assets/{id}/lineage", async () => {
+    stubDdbSend(async (command) => {
+      if (!(command instanceof GetCommand)) {
+        throw new Error("Expected GetCommand");
+      }
+
+      const key = command.input.Key as { pk: string };
+      if (key.pk === "ASSET#lineage-asset") {
+        return {
+          Item: {
+            ...validAsset("lineage-asset"),
+            sourceAssetIds: ["source-1", "source-2"],
+          },
+        };
+      }
+
+      if (key.pk === "ASSET#source-1") {
+        return { Item: validAsset("source-1") };
+      }
+
+      if (key.pk === "ASSET#source-2") {
+        return { Item: validAsset("source-2") };
+      }
+
+      return { Item: null };
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: {
+          http: { method: "GET" },
+          routeKey: "GET /assets/{id}/lineage",
+        },
+        pathParameters: { id: "lineage-asset" },
+      })
+    );
+
+    expect(result.statusCode).toBe(200);
+    const body = parseBody(result) as { sources: Array<{ id: string }> };
+    expect(body.sources.map((source) => source.id)).toEqual(["source-1", "source-2"]);
+  });
+
+  it("moves an asset to a container on POST /assets/{id}/move", async () => {
+    stubDdbSend(async (command) => {
+      if (command instanceof GetCommand) {
+        const key = command.input.Key as { pk: string };
+        if (key.pk === "ASSET#asset-move") {
+          return { Item: validAsset("asset-move") };
+        }
+
+        if (key.pk === "ASSET#container-1") {
+          return {
+            Item: {
+              ...validAsset("container-1"),
+              rootId: "root-1",
+              depth: 2,
+            },
+          };
+        }
+
+        return { Item: null };
+      }
+
+      if (!(command instanceof UpdateCommand)) {
+        throw new Error("Expected UpdateCommand");
+      }
+
+      const values = command.input.ExpressionAttributeValues as Record<string, unknown>;
+      expect(values[":containerId"]).toBe("container-1");
+      expect(values[":rootId"]).toBe("root-1");
+      expect(values[":depth"]).toBe(3);
+      expect(values[":gsi2pk"]).toBe("CONTAINER#container-1");
+      expect(typeof values[":gsi2sk"]).toBe("string");
+
+      return {
+        Attributes: {
+          ...validAsset("asset-move"),
+          containerId: "container-1",
+          parentId: "container-1",
+          rootId: "root-1",
+          depth: 3,
+        },
+      };
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: {
+          http: { method: "POST" },
+          routeKey: "POST /assets/{id}/move",
+        },
+        pathParameters: { id: "asset-move" },
+        body: JSON.stringify({ containerId: "container-1" }),
+      })
+    );
+
+    expect(result.statusCode).toBe(200);
+    const body = parseBody(result) as { asset: { containerId?: string; depth?: number } };
+    expect(body.asset.containerId).toBe("container-1");
+    expect(body.asset.depth).toBe(3);
+  });
+
+  it("rejects move that creates a cycle", async () => {
+    stubDdbSend(async (command) => {
+      if (!(command instanceof GetCommand)) {
+        throw new Error("Expected GetCommand");
+      }
+
+      const key = command.input.Key as { pk: string };
+      if (key.pk === "ASSET#asset-cycle") {
+        return { Item: validAsset("asset-cycle") };
+      }
+
+      if (key.pk === "ASSET#container-cycle") {
+        return {
+          Item: {
+            ...validAsset("container-cycle"),
+            containerId: "asset-cycle",
+          },
+        };
+      }
+
+      return { Item: null };
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: {
+          http: { method: "POST" },
+          routeKey: "POST /assets/{id}/move",
+        },
+        pathParameters: { id: "asset-cycle" },
+        body: JSON.stringify({ containerId: "container-cycle" }),
+      })
+    );
+
+    expect(result.statusCode).toBe(400);
+    expect(result.body).toContain("cycle detected");
+  });
+
   it("patches asset fields on PATCH /assets/{id}", async () => {
     const { calls } = stubDdbSend(async (command) => {
       if (command instanceof GetCommand) {
@@ -280,10 +484,14 @@ describe("api-asset-by-id lambda", () => {
         throw new Error("Expected UpdateCommand");
       }
 
+      const values = command.input.ExpressionAttributeValues as Record<string, unknown>;
+      expect(values[":searchText"]).toBe("updated desc campaign launch video uploaded video/mp4");
+
       return {
         Attributes: {
           ...validAsset("asset-9"),
           title: "Updated",
+          searchText: "updated desc campaign launch video uploaded video/mp4",
           tags: [{ facet: "campaign", value: "launch", weight: "strong", source: "user" }],
         },
       };
@@ -292,7 +500,10 @@ describe("api-asset-by-id lambda", () => {
     const result = await handler({
       requestContext: { http: { method: "PATCH" } },
       pathParameters: { id: "asset-9" },
-      body: JSON.stringify({ title: "Updated", tags: [{ facet: "campaign", value: "launch" }] }),
+      body: JSON.stringify({
+        title: "Updated",
+        tags: [{ facet: "campaign", value: "launch" }],
+      }),
     });
 
     expect(result.statusCode).toBe(200);
@@ -336,6 +547,78 @@ describe("api-asset-by-id lambda", () => {
     expect(body.uploadUrl).toContain("media-originals-test");
     expect(body.expiresIn).toBe(900);
     expect(calls).toHaveLength(2);
+  });
+
+  it("includes video dimension metadata in signed upload URL", async () => {
+    stubDdbSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return { Item: validAsset("asset-upload-meta-1") };
+      }
+
+      if (!(command instanceof UpdateCommand)) {
+        throw new Error("Expected UpdateCommand");
+      }
+
+      return {
+        Attributes: {
+          ...validAsset("asset-upload-meta-1"),
+          updatedAt: "2026-01-02T00:00:00.000Z",
+        },
+      };
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: {
+          http: { method: "POST" },
+          routeKey: "POST /assets/{id}/upload-url",
+        },
+        pathParameters: { id: "asset-upload-meta-1" },
+        body: JSON.stringify({
+          contentType: "video/mp4",
+          videoMetadata: {
+            width: 1080,
+            height: 1920,
+          },
+        }),
+      })
+    );
+
+    expect(result.statusCode).toBe(200);
+    const body = parseBody(result) as { uploadUrl: string };
+    expect(body.uploadUrl).toContain("x-amz-meta-video-width=1080");
+    expect(body.uploadUrl).toContain("x-amz-meta-video-height=1920");
+  });
+
+  it("rejects upload-url request for folder assets", async () => {
+    stubDdbSend(async (command) => {
+      if (!(command instanceof GetCommand)) {
+        throw new Error("Expected GetCommand");
+      }
+
+      return {
+        Item: {
+          ...validAsset("folder-1"),
+          type: "folder",
+          status: "ready",
+          processingProfile: "folder-meta-v1",
+        },
+      };
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: {
+          http: { method: "POST" },
+          routeKey: "POST /assets/{id}/upload-url",
+        },
+        pathParameters: { id: "folder-1" },
+        body: JSON.stringify({ contentType: "application/octet-stream" }),
+      })
+    );
+
+    expect(result.statusCode).toBe(400);
+    expect(result.body).toContain("Folders do not support upload or playback operations");
   });
 
   it("returns pre-signed playback URL for GET /assets/{id}/playback-url", async () => {
@@ -411,6 +694,58 @@ describe("api-asset-by-id lambda", () => {
     expect(body.uploadId).toBe("upload-123");
     expect(body.partSize).toBe(32 * 1024 * 1024);
     expect(ddb.calls).toHaveLength(2);
+    expect(s3.calls).toHaveLength(1);
+  });
+
+  it("sets video dimension metadata on multipart init", async () => {
+    const s3 = stubS3Send(async (command) => {
+      if (!(command instanceof CreateMultipartUploadCommand)) {
+        throw new Error("Expected CreateMultipartUploadCommand");
+      }
+
+      expect(command.input.Metadata).toMatchObject({
+        "video-width": "720",
+        "video-height": "1280",
+      });
+
+      return { UploadId: "upload-metadata-1" };
+    });
+
+    stubDdbSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return { Item: validAsset("asset-mp-meta-1") };
+      }
+
+      if (!(command instanceof UpdateCommand)) {
+        throw new Error("Expected UpdateCommand");
+      }
+
+      return {
+        Attributes: {
+          ...validAsset("asset-mp-meta-1"),
+          updatedAt: "2026-01-02T00:00:00.000Z",
+        },
+      };
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: {
+          http: { method: "POST" },
+          routeKey: "POST /assets/{id}/multipart/init",
+        },
+        pathParameters: { id: "asset-mp-meta-1" },
+        body: JSON.stringify({
+          contentType: "video/mp4",
+          videoMetadata: {
+            width: 720,
+            height: 1280,
+          },
+        }),
+      })
+    );
+
+    expect(result.statusCode).toBe(200);
     expect(s3.calls).toHaveLength(1);
   });
 

@@ -139,6 +139,10 @@ export function AssetPlayer({ asset }: Props) {
     );
   }
 
+  if (asset.type === "folder") {
+    return <p className="text-sm text-muted-foreground">Folders do not have playback.</p>;
+  }
+
   if (asset.type === "audio") {
     if (directPlaybackLoading) {
       return <p className="text-sm text-muted-foreground">Loading audio playback...</p>;

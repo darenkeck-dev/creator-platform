@@ -882,6 +882,13 @@ Implement:
 - Chips display
 - Save via API
 
+Execution status (2026-02-27):
+
+- [x] Added facet selector + weight selector controls in asset detail edit mode.
+- [x] Added freeform tag input with Enter-to-add support.
+- [x] Added tag chips display for both read mode and edit mode.
+- [x] Wired tag edits to `PATCH /api/assets/{id}` save flow.
+
 Done when:
 
 - Tags persist and render correctly.
@@ -898,6 +905,13 @@ searchText = title + description + all tags + metadata
 
 Store in META record.
 
+Execution status (2026-02-27):
+
+- [x] Added server-side `searchText` composition on asset create using title + description + tags + key metadata.
+- [x] Updated PATCH flow to recompute `searchText` when tags, title, or description change.
+- [x] Included metadata terms in `searchText` generation (`type`, `processingProfile`, `original.contentType` when present).
+- [x] Added/updated lambda tests to verify `searchText` generation and update behavior.
+
 Done when:
 
 - searchText updates on edits.
@@ -912,6 +926,14 @@ Implement:
 - Filter by facet tag
 - Sort newest
 
+Execution status (2026-02-27):
+
+- [x] Added API support for list query filters (`type`, `facet`) and sort (`newest`, `oldest`) in assets lambda.
+- [x] Added query validation for list filters in both app API proxy and infra lambda handlers.
+- [x] Updated library page with filter UI controls for type/facet and sort selection.
+- [x] Wired library page to request filtered/sorted assets from API.
+- [x] Added lambda tests for type/facet filter behavior and invalid query handling.
+
 Done when:
 
 - Library filters correctly.
@@ -922,37 +944,324 @@ Done when:
 
 ## 8.1 Security Checks
 
-- [ ] Buckets private
-- [ ] Only CloudFront reads derived
-- [ ] Only API issues pre-signed URLs
-- [ ] JWT required for API
-- [ ] Email allow-list enforced in Lambda
+- [x] Buckets private
+- [x] Only CloudFront reads derived
+- [x] Only API issues pre-signed URLs
+- [x] JWT required for API
+- [x] Email allow-list enforced in Lambda
+
+Execution status (2026-02-27):
+
+- [x] Added stack-level security tests in `infra/cdk/test/stacks/security.test.ts`.
+- [x] Verified S3 buckets use block public access settings.
+- [x] Verified derived bucket policy only grants `s3:GetObject` to CloudFront service principal with `AWS:SourceArn` condition.
+- [x] Verified all `/assets` API routes (including upload/multipart/playback endpoints) require JWT authorization.
+- [x] Verified Cognito pre-token generation trigger and DynamoDB allowlist lookup policy remain configured.
 
 ---
 
 ## 8.2 Logging + Alerts
 
-- [ ] CloudWatch logs enabled
-- [ ] DLQ for SQS
-- [ ] Budget alert in AWS console
+- [x] CloudWatch logs enabled
+- [x] DLQ for SQS
+- [x] Budget alert in AWS console
+
+Execution status (2026-02-27):
+
+- [x] Added CloudWatch retention-managed log groups for auth/api/processing Lambdas.
+- [x] Added API Gateway HTTP API access logs on the `$default` stage.
+- [x] Added SQS dead-letter queue wiring for upload event processing queue.
+- [x] Added `MediaManagerObservabilityStack` with monthly AWS budget notification resource.
+- [x] Added stack assertion tests in `infra/cdk/test/stacks/observability.test.ts`.
 
 ---
 
-# Phase 9 — Future LLM Readiness (Do Not Implement Yet)
+# Phase 9 — Data Type Readiness (Do Not Implement Yet)
 
-Ensure each asset has:
+Goal:
 
-- Stable ID
-- searchText
+- Make asset contracts ready for upcoming data model expansions without enabling AI runtime features yet.
+
+Readiness baseline:
+
+- Stable ID for each asset
+- Maintained `searchText`
 - Structured facet tags
 - Freeform tags
 
-Future:
+## 9.1 Nested Media Structure (Planned)
 
-- Generate embeddings from searchText
-- Store in vector DB
-- Retrieve topK
-- Stochastic selection from topK
+Goal:
+
+- Support hierarchy/lineage relationships between assets (folders/containers and derived-from links).
+
+Planned tasks:
+
+- [x] Extend asset schema/contracts with hierarchy + lineage fields (`containerId`, `parentId`, `rootId`, `sourceAssetIds`).
+- [x] Add API endpoints for hierarchy operations (`move`, `list children`, lineage traversal).
+- [x] Add server-side validation to prevent cycles and invalid cross-owner references.
+- [x] Add library UI support for nested browsing and lineage context.
+
+Execution status (2026-02-28):
+
+- [x] Added nested + lineage contract fields and responses in `packages/contracts/src/index.ts`.
+- [x] Added API endpoints `GET /assets/{id}/children`, `GET /assets/{id}/lineage`, `POST /assets/{id}/move`.
+- [x] Added create/move validation for cross-owner references and cycle-prevention on moves.
+- [x] Added library nested browsing controls (`containerId`) and lineage context on asset detail.
+
+Backend scalability follow-up (next step for 9.1):
+
+- [x] Add first-class folder items in contracts (`assetKind` or equivalent) so containers are explicit entities, not inferred media items.
+- [x] Add a container-focused GSI in `DataStack` for direct child queries (for example `gsi2pk=CONTAINER#<id|ROOT>`, sortable `gsi2sk`).
+- [x] Update create/move write paths to persist container index keys (`gsi2pk/gsi2sk`) alongside metadata.
+- [x] Switch nested list/children APIs to query the new GSI directly (remove created-at index + in-memory filtering).
+- [ ] Add cursor pagination to children/list endpoints (`nextToken` style) to avoid fixed-size result caps.
+- [ ] Add optional root/subtree index strategy if descendant queries are needed (`rootId` + depth aware key).
+- [x] Update tests for GSI-backed child queries and pagination behavior.
+
+Folder entity status (2026-03-03):
+
+- [x] Added `folder` as a first-class asset type in contracts.
+- [x] Updated create flow so folders can be created without file uploads.
+- [x] Updated frontend upload/create UI to support folder creation.
+- [x] Blocked upload/playback endpoints for folder assets.
+
+Implementation note:
+
+- We can skip compatibility/backfill for old items and require fresh writes for nested data correctness.
+- Existing records without new index keys can be removed manually during rollout.
+
+## Phase 9 Release Gate (Before 9.3/9.4)
+
+- [ ] Complete 9.2 schema + API readiness for AI-generated media fields first.
+- [ ] Keep basic media upload/playback stable for video + audio assets.
+- [ ] Add a lightweight client integration test app/page that loads video and audio at the same time from uploaded assets.
+- [ ] Verify simultaneous playback behavior end-to-end (API -> storage/streaming -> browser playback) and document known limitations.
+
+## 9.2 AI-Generated Media Data Fields (Planned)
+
+Goal:
+
+- Extend schema/contracts so generated media can be ingested as first-class assets with full provenance.
+
+Planned tasks:
+
+- [x] Add provenance fields (`origin`, `model`, `provider`, `workflowId`, `promptHash`, `seed`, `createdBy`).
+- [x] Extend write-path contracts/validation for generated vs uploaded source metadata.
+- [x] Ensure `searchText` and provenance fields remain consistent on create/update flows.
+- [x] Add UI indicators and filtering for uploaded vs generated assets.
+
+Execution status (2026-03-09):
+
+- [x] Added origin and generation provenance schema fields in contracts.
+- [x] Added create-input validation for provenance variance (`generated` requires `generation`, `derived` requires `sourceAssetIds`, folder uses `manual`).
+- [x] Updated create/patch search text generation to include provenance terms.
+- [x] Added API/list filtering by `origin` and surfaced origin indicators/filters in library UI.
+- [x] Added tests covering provenance acceptance/rejection and list filtering behavior.
+
+Done when:
+
+- Generated assets are clearly distinguishable from uploaded assets in both API and UI.
+- Generated provenance metadata is present, validated, and searchable.
+
+## 9.3 Saved Combo Entity + Voting (Planned)
+
+Goal:
+
+- Represent video+audio pairings as first-class saved entities and support user voting on those entities.
+
+Data model tasks:
+
+- [x] Add `combo` entity schema with stable ID and ownership metadata.
+- [x] Store `videoAssetId` + `audioAssetId` references and optional playback parameters (offsets/gain/trim).
+- [x] Add aggregate vote fields and per-user vote records to prevent duplicate votes.
+
+API tasks:
+
+- [x] Create combo CRUD/list endpoints (create, read, list by owner/folder, delete).
+- [x] Add vote endpoints (`upvote`, `downvote`, `clear vote`) with idempotent behavior.
+- [x] Add authorization checks so only owner-accessible media can be paired.
+- [x] Support ad-hoc video+audio preview without pre-creating combo records; first vote lazily creates combo entity.
+
+UI tasks:
+
+- [x] Add combo detail/player view that loads video + audio together.
+- [x] Add voting controls bound to saved combo entity IDs.
+- [x] Add combo cards/list view with score and playback metadata.
+
+Execution status (2026-03-09):
+
+- [x] Added combo contracts and vote payload schemas in shared contracts package.
+- [x] Added `api-combos` lambda with combo CRUD/list and idempotent vote transitions.
+- [x] Added API routes for combos (`/combos`, `/combos/{id}`, `/combos/{id}/vote`) with JWT auth.
+- [x] Added web API proxy handlers and frontend combo pages (`/combos`, `/combo/{id}`) with synchronized player + voting controls.
+- [x] Added tests for combo schema payloads, combo lambda behavior, and JWT route coverage.
+
+Done when:
+
+- A saved combo can be created from existing uploaded media and replayed reliably.
+- Votes persist and aggregate correctly with per-user vote constraints.
+
+## 9.4 English Search for Video+Audio Combinations (Planned)
+
+Goal:
+
+- Let users find saved combos using natural English queries.
+
+Planned tasks:
+
+- [ ] Build combo `searchText` from video/audio titles, descriptions, tags, and combo notes.
+- [ ] Add API query endpoint for combo text search with deterministic filtering/sorting first.
+- [ ] Add semantic retrieval extension point (embedding-ready contract) for future ranking improvements.
+
+Done when:
+
+- Users can search with plain English phrases and retrieve relevant saved combos.
+
+---
+
+# Phase 10 — Frontend Combo App (Next.js)
+
+## Public Combo Query Rules (DarenKeck Site)
+
+Decisions:
+
+- Combos are always public (no combo-level visibility toggle).
+- A combo is eligible for public playback only when both referenced assets are public.
+- Public combo query must return a valid video+audio pair that is present and playable.
+
+Implementation notes:
+
+- Add/maintain asset-level `visibility` (`private` or `public`) in contracts and write paths.
+- Public random combo endpoint must filter for:
+  - `video` asset: `status=ready`, `visibility=public`
+  - `audio` asset: `status=ready`, `visibility=public`
+- Public endpoint should return playback-ready sources for both tracks.
+
+### Public Random Selection Strategy (Planned)
+
+Goal:
+
+- On each homepage load, give equal probability to two sources: existing saved public combos and derived random public video+audio pairs.
+
+Selection policy:
+
+- Use source-first randomization: flip a fair coin on every request.
+- If heads, attempt `derived` first; if tails, attempt `existing` first.
+- If the primary source has no valid candidate, fallback to the secondary source.
+- Return `404` only when both sources fail.
+
+API behavior (`GET /public/combos/random`):
+
+- Keep a single public endpoint for darenkeck page load.
+- Return a unified payload with existing fields plus:
+  - `source`: `"derived" | "existing"`
+  - `selection`: `"primary" | "fallback"`
+- Preserve existing playback contract (`videoSrc`, `audioSrc`, titles, asset IDs, combo ID).
+
+Lambda implementation tasks:
+
+- [ ] Split candidate lookup into two helpers:
+  - [ ] `pickExistingPublicComboCandidate(tableName, bucketName)`
+  - [ ] `pickDerivedPublicPairCandidate(tableName, bucketName)`
+- [ ] Add a small coordinator `pickRandomPublicComboCandidate()` implementing coin-flip + fallback flow.
+- [ ] Ensure `existing` candidates validate referenced assets are still `public` + `ready` before return.
+- [ ] Keep all candidate resolution strict: if either playback URL fails, continue searching.
+- [ ] Add structured logs per request: `primarySource`, `servedSource`, `selection`, `fallbackUsed`, `statusCode`.
+
+Data access tasks:
+
+- [x] Near-term: allow `dynamodb:Scan` for combos lambda for candidate discovery.
+- [ ] Near-term: cap scan page count/limit for bounded latency and cost.
+- [ ] Follow-up: add a public-combo index (or projection records) to remove full-table scans.
+- [ ] TODO: replace scan-based public candidate discovery with queryable index-backed reads (`Query` over `Scan`).
+
+IAM tasks:
+
+- [x] Update `infra/cdk/lib/api-stack.ts` policy for `CombosFunction` to include required scan permission.
+- [x] Prefer least privilege: add dedicated `dynamodb:Scan` statement only for resources used by public-random query.
+
+Testing tasks:
+
+- [ ] Unit tests: primary source success for `derived` and `existing` paths.
+- [ ] Unit tests: fallback from `derived -> existing` and `existing -> derived`.
+- [ ] Unit tests: both sources empty returns `404`.
+- [ ] Unit tests: invalid/now-private assets in existing combos are skipped.
+- [ ] Unit tests: response payload includes `source` and `selection`.
+
+Observability and verification:
+
+- [ ] Confirm Lambda logs show both source types over repeated requests.
+- [ ] Add temporary dashboard/query for:
+  - [ ] `% primarySource=derived`
+  - [ ] `% primarySource=existing`
+  - [ ] `% servedSource=derived|existing`
+  - [ ] `% fallbackUsed=true`
+- [ ] Verify homepage still renders fallback gradient when endpoint returns `404` or `500`.
+
+Rollout plan:
+
+- [ ] Deploy IAM + lambda changes to dev first.
+- [ ] Validate endpoint by direct curl and through `apps/darenkeck` page load.
+- [ ] Promote to prod after confirming source split and acceptable latency/cost.
+
+Nice-to-have follow-up (separate change):
+
+- [ ] Decide whether selected derived pairs should be materialized as persistent combo records.
+- [ ] If yes, define ownership model for system-created/public combos and update contracts/routes accordingly.
+
+Goal:
+
+- Implement a dedicated frontend flow for requesting/playing video+audio combinations, with a reusable `ComboPlayer` architecture that can later support effects and voting.
+
+Framework:
+
+- Next.js remains the frontend framework.
+
+## 10.1 ComboPlayer Core (Planned)
+
+Responsibilities:
+
+- Synchronize video + audio streaming timelines.
+- Synchronize user playback input across both tracks (play/pause/seek/rate).
+- Expose a future extension point for playback effects.
+
+Planned tasks:
+
+- [ ] Add `ComboPlayer` container component with load/ready/error playback states.
+- [ ] Implement media sync engine with video as timing authority and audio drift correction.
+- [ ] Implement source management for stream loading/fallback handling per track.
+- [ ] Add shared playback state contract for controls and future voting/analytics hooks.
+
+Done when:
+
+- Video and audio play in sync through seeks, pauses, and resumes.
+- Sync recovery works after buffering stalls and visibility/tab changes.
+
+## 10.2 Frontend Combo UI (Planned)
+
+Planned tasks:
+
+- [ ] Add combo-focused page/workflow in Next.js app for selecting and previewing video+audio pairs.
+- [ ] Add `ComboControls` UI (play/pause, scrub, rate, volume/mute).
+- [ ] Add basic accessibility + keyboard behavior for combo playback controls.
+- [ ] Add clear loading/error UX for partial or failed track loads.
+
+Done when:
+
+- User can open a combo view and reliably control synchronized playback.
+
+## 10.3 Effects Extension Point (Planned)
+
+Planned tasks:
+
+- [ ] Define `EffectsPipeline` interface (`attach`, `setEffects`, `detach`) with no-op implementation.
+- [ ] Add initial simple effect hooks (playback rate + basic color filter configuration surface).
+- [ ] Ensure effects integration does not break base sync behavior.
+
+Done when:
+
+- Effects can be toggled/configured without destabilizing synchronized playback.
 
 ---
 
@@ -991,8 +1300,35 @@ Future:
 ### Milestone 5 (Phase 9 Readiness)
 
 - Asset schema guarantees stable IDs, structured facet tags, freeform tags, and maintained `searchText`
-- Data contracts are ready for embedding generation pipeline inputs (without enabling embeddings yet)
-- Metadata quality and indexing shape are documented for future vector retrieval integration
+- Contract versioning/migration approach is defined for nested and generated media metadata
+- Data model baseline is ready for future retrieval/AI layers (without enabling them yet)
+
+### Milestone 6 (Phase 9.1 Nested Media)
+
+- Status: [x] Completed
+- Hierarchy + lineage fields are added to contracts and persisted in metadata records
+- API supports child listing, move operations, and lineage traversal with cycle safeguards
+- Library UX supports nested navigation and relationship context
+
+### Milestone 7 (Phase 9.2 AI-Generated Media)
+
+- Status: [x] Completed
+- Generated-media fields are represented in contracts with clear provenance semantics
+- Validation rules enforce consistent source/provenance metadata on write paths
+- UI clearly distinguishes uploaded, derived, and generated assets
+
+### Milestone 8 (Phase 9.3 Saved Combo Entity + Voting)
+
+- Status: [x] Completed
+- Saved combo entity exists for video+audio pairings with stable IDs
+- Combo playback supports synchronized video+audio loading in client app
+- Voting APIs/UI persist and reflect per-user votes and aggregate scores
+
+### Milestone 9 (Phase 9.4 English Combo Search)
+
+- Combo-level search text is generated and maintained
+- English query endpoint returns relevant saved combos
+- Semantic ranking extension point is documented and contract-ready
 
 ---
 

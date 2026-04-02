@@ -2,8 +2,10 @@
 
 import {
   AssetDetailResponseSchema,
+  AssetListResponseSchema,
   AssetTypeSchema,
   AssetUploadUrlResponseSchema,
+  type VideoUploadMetadata,
 } from "@media-manager/contracts";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
@@ -22,16 +24,26 @@ type ToastState = {
   description?: string;
 };
 
+type FolderOption = {
+  id: string;
+  title: string;
+};
+
 async function putFileWithProgress(
   uploadUrl: string,
   file: File,
   contentType: string,
-  onProgress: (progress: number) => void
+  onProgress: (progress: number) => void,
+  videoMetadata?: VideoUploadMetadata
 ): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open("PUT", uploadUrl, true);
     request.setRequestHeader("content-type", contentType);
+    if (videoMetadata) {
+      request.setRequestHeader("x-amz-meta-video-width", String(videoMetadata.width));
+      request.setRequestHeader("x-amz-meta-video-height", String(videoMetadata.height));
+    }
 
     request.upload.onprogress = (event) => {
       if (!event.lengthComputable) {
@@ -59,11 +71,54 @@ async function putFileWithProgress(
   });
 }
 
+async function getVideoUploadMetadata(file: File): Promise<VideoUploadMetadata | undefined> {
+  if (!file.type.startsWith("video/")) {
+    return undefined;
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const metadata = await new Promise<VideoUploadMetadata>((resolve, reject) => {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.muted = true;
+      video.playsInline = true;
+
+      video.onloadedmetadata = () => {
+        const width = Math.trunc(video.videoWidth);
+        const height = Math.trunc(video.videoHeight);
+        if (width <= 0 || height <= 0) {
+          reject(new Error("Video dimensions could not be determined."));
+          return;
+        }
+
+        resolve({ width, height });
+      };
+
+      video.onerror = () => {
+        reject(new Error("Video metadata could not be read."));
+      };
+
+      video.src = objectUrl;
+    });
+
+    return metadata;
+  } catch {
+    return undefined;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 export default function UploadPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [targetMode, setTargetMode] = useState<"root" | "existing" | "new">("root");
+  const [folders, setFolders] = useState<FolderOption[]>([]);
+  const [selectedFolderId, setSelectedFolderId] = useState("");
+  const [newFolderTitle, setNewFolderTitle] = useState("");
   const [toast, setToast] = useState<ToastState>({
     open: false,
     variant: "success",
@@ -88,6 +143,41 @@ export default function UploadPage() {
     };
   }, [toast.open]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadFolders = async () => {
+      try {
+        const response = await fetch("/api/assets?type=folder&sort=newest", {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const json = (await response.json()) as unknown;
+        const parsed = AssetListResponseSchema.safeParse(json);
+        if (!parsed.success || cancelled) {
+          return;
+        }
+
+        setFolders(parsed.data.assets.map((asset) => ({ id: asset.id, title: asset.title })));
+      } catch {
+        // best effort
+      }
+    };
+
+    void loadFolders();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const selectedFolder = folders.find((folder) => folder.id === selectedFolderId) ?? null;
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage(null);
@@ -105,6 +195,9 @@ export default function UploadPage() {
       if (!parsedType.success) {
         throw new Error("Please select a valid asset type.");
       }
+      if (parsedType.data === "folder") {
+        throw new Error("Use Create Folder in Library to add folders.");
+      }
 
       const title = rawTitle.trim();
       if (!title) {
@@ -113,6 +206,46 @@ export default function UploadPage() {
 
       if (!(file instanceof File) || file.size === 0) {
         throw new Error("Please choose a media file to upload.");
+      }
+
+      let containerId: string | undefined;
+      if (targetMode === "existing") {
+        const chosen = selectedFolderId.trim();
+        if (!chosen) {
+          throw new Error("Select a target folder.");
+        }
+        containerId = chosen;
+      }
+
+      if (targetMode === "new") {
+        const newTitle = newFolderTitle.trim();
+        if (!newTitle) {
+          throw new Error("New folder name is required.");
+        }
+
+        const folderCreateResponse = await fetch("/api/assets", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            type: "folder",
+            title: newTitle,
+            description: "",
+          }),
+        });
+
+        if (!folderCreateResponse.ok) {
+          throw new Error("Failed to create destination folder.");
+        }
+
+        const folderJson = (await folderCreateResponse.json()) as unknown;
+        const folderParsed = AssetDetailResponseSchema.safeParse(folderJson);
+        if (!folderParsed.success) {
+          throw new Error("Folder response failed validation.");
+        }
+
+        containerId = folderParsed.data.asset.id;
       }
 
       const createResponse = await fetch("/api/assets", {
@@ -124,6 +257,7 @@ export default function UploadPage() {
           type: parsedType.data,
           title,
           description: rawDescription.trim(),
+          ...(containerId ? { containerId } : {}),
         }),
       });
 
@@ -138,13 +272,18 @@ export default function UploadPage() {
       }
 
       const asset = createParsed.data.asset;
-      const contentType = file.type || "application/octet-stream";
+
+      const uploadFile = file as File;
+      const contentType = uploadFile.type || "application/octet-stream";
+      const videoMetadata =
+        parsedType.data === "video" ? await getVideoUploadMetadata(uploadFile) : undefined;
       const shouldUseMultipart =
-        parsedType.data === "video" && file.size >= MULTIPART_THRESHOLD_BYTES;
+        parsedType.data === "video" && uploadFile.size >= MULTIPART_THRESHOLD_BYTES;
 
       if (shouldUseMultipart) {
-        await uploadFileViaMultipart(asset.id, file, {
+        await uploadFileViaMultipart(asset.id, uploadFile, {
           onProgress: setUploadProgress,
+          videoMetadata,
         });
       } else {
         const uploadUrlResponse = await fetch(
@@ -154,7 +293,10 @@ export default function UploadPage() {
             headers: {
               "content-type": "application/json",
             },
-            body: JSON.stringify({ contentType }),
+            body: JSON.stringify({
+              contentType,
+              ...(videoMetadata ? { videoMetadata } : {}),
+            }),
           }
         );
 
@@ -170,9 +312,10 @@ export default function UploadPage() {
 
         await putFileWithProgress(
           uploadParsed.data.uploadUrl,
-          file,
+          uploadFile,
           contentType,
-          setUploadProgress
+          setUploadProgress,
+          videoMetadata
         );
 
         const confirmResponse = await fetch(
@@ -224,7 +367,7 @@ export default function UploadPage() {
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Upload</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Create an asset, request a signed upload URL, and upload directly to S3.
+          Upload media to root, an existing folder, or a new folder.
         </p>
       </header>
 
@@ -242,6 +385,65 @@ export default function UploadPage() {
           <option value="audio">Audio</option>
           <option value="image">Image</option>
         </select>
+
+        <fieldset className="space-y-2 rounded-md border p-3">
+          <legend className="px-1 text-sm font-medium">Destination</legend>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              checked={targetMode === "root"}
+              name="target-mode"
+              onChange={() => setTargetMode("root")}
+              type="radio"
+            />
+            Root
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              checked={targetMode === "existing"}
+              name="target-mode"
+              onChange={() => setTargetMode("existing")}
+              type="radio"
+            />
+            Existing folder
+          </label>
+          {targetMode === "existing" ? (
+            <select
+              className="w-full rounded-md border bg-card px-3 py-2 text-sm"
+              onChange={(event) => setSelectedFolderId(event.target.value)}
+              value={selectedFolderId}
+            >
+              <option value="">Select folder</option>
+              {folders.map((folder) => (
+                <option key={folder.id} value={folder.id}>
+                  {folder.title} - {folder.id}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {targetMode === "existing" && selectedFolder ? (
+            <p className="text-xs text-muted-foreground">
+              Selected: {selectedFolder.title}{" "}
+              <span className="text-muted-foreground/70">{selectedFolder.id}</span>
+            </p>
+          ) : null}
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              checked={targetMode === "new"}
+              name="target-mode"
+              onChange={() => setTargetMode("new")}
+              type="radio"
+            />
+            New folder
+          </label>
+          {targetMode === "new" ? (
+            <input
+              className="w-full rounded-md border bg-card px-3 py-2 text-sm"
+              onChange={(event) => setNewFolderTitle(event.target.value)}
+              placeholder="New folder name"
+              value={newFolderTitle}
+            />
+          ) : null}
+        </fieldset>
         <label className="block text-sm font-medium" htmlFor="asset-title">
           Asset title
         </label>

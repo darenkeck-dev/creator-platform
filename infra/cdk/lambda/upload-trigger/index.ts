@@ -6,6 +6,7 @@ import {
   MediaConvertClient,
   type JobSettings,
 } from "@aws-sdk/client-mediaconvert";
+import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { z } from "zod";
 
 type SqsEvent = {
@@ -68,6 +69,7 @@ type ProcessingProfile = {
 
 type ConversionState = "queued" | "processing" | "ready" | "error" | "passthrough_ready";
 type ProcessingProfileId = "video-standard-v1" | "audio-passthrough-v1" | "image-passthrough-v1";
+type VideoOrientation = "landscape" | "portrait";
 
 const VIDEO_STANDARD_V1 = "video-standard-v1";
 const AUDIO_PASSTHROUGH_V1 = "audio-passthrough-v1";
@@ -84,8 +86,44 @@ const db = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
     removeUndefinedValues: true,
   },
 });
+const s3 = new S3Client({});
 const mediaConvertControl = new MediaConvertClient({});
 let mediaConvertDataPlane: MediaConvertClient | null = null;
+
+type LogContext = Record<string, unknown>;
+
+function logInfo(message: string, context: LogContext = {}): void {
+  console.log(
+    JSON.stringify({
+      level: "info",
+      message,
+      ...context,
+    })
+  );
+}
+
+function logWarn(message: string, context: LogContext = {}): void {
+  console.warn(
+    JSON.stringify({
+      level: "warn",
+      message,
+      ...context,
+    })
+  );
+}
+
+function errorDetails(error: unknown): { errorName?: string; errorMessage: string } {
+  if (error instanceof Error) {
+    return {
+      errorName: error.name,
+      errorMessage: error.message,
+    };
+  }
+
+  return {
+    errorMessage: "Unknown error",
+  };
+}
 
 function requiredEnv(
   name:
@@ -113,6 +151,7 @@ function extractAssetIdFromKey(key: string): string | null {
 
 function parseEventBridgeMessage(body: string | undefined): EventBridgeS3ObjectCreatedEvent | null {
   if (!body) {
+    logWarn("Skipping SQS record without body");
     return null;
   }
 
@@ -120,11 +159,13 @@ function parseEventBridgeMessage(body: string | undefined): EventBridgeS3ObjectC
     const parsed = JSON.parse(body) as unknown;
     const validated = EventBridgeS3ObjectCreatedEventSchema.safeParse(parsed);
     if (!validated.success) {
+      logWarn("Skipping SQS record with invalid EventBridge payload");
       return null;
     }
 
     return validated.data;
-  } catch {
+  } catch (error) {
+    logWarn("Skipping SQS record with non-JSON body", errorDetails(error));
     return null;
   }
 }
@@ -147,8 +188,22 @@ function resolveProcessingProfile(asset: AssetRecord): ProcessingProfile {
     .enum([VIDEO_STANDARD_V1, AUDIO_PASSTHROUGH_V1, IMAGE_PASSTHROUGH_V1])
     .safeParse(profileId);
   if (!parsedProfileId.success) {
+    logWarn("Invalid processing profile on asset; defaulting to video profile", {
+      assetId: asset.id,
+      assetType: asset.type,
+      providedProfile: asset.processingProfile,
+      fallbackProfile: VIDEO_STANDARD_V1,
+    });
     return PROFILE_BY_ID[VIDEO_STANDARD_V1];
   }
+
+  logInfo("Resolved processing profile", {
+    assetId: asset.id,
+    assetType: asset.type,
+    providedProfile: asset.processingProfile,
+    resolvedProfile: parsedProfileId.data,
+    mode: PROFILE_BY_ID[parsedProfileId.data].mode,
+  });
 
   return PROFILE_BY_ID[parsedProfileId.data];
 }
@@ -158,7 +213,8 @@ function mediaConvertJobSettings(
   originalsBucket: string,
   key: string,
   derivedBucket: string,
-  contentType: string
+  contentType: string,
+  orientation: VideoOrientation
 ): JobSettings {
   const destinationBase = `s3://${derivedBucket}/derived/${assetId}`;
 
@@ -189,95 +245,186 @@ function mediaConvertJobSettings(
             ClientCache: "ENABLED",
           },
         },
-        Outputs: [
-          {
-            NameModifier: "_1080p",
-            ContainerSettings: { Container: "M3U8" },
-            VideoDescription: {
-              Width: 1920,
-              Height: 1080,
-              CodecSettings: {
-                Codec: "H_264",
-                H264Settings: {
-                  RateControlMode: "QVBR",
-                  MaxBitrate: 6000000,
-                  QvbrSettings: { QvbrQualityLevel: 7 },
-                },
-              },
-            },
-            AudioDescriptions: [
-              {
-                AudioSourceName: "Audio Selector 1",
-                CodecSettings: {
-                  Codec: "AAC",
-                  AacSettings: {
-                    Bitrate: 128000,
-                    CodingMode: "CODING_MODE_2_0",
-                    SampleRate: 48000,
+        Outputs:
+          orientation === "portrait"
+            ? [
+                {
+                  NameModifier: "_1080p",
+                  ContainerSettings: { Container: "M3U8" },
+                  VideoDescription: {
+                    Width: 1080,
+                    Height: 1920,
+                    CodecSettings: {
+                      Codec: "H_264",
+                      H264Settings: {
+                        RateControlMode: "QVBR",
+                        MaxBitrate: 6000000,
+                        QvbrSettings: { QvbrQualityLevel: 7 },
+                      },
+                    },
                   },
+                  AudioDescriptions: [
+                    {
+                      AudioSourceName: "Audio Selector 1",
+                      CodecSettings: {
+                        Codec: "AAC",
+                        AacSettings: {
+                          Bitrate: 128000,
+                          CodingMode: "CODING_MODE_2_0",
+                          SampleRate: 48000,
+                        },
+                      },
+                    },
+                  ],
                 },
-              },
-            ],
-          },
-          {
-            NameModifier: "_720p",
-            ContainerSettings: { Container: "M3U8" },
-            VideoDescription: {
-              Width: 1280,
-              Height: 720,
-              CodecSettings: {
-                Codec: "H_264",
-                H264Settings: {
-                  RateControlMode: "QVBR",
-                  MaxBitrate: 3500000,
-                  QvbrSettings: { QvbrQualityLevel: 7 },
-                },
-              },
-            },
-            AudioDescriptions: [
-              {
-                AudioSourceName: "Audio Selector 1",
-                CodecSettings: {
-                  Codec: "AAC",
-                  AacSettings: {
-                    Bitrate: 128000,
-                    CodingMode: "CODING_MODE_2_0",
-                    SampleRate: 48000,
+                {
+                  NameModifier: "_720p",
+                  ContainerSettings: { Container: "M3U8" },
+                  VideoDescription: {
+                    Width: 720,
+                    Height: 1280,
+                    CodecSettings: {
+                      Codec: "H_264",
+                      H264Settings: {
+                        RateControlMode: "QVBR",
+                        MaxBitrate: 3500000,
+                        QvbrSettings: { QvbrQualityLevel: 7 },
+                      },
+                    },
                   },
+                  AudioDescriptions: [
+                    {
+                      AudioSourceName: "Audio Selector 1",
+                      CodecSettings: {
+                        Codec: "AAC",
+                        AacSettings: {
+                          Bitrate: 128000,
+                          CodingMode: "CODING_MODE_2_0",
+                          SampleRate: 48000,
+                        },
+                      },
+                    },
+                  ],
                 },
-              },
-            ],
-          },
-          {
-            NameModifier: "_480p",
-            ContainerSettings: { Container: "M3U8" },
-            VideoDescription: {
-              Width: 854,
-              Height: 480,
-              CodecSettings: {
-                Codec: "H_264",
-                H264Settings: {
-                  RateControlMode: "QVBR",
-                  MaxBitrate: 2000000,
-                  QvbrSettings: { QvbrQualityLevel: 7 },
-                },
-              },
-            },
-            AudioDescriptions: [
-              {
-                AudioSourceName: "Audio Selector 1",
-                CodecSettings: {
-                  Codec: "AAC",
-                  AacSettings: {
-                    Bitrate: 96000,
-                    CodingMode: "CODING_MODE_2_0",
-                    SampleRate: 48000,
+                {
+                  NameModifier: "_540p",
+                  ContainerSettings: { Container: "M3U8" },
+                  VideoDescription: {
+                    Width: 540,
+                    Height: 960,
+                    CodecSettings: {
+                      Codec: "H_264",
+                      H264Settings: {
+                        RateControlMode: "QVBR",
+                        MaxBitrate: 2000000,
+                        QvbrSettings: { QvbrQualityLevel: 7 },
+                      },
+                    },
                   },
+                  AudioDescriptions: [
+                    {
+                      AudioSourceName: "Audio Selector 1",
+                      CodecSettings: {
+                        Codec: "AAC",
+                        AacSettings: {
+                          Bitrate: 96000,
+                          CodingMode: "CODING_MODE_2_0",
+                          SampleRate: 48000,
+                        },
+                      },
+                    },
+                  ],
                 },
-              },
-            ],
-          },
-        ],
+              ]
+            : [
+                {
+                  NameModifier: "_1080p",
+                  ContainerSettings: { Container: "M3U8" },
+                  VideoDescription: {
+                    Width: 1920,
+                    Height: 1080,
+                    CodecSettings: {
+                      Codec: "H_264",
+                      H264Settings: {
+                        RateControlMode: "QVBR",
+                        MaxBitrate: 6000000,
+                        QvbrSettings: { QvbrQualityLevel: 7 },
+                      },
+                    },
+                  },
+                  AudioDescriptions: [
+                    {
+                      AudioSourceName: "Audio Selector 1",
+                      CodecSettings: {
+                        Codec: "AAC",
+                        AacSettings: {
+                          Bitrate: 128000,
+                          CodingMode: "CODING_MODE_2_0",
+                          SampleRate: 48000,
+                        },
+                      },
+                    },
+                  ],
+                },
+                {
+                  NameModifier: "_720p",
+                  ContainerSettings: { Container: "M3U8" },
+                  VideoDescription: {
+                    Width: 1280,
+                    Height: 720,
+                    CodecSettings: {
+                      Codec: "H_264",
+                      H264Settings: {
+                        RateControlMode: "QVBR",
+                        MaxBitrate: 3500000,
+                        QvbrSettings: { QvbrQualityLevel: 7 },
+                      },
+                    },
+                  },
+                  AudioDescriptions: [
+                    {
+                      AudioSourceName: "Audio Selector 1",
+                      CodecSettings: {
+                        Codec: "AAC",
+                        AacSettings: {
+                          Bitrate: 128000,
+                          CodingMode: "CODING_MODE_2_0",
+                          SampleRate: 48000,
+                        },
+                      },
+                    },
+                  ],
+                },
+                {
+                  NameModifier: "_480p",
+                  ContainerSettings: { Container: "M3U8" },
+                  VideoDescription: {
+                    Width: 854,
+                    Height: 480,
+                    CodecSettings: {
+                      Codec: "H_264",
+                      H264Settings: {
+                        RateControlMode: "QVBR",
+                        MaxBitrate: 2000000,
+                        QvbrSettings: { QvbrQualityLevel: 7 },
+                      },
+                    },
+                  },
+                  AudioDescriptions: [
+                    {
+                      AudioSourceName: "Audio Selector 1",
+                      CodecSettings: {
+                        Codec: "AAC",
+                        AacSettings: {
+                          Bitrate: 96000,
+                          CodingMode: "CODING_MODE_2_0",
+                          SampleRate: 48000,
+                        },
+                      },
+                    },
+                  ],
+                },
+              ],
       },
       {
         Name: "Poster",
@@ -309,8 +456,63 @@ function mediaConvertJobSettings(
   };
 }
 
+function parsePositiveDimension(value: string | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return Math.trunc(parsed);
+}
+
+async function resolveVideoOrientation(bucketName: string, key: string): Promise<VideoOrientation> {
+  try {
+    const head = await s3.send(
+      new HeadObjectCommand({
+        Bucket: bucketName,
+        Key: key,
+      })
+    );
+
+    const width = parsePositiveDimension(head.Metadata?.["video-width"]);
+    const height = parsePositiveDimension(head.Metadata?.["video-height"]);
+    if (!width || !height) {
+      logWarn("Video orientation metadata missing or invalid; defaulting to landscape", {
+        bucketName,
+        key,
+        metadataWidth: head.Metadata?.["video-width"],
+        metadataHeight: head.Metadata?.["video-height"],
+      });
+      return "landscape";
+    }
+
+    const orientation = height > width ? "portrait" : "landscape";
+    logInfo("Resolved video orientation from object metadata", {
+      bucketName,
+      key,
+      width,
+      height,
+      orientation,
+    });
+
+    return orientation;
+  } catch (error) {
+    logWarn("Failed to read object metadata for orientation; defaulting to landscape", {
+      bucketName,
+      key,
+      ...errorDetails(error),
+    });
+    return "landscape";
+  }
+}
+
 async function mediaConvertClient(): Promise<MediaConvertClient> {
   if (mediaConvertDataPlane) {
+    logInfo("Using cached MediaConvert data-plane client");
     return mediaConvertDataPlane;
   }
 
@@ -319,6 +521,8 @@ async function mediaConvertClient(): Promise<MediaConvertClient> {
   if (!endpointUrl) {
     throw new Error("MediaConvert endpoint could not be resolved");
   }
+
+  logInfo("Resolved MediaConvert endpoint", { endpointUrl });
 
   mediaConvertDataPlane = new MediaConvertClient({ endpoint: endpointUrl });
   return mediaConvertDataPlane;
@@ -431,7 +635,33 @@ async function submitMediaConvertJob(
   const roleArn = requiredEnv("MEDIACONVERT_ROLE_ARN");
   const client = await mediaConvertClient();
 
-  const settings = mediaConvertJobSettings(assetId, bucketName, key, derivedBucket, contentType);
+  const orientation = await resolveVideoOrientation(bucketName, key);
+  const settings = mediaConvertJobSettings(
+    assetId,
+    bucketName,
+    key,
+    derivedBucket,
+    contentType,
+    orientation
+  );
+  const hlsOutputs = settings.OutputGroups?.[0]?.Outputs ?? [];
+  const ladder = hlsOutputs.map((output) => ({
+    nameModifier: output.NameModifier,
+    width: output.VideoDescription?.Width,
+    height: output.VideoDescription?.Height,
+  }));
+
+  logInfo("Submitting MediaConvert job", {
+    assetId,
+    sourceBucket: bucketName,
+    sourceKey: key,
+    contentType,
+    processingProfile,
+    orientation,
+    outputLadder: ladder,
+    destinationBucket: derivedBucket,
+  });
+
   const result = await client.send(
     new CreateJobCommand({
       Role: roleArn,
@@ -439,6 +669,7 @@ async function submitMediaConvertJob(
       UserMetadata: {
         assetId,
         processingProfile,
+        orientation,
         sourceBucket: bucketName,
         sourceKey: key,
       },
@@ -454,11 +685,22 @@ async function submitMediaConvertJob(
     throw new Error("MediaConvert did not return a job id");
   }
 
+  logInfo("MediaConvert job submitted", {
+    assetId,
+    jobId,
+    processingProfile,
+    orientation,
+  });
+
   return jobId;
 }
 
 async function handleObjectCreated(event: EventBridgeS3ObjectCreatedEvent): Promise<void> {
   if (event.source !== "aws.s3" || event["detail-type"] !== "Object Created") {
+    logInfo("Skipping non-object-created event", {
+      source: event.source,
+      detailType: event["detail-type"],
+    });
     return;
   }
 
@@ -467,29 +709,55 @@ async function handleObjectCreated(event: EventBridgeS3ObjectCreatedEvent): Prom
 
   const bucketName = event.detail?.bucket?.name;
   if (bucketName !== originalsBucket) {
+    logInfo("Skipping object-created event from non-originals bucket", {
+      eventBucket: bucketName,
+      originalsBucket,
+    });
     return;
   }
 
   const rawKey = event.detail?.object?.key;
   if (!rawKey) {
+    logWarn("Skipping object-created event with missing key", { bucketName });
     return;
   }
 
   const key = decodeS3Key(rawKey);
   const assetId = extractAssetIdFromKey(key);
   if (!assetId) {
+    logWarn("Skipping object-created key that does not map to asset id", {
+      bucketName,
+      key,
+    });
     return;
   }
 
   const size = typeof event.detail?.object?.size === "number" ? event.detail.object.size : 0;
+  logInfo("Processing object-created event", {
+    assetId,
+    bucketName,
+    key,
+    size,
+  });
+
   const asset = await getAsset(tableName, assetId);
   if (!asset) {
+    logWarn("Asset not found for uploaded object; skipping", {
+      assetId,
+      bucketName,
+      key,
+    });
     return;
   }
 
   const profile = resolveProcessingProfile(asset);
 
   if (profile.mode === "passthrough") {
+    logInfo("Using passthrough processing profile", {
+      assetId,
+      profileId: profile.profileId,
+      assetType: asset.type,
+    });
     await updateAssetStatus(tableName, assetId, bucketName, key, size, "ready", {
       status: "passthrough_ready",
       profile: profile.profileId,
@@ -502,8 +770,16 @@ async function handleObjectCreated(event: EventBridgeS3ObjectCreatedEvent): Prom
       status: "queued",
       profile: profile.profileId,
     });
+    logInfo("Asset status updated to processing queued", {
+      assetId,
+      profileId: profile.profileId,
+    });
   } catch (error) {
     if (error instanceof Error && error.name === "ConditionalCheckFailedException") {
+      logInfo("Skipping conversion because asset already terminal", {
+        assetId,
+        status: asset.status,
+      });
       return;
     }
 
@@ -523,6 +799,11 @@ async function handleObjectCreated(event: EventBridgeS3ObjectCreatedEvent): Prom
       profile: profile.profileId,
       jobId,
     });
+    logInfo("Asset status updated to processing with MediaConvert job", {
+      assetId,
+      jobId,
+      profileId: profile.profileId,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "MediaConvert job submission failed";
     await updateAssetStatus(tableName, assetId, bucketName, key, size, "error", {
@@ -530,12 +811,21 @@ async function handleObjectCreated(event: EventBridgeS3ObjectCreatedEvent): Prom
       profile: profile.profileId,
       errorMessage: message,
     });
+    logWarn("MediaConvert submission failed; asset marked error", {
+      assetId,
+      profileId: profile.profileId,
+      ...errorDetails(error),
+    });
     throw error;
   }
 }
 
 export async function handler(event: SqsEvent): Promise<{ ok: boolean; processed: number }> {
   let processed = 0;
+
+  logInfo("Upload trigger batch received", {
+    recordCount: event.Records?.length ?? 0,
+  });
 
   for (const record of event.Records ?? []) {
     const parsed = parseEventBridgeMessage(record.body);
@@ -546,6 +836,8 @@ export async function handler(event: SqsEvent): Promise<{ ok: boolean; processed
     await handleObjectCreated(parsed);
     processed += 1;
   }
+
+  logInfo("Upload trigger batch completed", { processed });
 
   return { ok: true, processed };
 }

@@ -5,6 +5,8 @@ import {
   AssetRecordSchema,
   AssetConversionInfoSchema,
   CreateAssetInputSchema,
+  CreateComboInputSchema,
+  ComboVoteInputSchema,
   MultipartCompleteInputSchema,
 } from "@media-manager/contracts";
 
@@ -60,6 +62,52 @@ describe("contracts", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("accepts generated provenance metadata on create", () => {
+    const parsed = CreateAssetInputSchema.safeParse({
+      type: "video",
+      title: "AI clip",
+      description: "generated",
+      origin: "generated",
+      generation: {
+        provider: "openai",
+        model: "sora-v1",
+        workflowId: "wf-1",
+        promptHash: "abc123",
+        seed: 42,
+        createdBy: "owner@example.com",
+      },
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects generated provenance fields when origin is uploaded", () => {
+    const parsed = CreateAssetInputSchema.safeParse({
+      type: "video",
+      title: "Uploaded clip",
+      origin: "uploaded",
+      generation: {
+        provider: "openai",
+        model: "sora-v1",
+        workflowId: "wf-1",
+        promptHash: "abc123",
+        createdBy: "owner@example.com",
+      },
+    });
+
+    expect(parsed.success).toBe(false);
+  });
+
+  it("rejects derived origin without sourceAssetIds", () => {
+    const parsed = CreateAssetInputSchema.safeParse({
+      type: "video",
+      title: "Derived clip",
+      origin: "derived",
+    });
+
+    expect(parsed.success).toBe(false);
+  });
+
   it("requires multipart complete parts to be non-empty", () => {
     const parsed = MultipartCompleteInputSchema.safeParse({
       uploadId: "upload-1",
@@ -67,5 +115,19 @@ describe("contracts", () => {
     });
 
     expect(parsed.success).toBe(false);
+  });
+
+  it("supports combo create and vote payloads", () => {
+    const comboParsed = CreateComboInputSchema.safeParse({
+      videoAssetId: "video-1",
+      audioAssetId: "audio-1",
+      playback: {
+        gainDb: -2,
+      },
+    });
+    const voteParsed = ComboVoteInputSchema.safeParse({ action: "up" });
+
+    expect(comboParsed.success).toBe(true);
+    expect(voteParsed.success).toBe(true);
   });
 });

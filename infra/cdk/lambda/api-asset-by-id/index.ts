@@ -24,7 +24,11 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import {
   AssetDeleteResponseSchema,
+  AssetChildrenResponseSchema,
   AssetDetailResponseSchema,
+  AssetLineageResponseSchema,
+  MoveAssetInputSchema,
+  MoveAssetResponseSchema,
   AssetPlaybackUrlResponseSchema,
   AssetRecordSchema,
   AssetUploadUrlInputSchema,
@@ -56,6 +60,7 @@ type HttpEvent = {
     id?: string;
   };
   body?: string | null;
+  queryStringParameters?: Record<string, string | undefined>;
 };
 
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -63,10 +68,54 @@ const s3 = new S3Client({});
 const UPLOAD_URL_EXPIRES_IN_SECONDS = 900;
 const MULTIPART_PART_SIZE_BYTES = 32 * 1024 * 1024;
 
+function buildSearchText(input: {
+  title: string;
+  description: string;
+  tags: Array<{ facet?: string; value: string }>;
+  type: string;
+  origin?: string;
+  generationProvider?: string;
+  generationModel?: string;
+  generationWorkflowId?: string;
+  processingProfile?: string;
+  originalContentType?: string;
+}): string {
+  const tagTerms = input.tags.flatMap((tag) => [tag.facet, tag.value]);
+  return [
+    input.title,
+    input.description,
+    ...tagTerms,
+    input.type,
+    input.origin,
+    input.generationProvider,
+    input.generationModel,
+    input.generationWorkflowId,
+    input.processingProfile,
+    input.originalContentType,
+  ]
+    .filter((term): term is string => typeof term === "string" && term.trim().length > 0)
+    .map((term) => term.trim().toLowerCase())
+    .join(" ");
+}
+
 function response(statusCode: number, body: unknown): { statusCode: number; body: string } {
   return {
     statusCode,
     body: JSON.stringify(body),
+  };
+}
+
+function buildUploadObjectMetadata(videoMetadata?: {
+  width: number;
+  height: number;
+}): Record<string, string> | undefined {
+  if (!videoMetadata) {
+    return undefined;
+  }
+
+  return {
+    "video-width": String(videoMetadata.width),
+    "video-height": String(videoMetadata.height),
   };
 }
 
@@ -97,6 +146,19 @@ function getDerivedBucketName(): string {
   return bucketName;
 }
 
+function getContainerIndex(): string {
+  const indexName = process.env.ASSETS_CONTAINER_INDEX;
+  if (!indexName) {
+    throw new Error("Missing environment variable: ASSETS_CONTAINER_INDEX");
+  }
+
+  return indexName;
+}
+
+function toContainerIndexPk(containerId?: string): string {
+  return `CONTAINER#${containerId ?? "ROOT"}`;
+}
+
 function getOwnerEmail(event: HttpEvent): string {
   const claims = event.requestContext?.authorizer?.jwt?.claims;
   const parsed = z.string().email().safeParse(claims?.email);
@@ -124,6 +186,95 @@ function parseBody(body: string | null | undefined): unknown {
   return JSON.parse(body);
 }
 
+function folderOperationNotAllowedResponse(): { statusCode: number; body: string } {
+  return response(400, { message: "Folders do not support upload or playback operations" });
+}
+
+async function fetchAssetById(
+  tableName: string,
+  id: string
+): Promise<z.infer<typeof AssetRecordSchema> | null> {
+  const result = await db.send(
+    new GetCommand({
+      TableName: tableName,
+      Key: {
+        pk: `ASSET#${id}`,
+        sk: "META",
+      },
+    })
+  );
+
+  if (!result.Item) {
+    return null;
+  }
+
+  return AssetRecordSchema.parse(result.Item);
+}
+
+async function resolveDepthAndRoot(
+  tableName: string,
+  assetId: string,
+  nextContainerId: string | null,
+  ownerEmail: string
+): Promise<
+  | { ok: true; containerId?: string; parentId?: string; rootId: string; depth: number }
+  | { ok: false; statusCode: number; body: string }
+> {
+  if (!nextContainerId) {
+    return {
+      ok: true,
+      rootId: assetId,
+      depth: 0,
+    };
+  }
+
+  if (nextContainerId === assetId) {
+    return {
+      ok: false,
+      statusCode: 400,
+      body: JSON.stringify({ message: "Invalid move: asset cannot be its own container" }),
+    };
+  }
+
+  const container = await fetchAssetById(tableName, nextContainerId);
+  if (!container) {
+    return {
+      ok: false,
+      statusCode: 400,
+      body: JSON.stringify({ message: "Invalid containerId: referenced asset not found" }),
+    };
+  }
+
+  if (container.ownerEmail !== ownerEmail) {
+    return {
+      ok: false,
+      statusCode: 403,
+      body: JSON.stringify({ message: "Forbidden: container belongs to another owner" }),
+    };
+  }
+
+  let cursor: z.infer<typeof AssetRecordSchema> | null = container;
+  while (cursor?.containerId) {
+    if (cursor.containerId === assetId) {
+      return {
+        ok: false,
+        statusCode: 400,
+        body: JSON.stringify({ message: "Invalid move: cycle detected" }),
+      };
+    }
+
+    cursor = await fetchAssetById(tableName, cursor.containerId);
+  }
+
+  return {
+    ok: true,
+    containerId: container.id,
+    parentId: container.id,
+    rootId: container.rootId ?? container.id,
+    depth: (container.depth ?? 0) + 1,
+  };
+}
+
 async function getAsset(id: string): Promise<{ statusCode: number; body: string }> {
   const tableName = getTableName();
 
@@ -144,6 +295,186 @@ async function getAsset(id: string): Promise<{ statusCode: number; body: string 
   const asset = AssetRecordSchema.parse(result.Item);
   const payload = AssetDetailResponseSchema.parse({ asset });
 
+  return response(200, payload);
+}
+
+async function getAssetChildren(
+  event: HttpEvent,
+  id: string
+): Promise<{ statusCode: number; body: string }> {
+  const tableName = getTableName();
+  const containerIndex = getContainerIndex();
+  const ownerEmail = getOwnerEmail(event);
+  const limit = Math.min(
+    100,
+    Math.max(1, Number.parseInt(event.queryStringParameters?.limit ?? "50", 10) || 50)
+  );
+
+  const parent = await fetchAssetById(tableName, id);
+  if (!parent) {
+    return response(404, { message: "Asset not found" });
+  }
+
+  if (parent.ownerEmail !== ownerEmail) {
+    return response(403, { message: "Forbidden" });
+  }
+
+  const result = await db.send(
+    new QueryCommand({
+      TableName: tableName,
+      IndexName: containerIndex,
+      KeyConditionExpression: "gsi2pk = :containerPk",
+      FilterExpression: "ownerEmail = :ownerEmail",
+      ExpressionAttributeValues: {
+        ":containerPk": toContainerIndexPk(id),
+        ":ownerEmail": ownerEmail,
+      },
+      ScanIndexForward: false,
+      Limit: limit,
+    })
+  );
+
+  const children = (result.Items ?? [])
+    .map((item) => AssetRecordSchema.safeParse(item))
+    .filter(
+      (parsed): parsed is z.SafeParseSuccess<z.infer<typeof AssetRecordSchema>> => parsed.success
+    )
+    .map((parsed) => parsed.data)
+    .filter((asset) => asset.containerId === id);
+  const payload = AssetChildrenResponseSchema.parse({
+    parentId: id,
+    assets: children,
+  });
+
+  return response(200, payload);
+}
+
+async function getAssetLineage(
+  event: HttpEvent,
+  id: string
+): Promise<{ statusCode: number; body: string }> {
+  const tableName = getTableName();
+  const ownerEmail = getOwnerEmail(event);
+  const asset = await fetchAssetById(tableName, id);
+
+  if (!asset) {
+    return response(404, { message: "Asset not found" });
+  }
+
+  if (asset.ownerEmail !== ownerEmail) {
+    return response(403, { message: "Forbidden" });
+  }
+
+  const sources: Array<z.infer<typeof AssetRecordSchema>> = [];
+  for (const sourceId of asset.sourceAssetIds ?? []) {
+    const source = await fetchAssetById(tableName, sourceId);
+    if (source && source.ownerEmail === ownerEmail) {
+      sources.push(source);
+    }
+  }
+
+  const payload = AssetLineageResponseSchema.parse({
+    asset,
+    sources,
+  });
+  return response(200, payload);
+}
+
+async function moveAsset(
+  event: HttpEvent,
+  id: string
+): Promise<{ statusCode: number; body: string }> {
+  const tableName = getTableName();
+  const ownerEmail = getOwnerEmail(event);
+  const parsedBody = MoveAssetInputSchema.safeParse(parseBody(event.body));
+  if (!parsedBody.success) {
+    return response(400, { message: "Invalid request body", issues: parsedBody.error.issues });
+  }
+
+  const currentAsset = await fetchAssetById(tableName, id);
+  if (!currentAsset) {
+    return response(404, { message: "Asset not found" });
+  }
+
+  if (currentAsset.ownerEmail !== ownerEmail) {
+    return response(403, { message: "Forbidden" });
+  }
+
+  const requestedContainerId = parsedBody.data.containerId ?? parsedBody.data.parentId ?? null;
+  const resolved = await resolveDepthAndRoot(tableName, id, requestedContainerId, ownerEmail);
+  if (!resolved.ok) {
+    return {
+      statusCode: resolved.statusCode,
+      body: resolved.body,
+    };
+  }
+
+  const now = new Date().toISOString();
+  const removeExpressions: string[] = [];
+  const names: Record<string, string> = {
+    "#updatedAt": "updatedAt",
+    "#containerId": "containerId",
+    "#parentId": "parentId",
+    "#rootId": "rootId",
+    "#depth": "depth",
+    "#gsi2pk": "gsi2pk",
+    "#gsi2sk": "gsi2sk",
+  };
+  const values: Record<string, unknown> = {
+    ":updatedAt": now,
+    ":rootId": resolved.rootId,
+    ":depth": resolved.depth,
+    ":gsi2pk": toContainerIndexPk(resolved.containerId),
+    ":gsi2sk": `${currentAsset.createdAt}#${id}`,
+  };
+
+  const setExpressions: string[] = [
+    "#updatedAt = :updatedAt",
+    "#rootId = :rootId",
+    "#depth = :depth",
+    "#gsi2pk = :gsi2pk",
+    "#gsi2sk = :gsi2sk",
+  ];
+  if (resolved.containerId) {
+    values[":containerId"] = resolved.containerId;
+    setExpressions.push("#containerId = :containerId");
+  } else {
+    removeExpressions.push("#containerId");
+  }
+
+  if (resolved.parentId) {
+    values[":parentId"] = resolved.parentId;
+    setExpressions.push("#parentId = :parentId");
+  } else {
+    removeExpressions.push("#parentId");
+  }
+
+  const updateExpression =
+    removeExpressions.length > 0
+      ? `SET ${setExpressions.join(", ")} REMOVE ${removeExpressions.join(", ")}`
+      : `SET ${setExpressions.join(", ")}`;
+
+  const updateResult = await db.send(
+    new UpdateCommand({
+      TableName: tableName,
+      Key: {
+        pk: `ASSET#${id}`,
+        sk: "META",
+      },
+      ConditionExpression: "attribute_exists(pk) AND attribute_exists(sk)",
+      UpdateExpression: updateExpression,
+      ExpressionAttributeNames: names,
+      ExpressionAttributeValues: values,
+      ReturnValues: "ALL_NEW",
+    })
+  );
+
+  if (!updateResult.Attributes) {
+    return response(404, { message: "Asset not found" });
+  }
+
+  const asset = AssetRecordSchema.parse(updateResult.Attributes);
+  const payload = MoveAssetResponseSchema.parse({ asset });
   return response(200, payload);
 }
 
@@ -197,11 +528,33 @@ async function patchAsset(
     setExpressions.push("#description = :description");
   }
 
-  if (updates.title !== undefined || updates.description !== undefined) {
+  if (updates.visibility !== undefined) {
+    names["#visibility"] = "visibility";
+    values[":visibility"] = updates.visibility;
+    setExpressions.push("#visibility = :visibility");
+  }
+
+  if (
+    updates.title !== undefined ||
+    updates.description !== undefined ||
+    updates.tags !== undefined
+  ) {
     const nextTitle = updates.title ?? currentAsset.title;
     const nextDescription = updates.description ?? currentAsset.description;
+    const nextTags = updates.tags ?? currentAsset.tags;
     names["#searchText"] = "searchText";
-    values[":searchText"] = [nextTitle, nextDescription].filter(Boolean).join(" ").trim();
+    values[":searchText"] = buildSearchText({
+      title: nextTitle,
+      description: nextDescription,
+      tags: nextTags,
+      type: currentAsset.type,
+      origin: currentAsset.origin,
+      generationProvider: currentAsset.generation?.provider,
+      generationModel: currentAsset.generation?.model,
+      generationWorkflowId: currentAsset.generation?.workflowId,
+      processingProfile: currentAsset.processingProfile,
+      originalContentType: currentAsset.original.contentType,
+    });
     setExpressions.push("#searchText = :searchText");
   }
 
@@ -263,17 +616,22 @@ async function createUploadUrl(
   }
 
   const currentAsset = AssetRecordSchema.parse(current.Item);
+  if (currentAsset.type === "folder") {
+    return folderOperationNotAllowedResponse();
+  }
   if (currentAsset.ownerEmail !== ownerEmail) {
     return response(403, { message: "Forbidden" });
   }
 
   const contentType = parsedBody.data.contentType ?? currentAsset.original.contentType;
+  const objectMetadata = buildUploadObjectMetadata(parsedBody.data.videoMetadata);
   const uploadUrl = await getSignedUrl(
     s3,
     new PutObjectCommand({
       Bucket: originalsBucketName,
       Key: currentAsset.original.key,
       ContentType: contentType,
+      Metadata: objectMetadata,
     }),
     { expiresIn: UPLOAD_URL_EXPIRES_IN_SECONDS }
   );
@@ -344,6 +702,9 @@ async function getPlaybackUrl(
   }
 
   const asset = AssetRecordSchema.parse(current.Item);
+  if (asset.type === "folder") {
+    return folderOperationNotAllowedResponse();
+  }
   if (asset.ownerEmail !== ownerEmail) {
     return response(403, { message: "Forbidden" });
   }
@@ -397,16 +758,21 @@ async function initMultipartUpload(
   }
 
   const currentAsset = AssetRecordSchema.parse(current.Item);
+  if (currentAsset.type === "folder") {
+    return folderOperationNotAllowedResponse();
+  }
   if (currentAsset.ownerEmail !== ownerEmail) {
     return response(403, { message: "Forbidden" });
   }
 
   const contentType = parsedBody.data.contentType ?? currentAsset.original.contentType;
+  const objectMetadata = buildUploadObjectMetadata(parsedBody.data.videoMetadata);
   const created = await s3.send(
     new CreateMultipartUploadCommand({
       Bucket: originalsBucketName,
       Key: currentAsset.original.key,
       ContentType: contentType,
+      Metadata: objectMetadata,
     })
   );
 
@@ -486,6 +852,9 @@ async function signMultipartPart(
   }
 
   const asset = AssetRecordSchema.parse(current.Item);
+  if (asset.type === "folder") {
+    return folderOperationNotAllowedResponse();
+  }
   if (asset.ownerEmail !== ownerEmail) {
     return response(403, { message: "Forbidden" });
   }
@@ -538,6 +907,9 @@ async function completeMultipartUpload(
   }
 
   const asset = AssetRecordSchema.parse(current.Item);
+  if (asset.type === "folder") {
+    return folderOperationNotAllowedResponse();
+  }
   if (asset.ownerEmail !== ownerEmail) {
     return response(403, { message: "Forbidden" });
   }
@@ -588,6 +960,9 @@ async function abortMultipartUpload(
   }
 
   const asset = AssetRecordSchema.parse(current.Item);
+  if (asset.type === "folder") {
+    return folderOperationNotAllowedResponse();
+  }
   if (asset.ownerEmail !== ownerEmail) {
     return response(403, { message: "Forbidden" });
   }
@@ -644,6 +1019,9 @@ async function confirmUpload(
   }
 
   const currentAsset = AssetRecordSchema.parse(current.Item);
+  if (currentAsset.type === "folder") {
+    return folderOperationNotAllowedResponse();
+  }
   if (currentAsset.ownerEmail !== ownerEmail) {
     return response(403, { message: "Forbidden" });
   }
@@ -835,6 +1213,14 @@ export async function handler(event: HttpEvent): Promise<{ statusCode: number; b
       return await getPlaybackUrl(event, id);
     }
 
+    if (method === "GET" && routeKey === "GET /assets/{id}/children") {
+      return await getAssetChildren(event, id);
+    }
+
+    if (method === "GET" && routeKey === "GET /assets/{id}/lineage") {
+      return await getAssetLineage(event, id);
+    }
+
     if (method === "GET") {
       return await getAsset(id);
     }
@@ -845,6 +1231,10 @@ export async function handler(event: HttpEvent): Promise<{ statusCode: number; b
 
     if (method === "POST" && routeKey === "POST /assets/{id}/upload-url") {
       return await createUploadUrl(event, id);
+    }
+
+    if (method === "POST" && routeKey === "POST /assets/{id}/move") {
+      return await moveAsset(event, id);
     }
 
     if (method === "POST" && routeKey === "POST /assets/{id}/multipart/init") {

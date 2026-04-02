@@ -4,6 +4,7 @@ import * as targets from "aws-cdk-lib/aws-events-targets";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as lambdaEventSources from "aws-cdk-lib/aws-lambda-event-sources";
+import * as logs from "aws-cdk-lib/aws-logs";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import type { Construct } from "constructs";
 
@@ -57,6 +58,7 @@ export class ProcessingStack extends Stack {
       handler: "index.handler",
       code: lambda.Code.fromAsset(".dist/lambda/mediaconvert-status"),
       timeout: Duration.seconds(30),
+      logRetention: logs.RetentionDays.ONE_MONTH,
       environment: {
         ASSETS_TABLE_NAME: assetsTableName,
         ASSETS_DERIVED_BUCKET_NAME: derivedBucketName,
@@ -80,10 +82,19 @@ export class ProcessingStack extends Stack {
       })
     );
 
+    const uploadEventsDlq = new sqs.Queue(this, "UploadEventsDlq", {
+      queueName: withStageSuffix("media-manager-upload-events-dlq", stage),
+      retentionPeriod: Duration.days(14),
+    });
+
     const uploadEventsQueue = new sqs.Queue(this, "UploadEventsQueue", {
       queueName: withStageSuffix("media-manager-upload-events", stage),
       visibilityTimeout: Duration.seconds(120),
       retentionPeriod: Duration.days(4),
+      deadLetterQueue: {
+        queue: uploadEventsDlq,
+        maxReceiveCount: 5,
+      },
     });
 
     const uploadTrigger = new lambda.Function(this, "UploadTriggerFunction", {
@@ -91,6 +102,7 @@ export class ProcessingStack extends Stack {
       handler: "index.handler",
       code: lambda.Code.fromAsset(".dist/lambda/upload-trigger"),
       timeout: Duration.seconds(30),
+      logRetention: logs.RetentionDays.ONE_MONTH,
       environment: {
         ASSETS_TABLE_NAME: assetsTableName,
         ASSETS_ORIGINALS_BUCKET_NAME: originalsBucketName,
@@ -113,6 +125,13 @@ export class ProcessingStack extends Stack {
       new iam.PolicyStatement({
         actions: ["mediaconvert:DescribeEndpoints", "mediaconvert:CreateJob"],
         resources: ["*"],
+      })
+    );
+
+    uploadTrigger.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["s3:HeadObject"],
+        resources: [`${originalsBucketArn}/*`],
       })
     );
 

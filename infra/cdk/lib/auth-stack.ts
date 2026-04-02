@@ -11,6 +11,7 @@ import {
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as logs from "aws-cdk-lib/aws-logs";
 import type { Construct } from "constructs";
 
 import { stageExportName, withStageSuffix } from "./stage";
@@ -53,6 +54,7 @@ export class AuthStack extends Stack {
       handler: "index.handler",
       code: lambda.Code.fromAsset(".dist/lambda/pre-token-allowlist"),
       timeout: Duration.seconds(10),
+      logRetention: logs.RetentionDays.ONE_MONTH,
       environment: {
         ASSETS_TABLE_NAME: assetsTableName,
       },

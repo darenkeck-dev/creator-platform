@@ -4,8 +4,10 @@ import {
   AssetDetailResponseSchema,
   ASSET_TAG_FACETS,
   ASSET_TAG_WEIGHTS,
+  ASSET_VISIBILITIES,
   type AssetDetailResponse,
   type AssetTag,
+  type AssetVisibility,
   type UpdateAssetInput,
 } from "@media-manager/contracts";
 import { useRouter } from "next/navigation";
@@ -36,6 +38,13 @@ type Asset = AssetDetailResponse["asset"];
 
 type Props = {
   initialAsset: Asset;
+  children?: Asset[];
+  sourceAssets?: Asset[];
+};
+
+type FolderOption = {
+  id: string;
+  title: string;
 };
 
 function tagsEqual(a: AssetTag[], b: AssetTag[]) {
@@ -51,27 +60,105 @@ function shouldPollAsset(asset: Asset) {
   );
 }
 
-export function AssetDetailEditor({ initialAsset }: Props) {
+export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = [] }: Props) {
   const router = useRouter();
   const [asset, setAsset] = useState<Asset>(initialAsset);
   const [editMode, setEditMode] = useState(false);
   const [title, setTitle] = useState(initialAsset.title);
   const [description, setDescription] = useState(initialAsset.description);
+  const [visibility, setVisibility] = useState<AssetVisibility>(initialAsset.visibility);
   const [tags, setTags] = useState<AssetTag[]>(initialAsset.tags);
   const [saving, setSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [newTagFacet, setNewTagFacet] = useState<string>("__freeform__");
+  const [newTagValue, setNewTagValue] = useState("");
+  const [newTagWeight, setNewTagWeight] = useState<string>("__none__");
+  const [containerIdDraft, setContainerIdDraft] = useState(initialAsset.containerId ?? "");
+  const [folders, setFolders] = useState<FolderOption[]>([]);
 
   const dirty = useMemo(() => {
     return (
-      title !== asset.title || description !== asset.description || !tagsEqual(tags, asset.tags)
+      title !== asset.title ||
+      description !== asset.description ||
+      visibility !== asset.visibility ||
+      !tagsEqual(tags, asset.tags)
     );
-  }, [asset.description, asset.tags, asset.title, description, tags, title]);
+  }, [
+    asset.description,
+    asset.tags,
+    asset.title,
+    asset.visibility,
+    description,
+    tags,
+    title,
+    visibility,
+  ]);
 
   const streamReady = asset.status === "ready" && asset.stream?.hlsMasterUrl;
   const conversionStatus = asset.conversion?.status ?? "not_started";
+  const containerFolder = folders.find((folder) => folder.id === asset.containerId) ?? null;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadFolders = async () => {
+      try {
+        const response = await fetch("/api/assets?type=folder&sort=newest", {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const json = (await response.json()) as { assets?: Array<{ id: string; title: string }> };
+        if (cancelled || !Array.isArray(json.assets)) {
+          return;
+        }
+
+        setFolders(
+          json.assets
+            .filter((entry) => typeof entry.id === "string" && typeof entry.title === "string")
+            .map((entry) => ({ id: entry.id, title: entry.title }))
+        );
+      } catch {
+        // best effort only
+      }
+    };
+
+    void loadFolders();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function addTagFromDraft() {
+    const value = newTagValue.trim();
+    if (value.length === 0) {
+      return;
+    }
+
+    const facet =
+      newTagFacet !== "__freeform__" &&
+      ASSET_TAG_FACETS.includes(newTagFacet as (typeof ASSET_TAG_FACETS)[number])
+        ? (newTagFacet as (typeof ASSET_TAG_FACETS)[number])
+        : undefined;
+    const weight =
+      newTagWeight !== "__none__" &&
+      ASSET_TAG_WEIGHTS.includes(newTagWeight as (typeof ASSET_TAG_WEIGHTS)[number])
+        ? (newTagWeight as (typeof ASSET_TAG_WEIGHTS)[number])
+        : undefined;
+
+    setTags((previous) => [...previous, { facet, value, weight, source: "user" }]);
+    setNewTagValue("");
+    setNewTagFacet("__freeform__");
+    setNewTagWeight("__none__");
+  }
 
   async function saveChanges() {
     if (!dirty || saving) {
@@ -84,6 +171,7 @@ export function AssetDetailEditor({ initialAsset }: Props) {
     const payload: UpdateAssetInput = {
       title: title.trim(),
       description: description.trim(),
+      visibility,
       tags: tags
         .map((tag) => ({
           ...tag,
@@ -113,8 +201,10 @@ export function AssetDetailEditor({ initialAsset }: Props) {
       }
 
       setAsset(data.asset);
+      setContainerIdDraft(data.asset.containerId ?? "");
       setTitle(data.asset.title);
       setDescription(data.asset.description);
+      setVisibility(data.asset.visibility);
       setTags(data.asset.tags);
       setStatusMessage("Changes saved.");
       return true;
@@ -138,6 +228,7 @@ export function AssetDetailEditor({ initialAsset }: Props) {
   function discardChangesAndLeaveEditMode() {
     setTitle(asset.title);
     setDescription(asset.description);
+    setVisibility(asset.visibility);
     setTags(asset.tags);
     setLeaveDialogOpen(false);
     setEditMode(false);
@@ -177,6 +268,38 @@ export function AssetDetailEditor({ initialAsset }: Props) {
     } finally {
       setDeleting(false);
       setDeleteDialogOpen(false);
+    }
+  }
+
+  async function moveAsset(nextContainerIdOverride?: string) {
+    const nextContainerId = (nextContainerIdOverride ?? containerIdDraft).trim();
+
+    try {
+      const response = await fetch(`/api/assets/${encodeURIComponent(asset.id)}/move`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          containerId: nextContainerId.length > 0 ? nextContainerId : null,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to move asset");
+      }
+
+      const data = (await response.json()) as { asset?: Asset };
+      if (!data.asset) {
+        throw new Error("Invalid move response");
+      }
+
+      setAsset(data.asset);
+      setContainerIdDraft(data.asset.containerId ?? "");
+      setStatusMessage("Asset location updated.");
+      router.refresh();
+    } catch {
+      setStatusMessage("Could not move asset. Check the container ID and try again.");
     }
   }
 
@@ -223,8 +346,10 @@ export function AssetDetailEditor({ initialAsset }: Props) {
 
         const latest = parsed.data.asset;
         setAsset(latest);
+        setContainerIdDraft(latest.containerId ?? "");
         setTitle(latest.title);
         setDescription(latest.description);
+        setVisibility(latest.visibility);
         setTags(latest.tags);
       } catch {
         // best effort polling
@@ -334,8 +459,37 @@ export function AssetDetailEditor({ initialAsset }: Props) {
             <dd className="font-medium capitalize">{asset.type}</dd>
           </div>
           <div>
+            <dt className="text-muted-foreground">Origin</dt>
+            <dd className="font-medium capitalize">{asset.origin ?? "uploaded"}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Container</dt>
+            <dd className="font-medium">
+              {asset.containerId ? (
+                <span>
+                  {containerFolder?.title ?? "Unknown folder"}{" "}
+                  <span className="text-xs text-muted-foreground/70">{asset.containerId}</span>
+                </span>
+              ) : (
+                "root"
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Root</dt>
+            <dd className="font-medium">{asset.rootId ?? asset.id}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Depth</dt>
+            <dd className="font-medium">{asset.depth ?? 0}</dd>
+          </div>
+          <div>
             <dt className="text-muted-foreground">Status</dt>
             <dd className="font-medium capitalize">{asset.status}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Visibility</dt>
+            <dd className="font-medium capitalize">{asset.visibility}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Conversion</dt>
@@ -349,6 +503,15 @@ export function AssetDetailEditor({ initialAsset }: Props) {
             <div>
               <dt className="text-muted-foreground">Profile</dt>
               <dd className="font-medium">{asset.conversion.profile}</dd>
+            </div>
+          ) : null}
+          {asset.generation ? (
+            <div className="sm:col-span-2">
+              <dt className="text-muted-foreground">Generation</dt>
+              <dd className="font-medium">
+                {asset.generation.provider} / {asset.generation.model} (
+                {asset.generation.workflowId})
+              </dd>
             </div>
           ) : null}
           {asset.conversion?.jobId ? (
@@ -372,6 +535,94 @@ export function AssetDetailEditor({ initialAsset }: Props) {
             </dd>
           </div>
         </dl>
+      </div>
+
+      <div className="rounded-xl border bg-card p-6 shadow-sm">
+        <h2 className="text-base font-semibold">Nested Location</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Move this asset under a folder. Folder IDs are shown as secondary text.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+          <Select
+            onValueChange={(value) => setContainerIdDraft(value === "__root__" ? "" : value)}
+            value={containerIdDraft || "__root__"}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select folder" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__root__">Root</SelectItem>
+              {folders
+                .filter((folder) => folder.id !== asset.id)
+                .map((folder) => (
+                  <SelectItem key={folder.id} value={folder.id}>
+                    <span>{folder.title}</span>
+                    <span className="ml-2 text-xs text-muted-foreground/70">{folder.id}</span>
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+          <Button onClick={() => void moveAsset()} type="button" variant="outline">
+            Update Location
+          </Button>
+        </div>
+        <div className="mt-3">
+          <Button
+            onClick={() => {
+              setContainerIdDraft("");
+              void moveAsset("");
+            }}
+            size="sm"
+            type="button"
+            variant="secondary"
+          >
+            Move to Root
+          </Button>
+        </div>
+      </div>
+
+      <div className="rounded-xl border bg-card p-6 shadow-sm">
+        <h2 className="text-base font-semibold">Lineage Context</h2>
+        <div className="mt-4 grid gap-6 sm:grid-cols-2">
+          <div>
+            <p className="text-sm font-medium">Source Assets</p>
+            <div className="mt-2 space-y-2 text-sm">
+              {sourceAssets.length === 0 ? (
+                <p className="text-muted-foreground">No linked source assets.</p>
+              ) : (
+                sourceAssets.map((source) => (
+                  <button
+                    className="block text-left underline"
+                    key={`source-${source.id}`}
+                    onClick={() => router.push(`/asset/${source.id}`)}
+                    type="button"
+                  >
+                    {source.title} ({source.id})
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-medium">Child Assets</p>
+            <div className="mt-2 space-y-2 text-sm">
+              {children.length === 0 ? (
+                <p className="text-muted-foreground">No child assets.</p>
+              ) : (
+                children.map((child) => (
+                  <button
+                    className="block text-left underline"
+                    key={`child-${child.id}`}
+                    onClick={() => router.push(`/asset/${child.id}`)}
+                    type="button"
+                  >
+                    {child.title} ({child.id})
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="rounded-xl border bg-card p-6 shadow-sm">
@@ -402,28 +653,111 @@ export function AssetDetailEditor({ initialAsset }: Props) {
             />
           </div>
 
+          <div>
+            <label className="mb-1 block text-sm font-medium" htmlFor="asset-visibility">
+              Visibility
+            </label>
+            <Select
+              disabled={!editMode}
+              onValueChange={(value) => setVisibility(value as AssetVisibility)}
+              value={visibility}
+            >
+              <SelectTrigger id="asset-visibility">
+                <SelectValue placeholder="Select visibility" />
+              </SelectTrigger>
+              <SelectContent>
+                {ASSET_VISIBILITIES.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {item}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-sm font-medium">Tags</h3>
               {editMode ? (
-                <Button
-                  onClick={() =>
-                    setTags((previous) => [
-                      ...previous,
-                      { value: "", source: "user", weight: "moderate" },
-                    ])
-                  }
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  Add Tag
-                </Button>
+                <span className="text-xs text-muted-foreground">Facet + freeform tags</span>
               ) : null}
             </div>
 
             {editMode ? (
               <div className="space-y-3 rounded-lg border bg-background p-4">
+                <div className="grid gap-3 rounded-md border bg-card p-3 sm:grid-cols-[1fr_1.4fr_1fr_auto]">
+                  <Select onValueChange={setNewTagFacet} value={newTagFacet}>
+                    <SelectTrigger className="h-10">
+                      <SelectValue placeholder="freeform" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__freeform__">freeform</SelectItem>
+                      {ASSET_TAG_FACETS.map((facet) => (
+                        <SelectItem key={facet} value={facet}>
+                          {facet}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Input
+                    className="h-10"
+                    onChange={(event) => setNewTagValue(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        addTagFromDraft();
+                      }
+                    }}
+                    placeholder="add a tag"
+                    value={newTagValue}
+                  />
+
+                  <Select onValueChange={setNewTagWeight} value={newTagWeight}>
+                    <SelectTrigger className="h-10">
+                      <SelectValue placeholder="weight" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">weight</SelectItem>
+                      {ASSET_TAG_WEIGHTS.map((weight) => (
+                        <SelectItem key={weight} value={weight}>
+                          {weight}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <div className="flex items-center justify-end">
+                    <Button onClick={addTagFromDraft} size="sm" type="button" variant="outline">
+                      Add
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 rounded-md border bg-card p-3">
+                  {tags.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No tags yet</p>
+                  ) : (
+                    tags.map((tag, index) => (
+                      <button
+                        className="inline-flex"
+                        key={`tag-chip-${index}`}
+                        onClick={() => {
+                          setTags((previous) =>
+                            previous.filter((_, tagIndex) => tagIndex !== index)
+                          );
+                        }}
+                        type="button"
+                      >
+                        <Badge variant="secondary">
+                          {tag.facet ? `${tag.facet}: ${tag.value}` : tag.value}
+                          {tag.weight ? ` (${tag.weight})` : ""}
+                        </Badge>
+                      </button>
+                    ))
+                  )}
+                </div>
+
                 {tags.map((tag, index) => (
                   <div
                     className="grid gap-3 rounded-md border bg-card p-3 sm:grid-cols-[1fr_1.2fr_1fr_auto]"

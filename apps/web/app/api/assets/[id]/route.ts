@@ -77,6 +77,10 @@ export async function DELETE(_: Request, context: { params: Promise<Params> }) {
       return NextResponse.json({ message: "Asset not found" }, { status: 404 });
     }
 
+    if (message.includes("Forbidden")) {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
+
     return NextResponse.json({ message: "Failed to delete asset" }, { status: 500 });
   }
 }

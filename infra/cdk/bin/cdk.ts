@@ -6,6 +6,7 @@ import { AuthStack } from "../lib/auth-stack";
 import { ApiStack } from "../lib/api-stack";
 import { CoreStack } from "../lib/core-stack";
 import { DataStack } from "../lib/data-stack";
+import { ObservabilityStack } from "../lib/observability-stack";
 import { ProcessingStack } from "../lib/processing-stack";
 import { StorageStack } from "../lib/storage-stack";
 import { StreamingStack } from "../lib/streaming-stack";
@@ -59,4 +60,10 @@ new ProcessingStack(app, "MediaManagerProcessingStack", {
   env: stackEnv,
   stage,
   stackName: withStageSuffix("MediaManagerProcessingStack", stage),
+});
+
+new ObservabilityStack(app, "MediaManagerObservabilityStack", {
+  env: stackEnv,
+  stage,
+  stackName: withStageSuffix("MediaManagerObservabilityStack", stage),
 });

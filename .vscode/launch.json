@@ -1,0 +1,43 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "darenkeck: Next server (debug)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npx next dev --port 3001",
+      "cwd": "${workspaceFolder}/apps/darenkeck"
+    },
+    {
+      "name": "darenkeck: Chrome",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://localhost:3001",
+      "webRoot": "${workspaceFolder}/apps/darenkeck"
+    },
+    {
+      "name": "darenkeck-v2: Vite dev server (debug)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "bun run dev",
+      "cwd": "${workspaceFolder}/apps/darenkeck-v2"
+    },
+    {
+      "name": "darenkeck-v2: Chrome",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://localhost:3002",
+      "webRoot": "${workspaceFolder}/apps/darenkeck-v2"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "darenkeck: full stack debug",
+      "configurations": ["darenkeck: Next server (debug)", "darenkeck: Chrome"]
+    },
+    {
+      "name": "darenkeck-v2: full stack debug",
+      "configurations": ["darenkeck-v2: Vite dev server (debug)", "darenkeck-v2: Chrome"]
+    }
+  ]
+}

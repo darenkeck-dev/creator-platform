@@ -1,7 +1,18 @@
 import {
   AssetDeleteResponseSchema,
   AssetDetailResponseSchema,
+  AssetChildrenResponseSchema,
+  AssetLineageResponseSchema,
   AssetListResponseSchema,
+  CreateAssetInputSchema,
+  CreateComboInputSchema,
+  MoveAssetInputSchema,
+  MoveAssetResponseSchema,
+  ComboDeleteResponseSchema,
+  ComboDetailResponseSchema,
+  ComboListResponseSchema,
+  ComboVoteInputSchema,
+  ComboVoteByAssetsInputSchema,
   AssetPlaybackUrlResponseSchema,
   MultipartAbortInputSchema,
   MultipartAbortResponseSchema,
@@ -13,7 +24,6 @@ import {
   AssetUploadUrlInputSchema,
   AssetUploadUrlResponseSchema,
   UpdateAssetInputSchema,
-  AssetTypeSchema,
   type MultipartAbortInput,
   type MultipartAbortResponse,
   type MultipartCompleteInput,
@@ -26,7 +36,18 @@ import {
   type AssetPlaybackUrlResponse,
   type AssetDeleteResponse,
   type AssetDetailResponse,
+  type AssetChildrenResponse,
+  type AssetLineageResponse,
   type AssetListResponse,
+  type CreateAssetInput,
+  type CreateComboInput,
+  type MoveAssetInput,
+  type MoveAssetResponse,
+  type ComboDeleteResponse,
+  type ComboDetailResponse,
+  type ComboListResponse,
+  type ComboVoteInput,
+  type ComboVoteByAssetsInput,
   type UpdateAssetInput,
 } from "@media-manager/contracts";
 import { cookies } from "next/headers";
@@ -56,8 +77,38 @@ async function getAuthHeader(): Promise<string> {
   return `Bearer ${token}`;
 }
 
-export async function fetchAssetsFromApi(): Promise<AssetListResponse["assets"]> {
-  const response = await fetch(`${getApiBaseUrl()}/assets`, {
+type AssetListFilters = {
+  type?: "video" | "audio" | "image" | "folder";
+  origin?: "uploaded" | "generated" | "derived" | "manual";
+  facet?: string;
+  containerId?: string;
+  sort?: "newest" | "oldest";
+};
+
+export async function fetchAssetsFromApi(
+  filters: AssetListFilters = {}
+): Promise<AssetListResponse["assets"]> {
+  const query = new URLSearchParams();
+  if (filters.type) {
+    query.set("type", filters.type);
+  }
+  if (filters.facet) {
+    query.set("facet", filters.facet);
+  }
+  if (filters.origin) {
+    query.set("origin", filters.origin);
+  }
+  if (filters.containerId) {
+    query.set("containerId", filters.containerId);
+  }
+  if (filters.sort) {
+    query.set("sort", filters.sort);
+  }
+
+  const queryString = query.toString();
+  const url = `${getApiBaseUrl()}/assets${queryString ? `?${queryString}` : ""}`;
+
+  const response = await fetch(url, {
     headers: {
       authorization: await getAuthHeader(),
     },
@@ -104,19 +155,12 @@ export async function fetchAssetByIdFromApi(
   return parsed.data.asset;
 }
 
-export async function createAssetInApi(input: {
-  type: "video" | "audio" | "image";
-  title: string;
-  description?: string;
-}): Promise<AssetDetailResponse["asset"]> {
-  const parsedType = AssetTypeSchema.safeParse(input.type);
-  if (!parsedType.success) {
-    throw new Error("Invalid asset type");
-  }
-
-  const title = input.title.trim();
-  if (!title) {
-    throw new Error("Title is required");
+export async function createAssetInApi(
+  input: CreateAssetInput
+): Promise<AssetDetailResponse["asset"]> {
+  const parsedInput = CreateAssetInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    throw new Error("Invalid create asset payload");
   }
 
   const response = await fetch(`${getApiBaseUrl()}/assets`, {
@@ -125,11 +169,7 @@ export async function createAssetInApi(input: {
       authorization: await getAuthHeader(),
       "content-type": "application/json",
     },
-    body: JSON.stringify({
-      type: parsedType.data,
-      title,
-      description: input.description?.trim() ?? "",
-    }),
+    body: JSON.stringify(parsedInput.data),
     cache: "no-store",
   });
 
@@ -272,6 +312,10 @@ export async function deleteAssetInApi(id: string): Promise<AssetDeleteResponse>
     throw new Error(`Asset ${id} not found`);
   }
 
+  if (response.status === 403) {
+    throw new Error(`Forbidden deleting asset ${id}`);
+  }
+
   if (!response.ok) {
     throw new Error(`Failed to delete asset ${id}: ${response.status}`);
   }
@@ -280,6 +324,82 @@ export async function deleteAssetInApi(id: string): Promise<AssetDeleteResponse>
   const parsed = AssetDeleteResponseSchema.safeParse(json);
   if (!parsed.success) {
     throw new Error("Delete asset response failed validation");
+  }
+
+  return parsed.data;
+}
+
+export async function fetchAssetChildrenFromApi(id: string): Promise<AssetChildrenResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/assets/${encodeURIComponent(id)}/children`, {
+    method: "GET",
+    headers: {
+      authorization: await getAuthHeader(),
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch children for asset ${id}: ${response.status}`);
+  }
+
+  const json = (await response.json()) as unknown;
+  const parsed = AssetChildrenResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new Error("Asset children response failed validation");
+  }
+
+  return parsed.data;
+}
+
+export async function fetchAssetLineageFromApi(id: string): Promise<AssetLineageResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/assets/${encodeURIComponent(id)}/lineage`, {
+    method: "GET",
+    headers: {
+      authorization: await getAuthHeader(),
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch lineage for asset ${id}: ${response.status}`);
+  }
+
+  const json = (await response.json()) as unknown;
+  const parsed = AssetLineageResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new Error("Asset lineage response failed validation");
+  }
+
+  return parsed.data;
+}
+
+export async function moveAssetInApi(
+  id: string,
+  input: MoveAssetInput
+): Promise<MoveAssetResponse> {
+  const parsedInput = MoveAssetInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    throw new Error("Invalid move asset payload");
+  }
+
+  const response = await fetch(`${getApiBaseUrl()}/assets/${encodeURIComponent(id)}/move`, {
+    method: "POST",
+    headers: {
+      authorization: await getAuthHeader(),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(parsedInput.data),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to move asset ${id}: ${response.status}`);
+  }
+
+  const json = (await response.json()) as unknown;
+  const parsed = MoveAssetResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new Error("Move asset response failed validation");
   }
 
   return parsed.data;
@@ -420,6 +540,174 @@ export async function abortMultipartUploadInApi(
   const parsed = MultipartAbortResponseSchema.safeParse(json);
   if (!parsed.success) {
     throw new Error("Multipart abort response failed validation");
+  }
+
+  return parsed.data;
+}
+
+export async function listCombosFromApi(): Promise<ComboListResponse["combos"]> {
+  const response = await fetch(`${getApiBaseUrl()}/combos`, {
+    method: "GET",
+    headers: {
+      authorization: await getAuthHeader(),
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to load combos: ${response.status}`);
+  }
+
+  const json = (await response.json()) as unknown;
+  const parsed = ComboListResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new Error("Combo list response failed validation");
+  }
+
+  return parsed.data.combos;
+}
+
+export async function createComboInApi(
+  input: CreateComboInput
+): Promise<ComboDetailResponse["combo"]> {
+  const parsedInput = CreateComboInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    throw new Error("Invalid combo payload");
+  }
+
+  const response = await fetch(`${getApiBaseUrl()}/combos`, {
+    method: "POST",
+    headers: {
+      authorization: await getAuthHeader(),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(parsedInput.data),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to create combo: ${response.status}`);
+  }
+
+  const json = (await response.json()) as unknown;
+  const parsed = ComboDetailResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new Error("Create combo response failed validation");
+  }
+
+  return parsed.data.combo;
+}
+
+export async function fetchComboByIdFromApi(id: string): Promise<ComboDetailResponse["combo"]> {
+  const response = await fetch(`${getApiBaseUrl()}/combos/${encodeURIComponent(id)}`, {
+    method: "GET",
+    headers: {
+      authorization: await getAuthHeader(),
+    },
+    cache: "no-store",
+  });
+
+  if (response.status === 404) {
+    throw new Error(`Combo ${id} not found`);
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch combo ${id}: ${response.status}`);
+  }
+
+  const json = (await response.json()) as unknown;
+  const parsed = ComboDetailResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new Error("Combo response failed validation");
+  }
+
+  return parsed.data.combo;
+}
+
+export async function voteOnComboInApi(
+  id: string,
+  input: ComboVoteInput
+): Promise<ComboDetailResponse["combo"]> {
+  const parsedInput = ComboVoteInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    throw new Error("Invalid combo vote payload");
+  }
+
+  const response = await fetch(`${getApiBaseUrl()}/combos/${encodeURIComponent(id)}/vote`, {
+    method: "POST",
+    headers: {
+      authorization: await getAuthHeader(),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(parsedInput.data),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to vote on combo ${id}: ${response.status}`);
+  }
+
+  const json = (await response.json()) as unknown;
+  const parsed = ComboDetailResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new Error("Combo vote response failed validation");
+  }
+
+  return parsed.data.combo;
+}
+
+export async function voteOnComboByAssetsInApi(
+  input: ComboVoteByAssetsInput
+): Promise<ComboDetailResponse["combo"]> {
+  const parsedInput = ComboVoteByAssetsInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    throw new Error("Invalid combo vote-by-assets payload");
+  }
+
+  const response = await fetch(`${getApiBaseUrl()}/combos/vote`, {
+    method: "POST",
+    headers: {
+      authorization: await getAuthHeader(),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(parsedInput.data),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to vote on combo pair: ${response.status}`);
+  }
+
+  const json = (await response.json()) as unknown;
+  const parsed = ComboDetailResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new Error("Combo pair vote response failed validation");
+  }
+
+  return parsed.data.combo;
+}
+
+export async function deleteComboInApi(id: string): Promise<ComboDeleteResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/combos/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: {
+      authorization: await getAuthHeader(),
+    },
+    cache: "no-store",
+  });
+
+  if (response.status === 404) {
+    throw new Error(`Combo ${id} not found`);
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to delete combo ${id}: ${response.status}`);
+  }
+
+  const json = (await response.json()) as unknown;
+  const parsed = ComboDeleteResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new Error("Delete combo response failed validation");
   }
 
   return parsed.data;

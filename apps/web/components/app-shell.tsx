@@ -7,7 +7,8 @@ import { buttonVariants } from "@/components/ui/button";
 
 const navItems = [
   { href: "/library", label: "Library" },
-  { href: "/upload", label: "Upload" }
+  { href: "/upload", label: "Upload" },
+  { href: "/combos", label: "Combos" },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -20,7 +21,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
           <nav className="flex items-center gap-2">
             {navItems.map((item) => (
-              <Link key={item.href} href={item.href} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+              <Link
+                key={item.href}
+                href={item.href}
+                className={buttonVariants({ variant: "ghost", size: "sm" })}
+              >
                 {item.label}
               </Link>
             ))}

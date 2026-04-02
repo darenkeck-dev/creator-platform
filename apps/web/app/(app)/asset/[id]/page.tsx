@@ -2,7 +2,12 @@ import { AssetIdParamSchema, type AssetDetailResponse } from "@media-manager/con
 import { notFound } from "next/navigation";
 
 import { AssetDetailEditor } from "@/components/asset-detail-editor";
-import { fetchAssetByIdFromApi } from "@/lib/assets-api";
+import { FolderDetailView } from "@/components/folder-detail-view";
+import {
+  fetchAssetByIdFromApi,
+  fetchAssetChildrenFromApi,
+  fetchAssetLineageFromApi,
+} from "@/lib/assets-api";
 
 type AssetPageProps = {
   params: Promise<{ id: string }>;
@@ -24,5 +29,17 @@ export default async function AssetDetailPage({ params }: AssetPageProps) {
     notFound();
   }
 
-  return <AssetDetailEditor initialAsset={asset} />;
+  const [childrenResult, lineageResult] = await Promise.allSettled([
+    fetchAssetChildrenFromApi(asset.id),
+    fetchAssetLineageFromApi(asset.id),
+  ]);
+
+  const children = childrenResult.status === "fulfilled" ? childrenResult.value.assets : [];
+  const sourceAssets = lineageResult.status === "fulfilled" ? lineageResult.value.sources : [];
+
+  if (asset.type === "folder") {
+    return <FolderDetailView children={children} folder={asset} />;
+  }
+
+  return <AssetDetailEditor children={children} initialAsset={asset} sourceAssets={sourceAssets} />;
 }

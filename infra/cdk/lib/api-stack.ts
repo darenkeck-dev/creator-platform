@@ -2,6 +2,7 @@ import { CfnOutput, Duration, Fn, Stack, type StackProps } from "aws-cdk-lib";
 import * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as logs from "aws-cdk-lib/aws-logs";
 import type { Construct } from "constructs";
 
 import { stageExportName, withStageSuffix } from "./stage";
@@ -21,6 +22,7 @@ export class ApiStack extends Stack {
     const region = Fn.importValue(stageExportName("REGION", stage));
     const assetsTableName = Fn.importValue(stageExportName("ASSETS-TABLE-NAME", stage));
     const assetsCreatedAtIndex = Fn.importValue(stageExportName("ASSETS-CREATED-AT-GSI", stage));
+    const assetsContainerIndex = Fn.importValue(stageExportName("ASSETS-CONTAINER-GSI", stage));
     const assetsOriginalsBucketName = Fn.importValue(
       stageExportName("MEDIA-ORIGINALS-BUCKET-NAME", stage)
     );
@@ -33,9 +35,11 @@ export class ApiStack extends Stack {
       handler: "index.handler",
       code: lambda.Code.fromAsset(".dist/lambda/api-assets"),
       timeout: Duration.seconds(10),
+      logRetention: logs.RetentionDays.ONE_MONTH,
       environment: {
         ASSETS_TABLE_NAME: assetsTableName,
         ASSETS_CREATED_AT_INDEX: assetsCreatedAtIndex,
+        ASSETS_CONTAINER_INDEX: assetsContainerIndex,
       },
     });
 
@@ -44,10 +48,26 @@ export class ApiStack extends Stack {
       handler: "index.handler",
       code: lambda.Code.fromAsset(".dist/lambda/api-asset-by-id"),
       timeout: Duration.seconds(10),
+      logRetention: logs.RetentionDays.ONE_MONTH,
       environment: {
         ASSETS_TABLE_NAME: assetsTableName,
+        ASSETS_CREATED_AT_INDEX: assetsCreatedAtIndex,
+        ASSETS_CONTAINER_INDEX: assetsContainerIndex,
         ASSETS_ORIGINALS_BUCKET_NAME: assetsOriginalsBucketName,
         ASSETS_DERIVED_BUCKET_NAME: assetsDerivedBucketName,
+      },
+    });
+
+    const combosFunction = new lambda.Function(this, "CombosFunction", {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: "index.handler",
+      code: lambda.Code.fromAsset(".dist/lambda/api-combos"),
+      timeout: Duration.seconds(10),
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      environment: {
+        ASSETS_TABLE_NAME: assetsTableName,
+        ASSETS_CREATED_AT_INDEX: assetsCreatedAtIndex,
+        ASSETS_ORIGINALS_BUCKET_NAME: assetsOriginalsBucketName,
       },
     });
 
@@ -56,6 +76,9 @@ export class ApiStack extends Stack {
 
     const assetByIdFunctionCfn = assetByIdFunction.node.defaultChild as lambda.CfnFunction;
     assetByIdFunctionCfn.addPropertyOverride("Runtime", "nodejs22.x");
+
+    const combosFunctionCfn = combosFunction.node.defaultChild as lambda.CfnFunction;
+    combosFunctionCfn.addPropertyOverride("Runtime", "nodejs22.x");
 
     const assetsTableArn = Stack.of(this).formatArn({
       service: "dynamodb",
@@ -72,6 +95,11 @@ export class ApiStack extends Stack {
         "dynamodb:Query",
       ],
       resources: [assetsTableArn, `${assetsTableArn}/index/*`],
+    });
+
+    const tableScanPolicy = new iam.PolicyStatement({
+      actions: ["dynamodb:Scan"],
+      resources: [assetsTableArn],
     });
 
     const originalsBucketArn = `arn:aws:s3:::${assetsOriginalsBucketName}`;
@@ -104,6 +132,14 @@ export class ApiStack extends Stack {
 
     assetsFunction.addToRolePolicy(tableReadWritePolicy);
     assetByIdFunction.addToRolePolicy(tableReadWritePolicy);
+    combosFunction.addToRolePolicy(tableReadWritePolicy);
+    combosFunction.addToRolePolicy(tableScanPolicy);
+    combosFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["s3:GetObject"],
+        resources: [`${originalsBucketArn}/*`],
+      })
+    );
     assetByIdFunction.addToRolePolicy(originalsBucketPutPolicy);
     assetByIdFunction.addToRolePolicy(originalsBucketMultipartListPolicy);
     assetByIdFunction.addToRolePolicy(derivedBucketListPolicy);
@@ -139,6 +175,13 @@ export class ApiStack extends Stack {
       payloadFormatVersion: "2.0",
     });
 
+    const combosIntegration = new apigwv2.CfnIntegration(this, "CombosIntegration", {
+      apiId: api.ref,
+      integrationType: "AWS_PROXY",
+      integrationUri: `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/${combosFunction.functionArn}/invocations`,
+      payloadFormatVersion: "2.0",
+    });
+
     new apigwv2.CfnRoute(this, "PostAssetsRoute", {
       apiId: api.ref,
       routeKey: "POST /assets",
@@ -171,6 +214,22 @@ export class ApiStack extends Stack {
       authorizerId: authorizer.ref,
     });
 
+    new apigwv2.CfnRoute(this, "GetAssetChildrenRoute", {
+      apiId: api.ref,
+      routeKey: "GET /assets/{id}/children",
+      target: `integrations/${assetByIdIntegration.ref}`,
+      authorizationType: "JWT",
+      authorizerId: authorizer.ref,
+    });
+
+    new apigwv2.CfnRoute(this, "GetAssetLineageRoute", {
+      apiId: api.ref,
+      routeKey: "GET /assets/{id}/lineage",
+      target: `integrations/${assetByIdIntegration.ref}`,
+      authorizationType: "JWT",
+      authorizerId: authorizer.ref,
+    });
+
     new apigwv2.CfnRoute(this, "PatchAssetByIdRoute", {
       apiId: api.ref,
       routeKey: "PATCH /assets/{id}",
@@ -182,6 +241,14 @@ export class ApiStack extends Stack {
     new apigwv2.CfnRoute(this, "PostAssetUploadUrlRoute", {
       apiId: api.ref,
       routeKey: "POST /assets/{id}/upload-url",
+      target: `integrations/${assetByIdIntegration.ref}`,
+      authorizationType: "JWT",
+      authorizerId: authorizer.ref,
+    });
+
+    new apigwv2.CfnRoute(this, "PostAssetMoveRoute", {
+      apiId: api.ref,
+      routeKey: "POST /assets/{id}/move",
       target: `integrations/${assetByIdIntegration.ref}`,
       authorizationType: "JWT",
       authorizerId: authorizer.ref,
@@ -235,10 +302,82 @@ export class ApiStack extends Stack {
       authorizerId: authorizer.ref,
     });
 
+    new apigwv2.CfnRoute(this, "GetCombosRoute", {
+      apiId: api.ref,
+      routeKey: "GET /combos",
+      target: `integrations/${combosIntegration.ref}`,
+      authorizationType: "JWT",
+      authorizerId: authorizer.ref,
+    });
+
+    new apigwv2.CfnRoute(this, "PostCombosRoute", {
+      apiId: api.ref,
+      routeKey: "POST /combos",
+      target: `integrations/${combosIntegration.ref}`,
+      authorizationType: "JWT",
+      authorizerId: authorizer.ref,
+    });
+
+    new apigwv2.CfnRoute(this, "PostCombosVoteByAssetsRoute", {
+      apiId: api.ref,
+      routeKey: "POST /combos/vote",
+      target: `integrations/${combosIntegration.ref}`,
+      authorizationType: "JWT",
+      authorizerId: authorizer.ref,
+    });
+
+    new apigwv2.CfnRoute(this, "GetComboByIdRoute", {
+      apiId: api.ref,
+      routeKey: "GET /combos/{id}",
+      target: `integrations/${combosIntegration.ref}`,
+      authorizationType: "JWT",
+      authorizerId: authorizer.ref,
+    });
+
+    new apigwv2.CfnRoute(this, "DeleteComboByIdRoute", {
+      apiId: api.ref,
+      routeKey: "DELETE /combos/{id}",
+      target: `integrations/${combosIntegration.ref}`,
+      authorizationType: "JWT",
+      authorizerId: authorizer.ref,
+    });
+
+    new apigwv2.CfnRoute(this, "PostComboVoteRoute", {
+      apiId: api.ref,
+      routeKey: "POST /combos/{id}/vote",
+      target: `integrations/${combosIntegration.ref}`,
+      authorizationType: "JWT",
+      authorizerId: authorizer.ref,
+    });
+
+    new apigwv2.CfnRoute(this, "GetPublicRandomComboRoute", {
+      apiId: api.ref,
+      routeKey: "GET /public/combos/random",
+      target: `integrations/${combosIntegration.ref}`,
+      authorizationType: "NONE",
+    });
+
+    const apiAccessLogGroup = new logs.LogGroup(this, "ApiAccessLogGroup", {
+      retention: logs.RetentionDays.ONE_MONTH,
+    });
+
     new apigwv2.CfnStage(this, "DefaultStage", {
       apiId: api.ref,
       stageName: "$default",
       autoDeploy: true,
+      accessLogSettings: {
+        destinationArn: apiAccessLogGroup.logGroupArn,
+        format: JSON.stringify({
+          requestId: "$context.requestId",
+          ip: "$context.identity.sourceIp",
+          requestTime: "$context.requestTime",
+          httpMethod: "$context.httpMethod",
+          routeKey: "$context.routeKey",
+          status: "$context.status",
+          responseLength: "$context.responseLength",
+          integrationError: "$context.integrationErrorMessage",
+        }),
+      },
     });
 
     const executeApiArnPrefix = Stack.of(this).formatArn({
@@ -254,6 +393,12 @@ export class ApiStack extends Stack {
     });
 
     assetByIdFunction.addPermission("AllowHttpApiInvokeAssetById", {
+      principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
+      action: "lambda:InvokeFunction",
+      sourceArn: executeApiArnPrefix,
+    });
+
+    combosFunction.addPermission("AllowHttpApiInvokeCombos", {
       principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
       action: "lambda:InvokeFunction",
       sourceArn: executeApiArnPrefix,

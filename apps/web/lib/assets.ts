@@ -9,6 +9,7 @@ const mockAssets: AssetRecord[] = [
     title: "Volcanic Coast Drone Reel",
     description: "Aerial footage for campaign launch trailer.",
     status: "processing",
+    visibility: "private",
     original: {
       bucket: "media-originals-dev",
       key: "originals/asset-001/source.mov",
@@ -31,6 +32,7 @@ const mockAssets: AssetRecord[] = [
     title: "Night Market Ambience",
     description: "Stereo ambience loop for background layer.",
     status: "ready",
+    visibility: "public",
     original: {
       bucket: "media-originals-dev",
       key: "originals/asset-002/source.wav",
@@ -61,6 +63,7 @@ const mockAssets: AssetRecord[] = [
     title: "Product Hero Frame",
     description: "Studio still used as product hero image.",
     status: "uploaded",
+    visibility: "private",
     original: {
       bucket: "media-originals-dev",
       key: "originals/asset-003/source.png",

@@ -3,6 +3,7 @@ import {
   MultipartCompleteInputSchema,
   MultipartInitResponseSchema,
   MultipartSignResponseSchema,
+  type VideoUploadMetadata,
 } from "@media-manager/contracts";
 
 const DEFAULT_PART_SIZE = 32 * 1024 * 1024;
@@ -19,6 +20,7 @@ type MultipartUploadOptions = {
   concurrency?: number;
   retries?: number;
   onProgress?: (progress: number) => void;
+  videoMetadata?: VideoUploadMetadata;
 };
 
 function normalizeEtag(etag: string | null): string | null {
@@ -137,7 +139,10 @@ export async function uploadFileViaMultipart(
     headers: {
       "content-type": "application/json",
     },
-    body: JSON.stringify({ contentType: file.type || "application/octet-stream" }),
+    body: JSON.stringify({
+      contentType: file.type || "application/octet-stream",
+      ...(options.videoMetadata ? { videoMetadata: options.videoMetadata } : {}),
+    }),
   });
 
   if (!initResponse.ok) {
