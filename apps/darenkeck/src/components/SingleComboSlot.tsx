@@ -12,6 +12,7 @@ type SingleComboSlotProps = {
   combo: ComboPayload;
   playbackCycle: number;
   audioMuted: boolean;
+  audioVolume: number;
   onTimelineEnded?: () => void;
   onPlaybackReady?: () => void;
   onPlaybackStateChange?: (phase: string) => void;
@@ -21,6 +22,7 @@ export function SingleComboSlot({
   combo,
   playbackCycle,
   audioMuted,
+  audioVolume,
   onTimelineEnded,
   onPlaybackReady,
   onPlaybackStateChange,
@@ -32,7 +34,7 @@ export function SingleComboSlot({
         audioMuted={audioMuted}
         audioSrc={combo.audioSrc}
         audioTitle={combo.audioTitle}
-        audioVolume={1}
+        audioVolume={audioVolume}
         autoPlay
         className="h-full w-full"
         comboId={combo.comboId}

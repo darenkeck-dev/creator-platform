@@ -56,10 +56,12 @@ async function fetchRandomCombo(): Promise<ComboPayload | null> {
 }
 
 export function App() {
+  type AudioLevel = "muted" | "medium" | "full";
+
   const [slotAssignment, setSlotAssignment] = useState<SlotPlaybackAssignment | null>(null);
   const [comboLoading, setComboLoading] = useState(false);
   const [comboError, setComboError] = useState<string | null>(null);
-  const [isAudioMuted, setIsAudioMuted] = useState(true);
+  const [audioLevel, setAudioLevel] = useState<AudioLevel>("muted");
   const [managerState, setManagerState] = useState<SlotManagerState>(SlotManagerState.Idle);
   const [slotState, setSlotState] = useState<SlotPlaybackState>(SlotPlaybackState.Idle);
   const [combosPlayedCount, setCombosPlayedCount] = useState(0);
@@ -106,6 +108,17 @@ export function App() {
     managerRef.current?.handleSlotPlaybackPhaseChange(SingleSlotKey.Primary, phase);
   };
 
+  const isAudioMuted = audioLevel === "muted";
+  const audioVolume = audioLevel === "medium" ? 0.5 : 1;
+  const nextAudioLevel: AudioLevel =
+    audioLevel === "full" ? "medium" : audioLevel === "medium" ? "muted" : "full";
+  const audioButtonTitle =
+    nextAudioLevel === "full"
+      ? "Set volume to 100%"
+      : nextAudioLevel === "medium"
+        ? "Set volume to 50%"
+        : "Mute audio";
+
   const linkItems = [
     { label: "Github", href: "https://github.com/darenkeck-dev" },
     { label: "Soundcloud", href: "https://soundcloud.com/darenkeck" },
@@ -145,6 +158,7 @@ export function App() {
       {slotAssignment ? (
         <SingleComboSlot
           audioMuted={isAudioMuted}
+          audioVolume={audioVolume}
           combo={slotAssignment.combo}
           playbackCycle={slotAssignment.playbackCycle}
           onPlaybackReady={handlePlaybackReady}
@@ -153,14 +167,14 @@ export function App() {
         />
       ) : null}
       <button
-        aria-label={isAudioMuted ? "Unmute audio" : "Mute audio"}
+        aria-label={audioButtonTitle}
         className="pointer-events-auto fixed z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/40 bg-black/45 text-white shadow-lg backdrop-blur-sm [left:max(1.5rem,env(safe-area-inset-left))] [top:max(1.5rem,env(safe-area-inset-top))]"
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          setIsAudioMuted((previous) => !previous);
+          setAudioLevel(nextAudioLevel);
         }}
-        title={isAudioMuted ? "Unmute audio" : "Mute audio"}
+        title={audioButtonTitle}
         type="button"
       >
         <svg
@@ -175,16 +189,20 @@ export function App() {
           width="24"
         >
           <path d="M11 5L6 9H3v6h3l5 4V5z" />
-          {isAudioMuted ? (
+          {audioLevel === "muted" ? (
             <>
               <path d="M16 9l5 6" />
               <path d="M21 9l-5 6" />
             </>
+          ) : audioLevel === "medium" ? (
+            <g transform="translate(0 -2)">
+              <path d="M16 10.5c1 .8 1.5 2 1.5 3.5s-.5 2.7-1.5 3.5" />
+            </g>
           ) : (
-            <>
+            <g transform="translate(0 -2)">
               <path d="M16 10.5c1 .8 1.5 2 1.5 3.5s-.5 2.7-1.5 3.5" />
               <path d="M18.8 7.7c1.7 1.5 2.7 3.8 2.7 6.3s-1 4.8-2.7 6.3" />
-            </>
+            </g>
           )}
         </svg>
       </button>
@@ -195,7 +213,7 @@ export function App() {
         <div className="w-full">
           <div
             className={`relative z-10 flex items-center justify-between px-1 transition-all duration-300 ease-in-out ${
-              isBulletinOpen ? "mb-1" : "mb-0 translate-y-1"
+              isBulletinOpen ? "mb-1 translate-y-[8px]" : "mb-0 translate-y-1"
             }`}
           >
             <div className="relative inline-flex items-center">
