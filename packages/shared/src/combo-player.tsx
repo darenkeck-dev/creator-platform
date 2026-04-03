@@ -46,95 +46,7 @@ type HlsInstance = {
   destroy: () => void;
 };
 
-const DEFAULT_VIDEO_TARGET_HEIGHT = 720;
-const preferredHlsVariantCache = new Map<string, string>();
-
-async function resolvePreferredVideoHlsVariantUrl(
-  masterUrl: string,
-  targetHeight: number
-): Promise<string> {
-  if (!masterUrl.toLowerCase().includes(".m3u8")) {
-    return masterUrl;
-  }
-
-  const cached = preferredHlsVariantCache.get(masterUrl);
-  if (cached) {
-    return cached;
-  }
-
-  try {
-    const response = await fetch(masterUrl, {
-      method: "GET",
-      cache: "no-store",
-    });
-    if (!response.ok) {
-      preferredHlsVariantCache.set(masterUrl, masterUrl);
-      return masterUrl;
-    }
-
-    const manifest = await response.text();
-    const lines = manifest.split(/\r?\n/);
-    const variants: Array<{ uri: string; width: number; height: number }> = [];
-
-    for (let index = 0; index < lines.length; index += 1) {
-      const line = lines[index]?.trim();
-      if (!line || !line.startsWith("#EXT-X-STREAM-INF")) {
-        continue;
-      }
-
-      const resolutionMatch = /RESOLUTION=(\d+)x(\d+)/i.exec(line);
-      if (!resolutionMatch) {
-        continue;
-      }
-
-      let uri = "";
-      for (let seek = index + 1; seek < lines.length; seek += 1) {
-        const candidate = lines[seek]?.trim();
-        if (!candidate) {
-          continue;
-        }
-        if (candidate.startsWith("#")) {
-          continue;
-        }
-        uri = candidate;
-        break;
-      }
-
-      if (!uri) {
-        continue;
-      }
-
-      variants.push({
-        uri,
-        width: Number(resolutionMatch[1]),
-        height: Number(resolutionMatch[2]),
-      });
-    }
-
-    if (variants.length === 0) {
-      preferredHlsVariantCache.set(masterUrl, masterUrl);
-      return masterUrl;
-    }
-
-    const atOrBelowTarget = variants
-      .filter((variant) => Number.isFinite(variant.height) && variant.height <= targetHeight)
-      .sort((a, b) => b.height - a.height || b.width - a.width);
-
-    const sortedByHeight = [...variants].sort((a, b) => a.height - b.height || a.width - b.width);
-    const selected = atOrBelowTarget[0] ?? sortedByHeight[0] ?? null;
-    if (!selected) {
-      preferredHlsVariantCache.set(masterUrl, masterUrl);
-      return masterUrl;
-    }
-
-    const resolved = new URL(selected.uri, masterUrl).toString();
-    preferredHlsVariantCache.set(masterUrl, resolved);
-    return resolved;
-  } catch {
-    preferredHlsVariantCache.set(masterUrl, masterUrl);
-    return masterUrl;
-  }
-}
+const ENABLE_COMBO_PLAYER_DEBUG_LOGS = false;
 
 export function ComboPlayer({
   comboId,
@@ -193,6 +105,10 @@ export function ComboPlayer({
     !/Chrome|Chromium|CriOS|Edg|OPR|Firefox|FxiOS/i.test(navigator.userAgent);
 
   function debugLog(event: string, details: Record<string, unknown>) {
+    if (!ENABLE_COMBO_PLAYER_DEBUG_LOGS) {
+      return;
+    }
+
     console.log("[ComboPlayer]", event, {
       comboId: comboId ?? "none",
       variant,
@@ -520,28 +436,23 @@ export function ComboPlayer({
     let hlsInstance: HlsInstance | null = null;
 
     const setup = async () => {
-      const preferredVideoSrc = await resolvePreferredVideoHlsVariantUrl(
-        videoSrc,
-        DEFAULT_VIDEO_TARGET_HEIGHT
-      );
       debugLog("video.setup.start", {
         src: videoSrc,
-        preferredVideoSrc,
       });
       if (video.canPlayType("application/vnd.apple.mpegurl")) {
         debugLog("video.setup.native-hls", {
-          src: preferredVideoSrc,
+          src: videoSrc,
         });
-        video.src = preferredVideoSrc;
+        video.src = videoSrc;
         return;
       }
 
-      const likelyHls = preferredVideoSrc.toLowerCase().includes(".m3u8");
+      const likelyHls = videoSrc.toLowerCase().includes(".m3u8");
       if (!likelyHls) {
         debugLog("video.setup.direct", {
-          src: preferredVideoSrc,
+          src: videoSrc,
         });
-        video.src = preferredVideoSrc;
+        video.src = videoSrc;
         return;
       }
 
@@ -551,20 +462,20 @@ export function ComboPlayer({
         if (!Hls.isSupported() || cancelled) {
           debugLog("video.setup.hls-unsupported", {
             cancelled,
-            src: preferredVideoSrc,
+            src: videoSrc,
           });
           video.muted = true;
           video.defaultMuted = true;
           video.volume = 0;
-          video.src = preferredVideoSrc;
+          video.src = videoSrc;
           return;
         }
 
         const hls = new Hls();
         debugLog("video.setup.hls-attached", {
-          src: preferredVideoSrc,
+          src: videoSrc,
         });
-        hls.loadSource(preferredVideoSrc);
+        hls.loadSource(videoSrc);
         hls.attachMedia(video);
         hls.on(Hls.Events.ERROR, (_event: unknown, data: { fatal?: boolean }) => {
           if (data.fatal && !cancelled) {
@@ -576,12 +487,12 @@ export function ComboPlayer({
         hlsInstance = hls;
       } catch {
         debugLog("video.setup.hls-fallback", {
-          src: preferredVideoSrc,
+          src: videoSrc,
         });
         video.muted = true;
         video.defaultMuted = true;
         video.volume = 0;
-        video.src = preferredVideoSrc;
+        video.src = videoSrc;
       }
     };
 

@@ -1,17 +1,20 @@
-import { PublicRandomComboResponseSchema } from "@media-manager/contracts";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 
 import { BulletinSection } from "./components/BulletinSection";
 import { LinksSection } from "./components/LinksSection";
-import { SingleComboSlot } from "./components/SingleComboSlot";
 import {
   SingleSlotKey,
   SlotManager,
-  SlotManagerState,
-  SlotPlaybackState,
   type ComboPayload,
   type SlotPlaybackAssignment,
 } from "./lib/slot-manager";
+
+const SingleComboSlot = lazy(async () => {
+  const module = await import("./components/SingleComboSlot");
+  return { default: module.SingleComboSlot };
+});
+
+const ENABLE_DEBUG_LOGS = false;
 
 function getApiBaseUrl(): string | null {
   const raw = import.meta.env.VITE_COMBO_API_BASE_URL ?? import.meta.env.VITE_API_BASE_URL;
@@ -41,17 +44,28 @@ async function fetchRandomCombo(): Promise<ComboPayload | null> {
     return null;
   }
 
-  const parsed = PublicRandomComboResponseSchema.safeParse(await response.json());
-  if (!parsed.success) {
+  const payload = (await response.json()) as unknown;
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as Record<string, unknown>;
+  if (
+    typeof candidate.comboId !== "string" ||
+    typeof candidate.videoTitle !== "string" ||
+    typeof candidate.audioTitle !== "string" ||
+    typeof candidate.videoSrc !== "string" ||
+    typeof candidate.audioSrc !== "string"
+  ) {
     return null;
   }
 
   return {
-    comboId: parsed.data.comboId,
-    videoTitle: parsed.data.videoTitle,
-    audioTitle: parsed.data.audioTitle,
-    videoSrc: parsed.data.videoSrc,
-    audioSrc: parsed.data.audioSrc,
+    comboId: candidate.comboId,
+    videoTitle: candidate.videoTitle,
+    audioTitle: candidate.audioTitle,
+    videoSrc: candidate.videoSrc,
+    audioSrc: candidate.audioSrc,
   };
 }
 
@@ -62,26 +76,69 @@ export function App() {
   const [comboLoading, setComboLoading] = useState(false);
   const [comboError, setComboError] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState<AudioLevel>("muted");
-  const [managerState, setManagerState] = useState<SlotManagerState>(SlotManagerState.Idle);
-  const [slotState, setSlotState] = useState<SlotPlaybackState>(SlotPlaybackState.Idle);
-  const [combosPlayedCount, setCombosPlayedCount] = useState(0);
   const [isBulletinOpen, setIsBulletinOpen] = useState(true);
+  const [playerEnabled, setPlayerEnabled] = useState(false);
+  const [managerEnabled, setManagerEnabled] = useState(false);
   const managerRef = useRef<SlotManager | null>(null);
 
   useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      setPlayerEnabled(true);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!playerEnabled) {
+      return;
+    }
+
+    const win = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+
+    let timeoutId: number | null = null;
+    let idleId: number | null = null;
+
+    const enableManager = () => {
+      setManagerEnabled(true);
+    };
+
+    if (typeof win.requestIdleCallback === "function") {
+      idleId = win.requestIdleCallback(enableManager, { timeout: 800 });
+    } else {
+      timeoutId = window.setTimeout(enableManager, 500);
+    }
+
+    return () => {
+      if (idleId !== null && typeof win.cancelIdleCallback === "function") {
+        win.cancelIdleCallback(idleId);
+      }
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [playerEnabled]);
+
+  useEffect(() => {
+    if (!managerEnabled) {
+      return;
+    }
+
     const manager = new SlotManager({
       fetchRandomCombo,
       events: {
         onComboChanged: setSlotAssignment,
         onLoadingChange: setComboLoading,
         onError: setComboError,
-        onManagerStateChange: setManagerState,
-        onSlotStateChange: (_slot, state) => {
-          setSlotState(state);
-        },
-        onCombosPlayedChange: setCombosPlayedCount,
         onDebug: (event, data) => {
-          console.log("[darenkeck][SlotManager]", event, data ?? {});
+          if (ENABLE_DEBUG_LOGS) {
+            console.log("[darenkeck][SlotManager]", event, data ?? {});
+          }
         },
       },
     });
@@ -94,7 +151,7 @@ export function App() {
         managerRef.current = null;
       }
     };
-  }, []);
+  }, [managerEnabled]);
 
   const handleTimelineEnded = () => {
     void managerRef.current?.handleSlotPlaybackEnded(SingleSlotKey.Primary);
@@ -155,16 +212,20 @@ export function App() {
 
   return (
     <main className="relative isolate h-dvh overflow-hidden px-4 sm:px-6">
-      {slotAssignment ? (
-        <SingleComboSlot
-          audioMuted={isAudioMuted}
-          audioVolume={audioVolume}
-          combo={slotAssignment.combo}
-          playbackCycle={slotAssignment.playbackCycle}
-          onPlaybackReady={handlePlaybackReady}
-          onPlaybackStateChange={handlePlaybackStateChange}
-          onTimelineEnded={handleTimelineEnded}
-        />
+      {playerEnabled ? (
+        <Suspense fallback={null}>
+          {slotAssignment ? (
+            <SingleComboSlot
+              audioMuted={isAudioMuted}
+              audioVolume={audioVolume}
+              combo={slotAssignment.combo}
+              playbackCycle={slotAssignment.playbackCycle}
+              onPlaybackReady={handlePlaybackReady}
+              onPlaybackStateChange={handlePlaybackStateChange}
+              onTimelineEnded={handleTimelineEnded}
+            />
+          ) : null}
+        </Suspense>
       ) : null}
       <button
         aria-label={audioButtonTitle}
@@ -308,9 +369,9 @@ export function App() {
                       : (comboError ?? "Combo playback unavailable. Set VITE_COMBO_API_BASE_URL.")}
                   </p>
                 ) : null}
-                <p className="text-[11px] text-white/65">
+                {/* <p className="text-[11px] text-white/65">
                   manager: {managerState} | slot: {slotState} | combos played: {combosPlayedCount}
-                </p>
+                </p> */}
               </div>
             </div>
           </div>
