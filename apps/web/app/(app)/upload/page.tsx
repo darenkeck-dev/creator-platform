@@ -33,17 +33,12 @@ async function putFileWithProgress(
   uploadUrl: string,
   file: File,
   contentType: string,
-  onProgress: (progress: number) => void,
-  videoMetadata?: VideoUploadMetadata
+  onProgress: (progress: number) => void
 ): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open("PUT", uploadUrl, true);
     request.setRequestHeader("content-type", contentType);
-    if (videoMetadata) {
-      request.setRequestHeader("x-amz-meta-video-width", String(videoMetadata.width));
-      request.setRequestHeader("x-amz-meta-video-height", String(videoMetadata.height));
-    }
 
     request.upload.onprogress = (event) => {
       if (!event.lengthComputable) {
@@ -314,8 +309,7 @@ export default function UploadPage() {
           uploadParsed.data.uploadUrl,
           uploadFile,
           contentType,
-          setUploadProgress,
-          videoMetadata
+          setUploadProgress
         );
 
         const confirmResponse = await fetch(

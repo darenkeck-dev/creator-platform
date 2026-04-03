@@ -15,6 +15,7 @@ const MediaConvertEventSchema = z.object({
       outputGroupDetails: z
         .array(
           z.object({
+            playlistFilePaths: z.array(z.string()).optional(),
             outputDetails: z
               .array(
                 z.object({
@@ -108,6 +109,20 @@ function flattenOutputPaths(event: MediaConvertEvent): string[] {
   return paths;
 }
 
+function flattenPlaylistPaths(event: MediaConvertEvent): string[] {
+  const paths: string[] = [];
+
+  for (const group of event.detail?.outputGroupDetails ?? []) {
+    for (const path of group.playlistFilePaths ?? []) {
+      if (path) {
+        paths.push(path);
+      }
+    }
+  }
+
+  return paths;
+}
+
 function extractAssetId(event: MediaConvertEvent, outputPaths: string[]): string | null {
   const metadata = event.detail?.userMetadata ?? {};
   const candidates = [metadata.assetId, metadata.assetID, metadata.AssetId, metadata.asset_id];
@@ -179,6 +194,33 @@ function inferRenditionType(path: string): StreamRendition["type"] | null {
   return null;
 }
 
+function isLikelyVariantManifest(path: string): boolean {
+  const label = fileLabel(path).toLowerCase();
+  return /_(\d{3,4}p|\d+x\d+)$/.test(label);
+}
+
+function pickHlsMasterPath(paths: string[]): string | undefined {
+  const manifests = paths.filter((path) => path.toLowerCase().endsWith(".m3u8"));
+  if (manifests.length === 0) {
+    return undefined;
+  }
+
+  const explicitMaster = manifests.find((path) => path.toLowerCase().endsWith("/master.m3u8"));
+  if (explicitMaster) {
+    return explicitMaster;
+  }
+
+  const nonVariantCandidates = manifests.filter((path) => !isLikelyVariantManifest(path));
+  if (nonVariantCandidates.length > 0) {
+    return (
+      nonVariantCandidates.find((path) => path.toLowerCase().includes("/hls/")) ??
+      nonVariantCandidates[0]
+    );
+  }
+
+  return manifests.find((path) => path.toLowerCase().includes("/hls/")) ?? manifests[0];
+}
+
 function buildStreamInfo(
   event: MediaConvertEvent,
   fallbackBucket: string,
@@ -189,6 +231,7 @@ function buildStreamInfo(
   renditions: StreamRendition[];
 } {
   const paths = flattenOutputPaths(event);
+  const playlistPaths = flattenPlaylistPaths(event);
 
   let hlsMasterUrl: string | undefined;
   let posterUrl: string | undefined;
@@ -226,10 +269,11 @@ function buildStreamInfo(
     }
   }
 
-  const preferredHls = paths.find((path) => path.toLowerCase().endsWith("/master.m3u8"));
-  const anyHls = preferredHls ?? paths.find((path) => path.toLowerCase().endsWith(".m3u8"));
+  const anyHls = pickHlsMasterPath(playlistPaths);
   if (anyHls) {
     hlsMasterUrl = toHttpsUrl(anyHls, fallbackBucket, cloudFrontDomain) ?? undefined;
+  } else {
+    throw new Error("Missing HLS master manifest in MediaConvert playlistFilePaths");
   }
 
   const anyPoster = paths.find((path) => /(\/thumbs\/.*\.(jpg|jpeg|png|webp))$/i.test(path));

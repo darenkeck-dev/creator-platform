@@ -103,6 +103,7 @@ describe("mediaconvert-status lambda", () => {
         userMetadata: { assetId: "asset-202" },
         outputGroupDetails: [
           {
+            playlistFilePaths: ["s3://media-derived-test/derived/asset-202/hls/master.m3u8"],
             outputDetails: [
               {
                 outputFilePaths: ["s3://media-derived-test/derived/asset-202/hls/master.m3u8"],
@@ -153,6 +154,7 @@ describe("mediaconvert-status lambda", () => {
         userMetadata: { assetId: "asset-cf" },
         outputGroupDetails: [
           {
+            playlistFilePaths: ["s3://media-derived-test/derived/asset-cf/hls/master.m3u8"],
             outputDetails: [
               {
                 outputFilePaths: ["s3://media-derived-test/derived/asset-cf/hls/master.m3u8"],
@@ -170,6 +172,77 @@ describe("mediaconvert-status lambda", () => {
     expect(stream.hlsMasterUrl).toBe(
       "https://d111111abcdef8.cloudfront.net/derived/asset-cf/hls/master.m3u8"
     );
+  });
+
+  it("prefers non-variant HLS manifest when master filename differs", async () => {
+    const { calls } = stubSend(async () => ({}));
+
+    const result = await handler({
+      source: "aws.mediaconvert",
+      "detail-type": "MediaConvert Job State Change",
+      detail: {
+        status: "COMPLETE",
+        userMetadata: { assetId: "asset-nonstandard-master" },
+        outputGroupDetails: [
+          {
+            playlistFilePaths: [
+              "s3://media-derived-test/derived/asset-nonstandard-master/hls/asset-nonstandard-master.m3u8",
+            ],
+            outputDetails: [
+              {
+                outputFilePaths: [
+                  "s3://media-derived-test/derived/asset-nonstandard-master/hls/asset-nonstandard-master_1080p.m3u8",
+                ],
+              },
+              {
+                outputFilePaths: [
+                  "s3://media-derived-test/derived/asset-nonstandard-master/hls/asset-nonstandard-master.m3u8",
+                ],
+              },
+              {
+                outputFilePaths: [
+                  "s3://media-derived-test/derived/asset-nonstandard-master/hls/asset-nonstandard-master_720p.m3u8",
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    const stream = calls[0]?.input.ExpressionAttributeValues?.[":stream"] as {
+      hlsMasterUrl?: string;
+    };
+    expect(stream.hlsMasterUrl).toBe(
+      "https://media-derived-test.s3.amazonaws.com/derived/asset-nonstandard-master/hls/asset-nonstandard-master.m3u8"
+    );
+  });
+
+  it("throws when COMPLETE event is missing master playlistFilePaths", async () => {
+    stubSend(async () => ({}));
+
+    await expect(
+      handler({
+        source: "aws.mediaconvert",
+        "detail-type": "MediaConvert Job State Change",
+        detail: {
+          status: "COMPLETE",
+          userMetadata: { assetId: "asset-missing-master" },
+          outputGroupDetails: [
+            {
+              outputDetails: [
+                {
+                  outputFilePaths: [
+                    "s3://media-derived-test/derived/asset-missing-master/hls/asset-missing-master_1080p.m3u8",
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      })
+    ).rejects.toThrow("Missing HLS master manifest in MediaConvert playlistFilePaths");
   });
 
   it("ignores events without resolvable asset id", async () => {
