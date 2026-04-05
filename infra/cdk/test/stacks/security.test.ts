@@ -8,6 +8,7 @@ import { join } from "node:path";
 
 import { ApiStack } from "../../lib/api-stack";
 import { AuthStack } from "../../lib/auth-stack";
+import { DarenkeckSiteStack } from "../../lib/darenkeck-site-stack";
 import { StorageStack } from "../../lib/storage-stack";
 
 const env = {
@@ -75,6 +76,44 @@ describe("security posture", () => {
             Action: "s3:GetObject",
             Condition: Match.objectLike({
               StringLike: Match.objectLike({
+                "AWS:SourceArn": Match.anyValue(),
+              }),
+            }),
+          }),
+        ]),
+      },
+    });
+  });
+
+  it("keeps darenkeck site bucket private and scoped to its CloudFront distribution", () => {
+    const app = new App();
+    const stack = new DarenkeckSiteStack(app, "DarenkeckSiteStackSecurityTest", {
+      stage: "test",
+      env,
+    });
+
+    const template = Template.fromStack(stack);
+    template.hasResourceProperties("AWS::S3::Bucket", {
+      PublicAccessBlockConfiguration: {
+        BlockPublicAcls: true,
+        BlockPublicPolicy: true,
+        IgnorePublicAcls: true,
+        RestrictPublicBuckets: true,
+      },
+    });
+
+    template.hasResourceProperties("AWS::S3::BucketPolicy", {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Sid: "AllowCloudFrontReadDarenkeckSite",
+            Effect: "Allow",
+            Principal: {
+              Service: "cloudfront.amazonaws.com",
+            },
+            Action: "s3:GetObject",
+            Condition: Match.objectLike({
+              StringEquals: Match.objectLike({
                 "AWS:SourceArn": Match.anyValue(),
               }),
             }),

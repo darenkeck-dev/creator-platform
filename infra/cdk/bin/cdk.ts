@@ -6,6 +6,7 @@ import { AuthStack } from "../lib/auth-stack";
 import { ApiStack } from "../lib/api-stack";
 import { CoreStack } from "../lib/core-stack";
 import { DataStack } from "../lib/data-stack";
+import { DarenkeckSiteStack } from "../lib/darenkeck-site-stack";
 import { ObservabilityStack } from "../lib/observability-stack";
 import { ProcessingStack } from "../lib/processing-stack";
 import { StorageStack } from "../lib/storage-stack";
@@ -48,6 +49,12 @@ new StreamingStack(app, "MediaManagerStreamingStack", {
   env: stackEnv,
   stage,
   stackName: withStageSuffix("MediaManagerStreamingStack", stage),
+});
+
+new DarenkeckSiteStack(app, "MediaManagerDarenkeckSiteStack", {
+  env: stackEnv,
+  stage,
+  stackName: withStageSuffix("MediaManagerDarenkeckSiteStack", stage),
 });
 
 new ApiStack(app, "MediaManagerApiStack", {

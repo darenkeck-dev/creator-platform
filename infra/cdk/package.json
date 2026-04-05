@@ -35,6 +35,7 @@
     "deploy:data": "bun run build && bun run build:lambda && node ./node_modules/aws-cdk/bin/cdk deploy MediaManagerDataStack --require-approval never",
     "deploy:storage": "bun run build && bun run build:lambda && node ./node_modules/aws-cdk/bin/cdk deploy MediaManagerStorageStack --require-approval never",
     "deploy:streaming": "bun run build && bun run build:lambda && node ./node_modules/aws-cdk/bin/cdk deploy MediaManagerStreamingStack --require-approval never",
+    "deploy:darenkeck-site": "bun run build && bun run build:lambda && node ./node_modules/aws-cdk/bin/cdk deploy MediaManagerDarenkeckSiteStack --require-approval never",
     "deploy:api": "bun run build && bun run build:lambda && node ./node_modules/aws-cdk/bin/cdk deploy MediaManagerApiStack --require-approval never",
     "deploy:processing": "bun run build && bun run build:lambda && node ./node_modules/aws-cdk/bin/cdk deploy MediaManagerProcessingStack --require-approval never",
     "deploy:observability": "bun run build && bun run build:lambda && node ./node_modules/aws-cdk/bin/cdk deploy MediaManagerObservabilityStack --require-approval never --parameters BudgetAlertEmail=$BUDGET_ALERT_EMAIL --parameters MonthlyBudgetUsd=$MONTHLY_BUDGET_USD",

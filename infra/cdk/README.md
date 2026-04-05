@@ -99,6 +99,25 @@ Exports:
 
 - `CLOUDFRONT-DOMAIN`
 
+### `MediaManagerDarenkeckSiteStack` (`lib/darenkeck-site-stack.ts`)
+
+Responsibility:
+
+- Static site hosting for `apps/darenkeck` via S3 + CloudFront.
+
+Creates:
+
+- Private S3 bucket (`darenkeck-site-<stage>`) for static build artifacts.
+- CloudFront Origin Access Control (OAC).
+- CloudFront distribution with SPA fallback to `/index.html` for 403/404 responses.
+- S3 bucket policy allowing read access only from the created CloudFront distribution.
+
+Exports:
+
+- `DARENKECK-SITE-BUCKET-NAME`
+- `DARENKECK-SITE-CLOUDFRONT-DOMAIN`
+- `DARENKECK-SITE-CLOUDFRONT-DISTRIBUTION-ID`
+
 ### `MediaManagerApiStack` (`lib/api-stack.ts`)
 
 Responsibility:
@@ -163,8 +182,9 @@ Imports:
   2. `DataStack`
   3. `StorageStack`
   4. `StreamingStack`
-  5. `AuthStack`
-  6. `ApiStack`
-  7. `ProcessingStack`
-  8. `ObservabilityStack`
+  5. `DarenkeckSiteStack`
+  6. `AuthStack`
+  7. `ApiStack`
+  8. `ProcessingStack`
+  9. `ObservabilityStack`
 - Project scripts in `infra/cdk/package.json` wrap these (for example `bun run deploy:api`).
