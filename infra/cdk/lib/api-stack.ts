@@ -145,9 +145,34 @@ export class ApiStack extends Stack {
     assetByIdFunction.addToRolePolicy(derivedBucketListPolicy);
     assetByIdFunction.addToRolePolicy(derivedBucketDeletePolicy);
 
+    const configuredCorsOrigins = (process.env.API_CORS_ALLOWED_ORIGINS ?? "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter((origin) => origin.length > 0);
+
+    const allowOrigins =
+      configuredCorsOrigins.length > 0
+        ? configuredCorsOrigins
+        : [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://localhost:3002",
+            "https://darenkeck.com",
+            "https://www.darenkeck.com",
+            "https://staging.darenkeck.com",
+            "https://d2fmm3qe2rclf2.cloudfront.net",
+          ];
+
     const api = new apigwv2.CfnApi(this, "AssetsHttpApi", {
       name: withStageSuffix("media-manager-api", stage),
       protocolType: "HTTP",
+      corsConfiguration: {
+        allowOrigins,
+        allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allowHeaders: ["authorization", "content-type"],
+        exposeHeaders: ["etag"],
+        maxAge: 86400,
+      },
     });
 
     const authorizer = new apigwv2.CfnAuthorizer(this, "CognitoJwtAuthorizer", {
