@@ -411,9 +411,16 @@ export function ComboPlayer({
     transitionTo(ComboPlayerPhase.Ready);
   }
 
+  function configureVideoElement(video: HTMLVideoElement) {
+    video.muted = true;
+    video.defaultMuted = true;
+    video.volume = 0;
+  }
+
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) {
+    const audio = audioRef.current;
+    if (!video || !audio) {
       return;
     }
 
@@ -423,31 +430,36 @@ export function ComboPlayer({
     const nextReady = { video: false, audio: false };
     mediaReadyRef.current = nextReady;
 
-    video.muted = true;
-    video.defaultMuted = true;
-    video.volume = 0;
+    configureVideoElement(video);
 
     let cancelled = false;
-    let hlsInstance: HlsInstance | null = null;
+    const hlsInstances: HlsInstance[] = [];
 
-    const setup = async () => {
-      debugLog("video.setup.start", {
-        src: videoSrc,
+    const setupMediaSource = async (
+      kind: "video" | "audio",
+      element: HTMLMediaElement,
+      src: string
+    ) => {
+      const fatalMessage =
+        kind === "video" ? "Video stream failed to load." : "Audio stream failed to load.";
+
+      debugLog(`${kind}.setup.start`, {
+        src,
       });
-      if (video.canPlayType("application/vnd.apple.mpegurl")) {
-        debugLog("video.setup.native-hls", {
-          src: videoSrc,
+      if (element.canPlayType("application/vnd.apple.mpegurl")) {
+        debugLog(`${kind}.setup.native-hls`, {
+          src,
         });
-        video.src = videoSrc;
+        element.src = src;
         return;
       }
 
-      const likelyHls = videoSrc.toLowerCase().includes(".m3u8");
+      const likelyHls = src.toLowerCase().includes(".m3u8");
       if (!likelyHls) {
-        debugLog("video.setup.direct", {
-          src: videoSrc,
+        debugLog(`${kind}.setup.direct`, {
+          src,
         });
-        video.src = videoSrc;
+        element.src = src;
         return;
       }
 
@@ -455,126 +467,49 @@ export function ComboPlayer({
         const hlsModule = await import("hls.js");
         const Hls = hlsModule.default;
         if (!Hls.isSupported() || cancelled) {
-          debugLog("video.setup.hls-unsupported", {
+          debugLog(`${kind}.setup.hls-unsupported`, {
             cancelled,
-            src: videoSrc,
+            src,
           });
-          video.muted = true;
-          video.defaultMuted = true;
-          video.volume = 0;
-          video.src = videoSrc;
+          element.src = src;
           return;
         }
 
         const hls = new Hls();
-        debugLog("video.setup.hls-attached", {
-          src: videoSrc,
+        debugLog(`${kind}.setup.hls-attached`, {
+          src,
         });
-        hls.loadSource(videoSrc);
-        hls.attachMedia(video);
+        hls.loadSource(src);
+        hls.attachMedia(element);
         hls.on(Hls.Events.ERROR, (_event: unknown, data: { fatal?: boolean }) => {
           if (data.fatal && !cancelled) {
-            setMessage("Video stream failed to load.");
-            reportPlaybackError("video", "Video stream failed to load.");
+            setMessage(fatalMessage);
+            reportPlaybackError(kind, fatalMessage);
             transitionTo(ComboPlayerPhase.Error);
           }
         });
-        hlsInstance = hls;
+        hlsInstances.push(hls);
       } catch {
-        debugLog("video.setup.hls-fallback", {
-          src: videoSrc,
+        debugLog(`${kind}.setup.hls-fallback`, {
+          src,
         });
-        video.muted = true;
-        video.defaultMuted = true;
-        video.volume = 0;
-        video.src = videoSrc;
+        element.src = src;
       }
     };
 
-    void setup();
+    void Promise.all([
+      setupMediaSource("video", video, videoSrc),
+      setupMediaSource("audio", audio, audioSrc),
+    ]);
 
     return () => {
       cancelled = true;
-      debugLog("video.setup.cleanup", {});
-      hlsInstance?.destroy();
-    };
-  }, [videoSrc]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) {
-      return;
-    }
-
-    let cancelled = false;
-    let hlsInstance: HlsInstance | null = null;
-    const nextReady = { ...mediaReadyRef.current, audio: false };
-    playbackReadyNotifiedRef.current = false;
-    mediaReadyRef.current = nextReady;
-
-    const setup = async () => {
-      debugLog("audio.setup.start", {
-        src: audioSrc,
-      });
-      if (audio.canPlayType("application/vnd.apple.mpegurl")) {
-        debugLog("audio.setup.native-hls", {
-          src: audioSrc,
-        });
-        audio.src = audioSrc;
-        return;
-      }
-
-      const likelyHls = audioSrc.toLowerCase().includes(".m3u8");
-      if (!likelyHls) {
-        debugLog("audio.setup.direct", {
-          src: audioSrc,
-        });
-        audio.src = audioSrc;
-        return;
-      }
-
-      try {
-        const hlsModule = await import("hls.js");
-        const Hls = hlsModule.default;
-        if (!Hls.isSupported() || cancelled) {
-          debugLog("audio.setup.hls-unsupported", {
-            cancelled,
-            src: audioSrc,
-          });
-          audio.src = audioSrc;
-          return;
-        }
-
-        const hls = new Hls();
-        debugLog("audio.setup.hls-attached", {
-          src: audioSrc,
-        });
-        hls.loadSource(audioSrc);
-        hls.attachMedia(audio);
-        hls.on(Hls.Events.ERROR, (_event: unknown, data: { fatal?: boolean }) => {
-          if (data.fatal && !cancelled) {
-            setMessage("Audio stream failed to load.");
-            reportPlaybackError("audio", "Audio stream failed to load.");
-            transitionTo(ComboPlayerPhase.Error);
-          }
-        });
-        hlsInstance = hls;
-      } catch {
-        debugLog("audio.setup.hls-fallback", {
-          src: audioSrc,
-        });
-        audio.src = audioSrc;
+      debugLog("media.setup.cleanup", {});
+      for (const hlsInstance of hlsInstances) {
+        hlsInstance.destroy();
       }
     };
-
-    void setup();
-
-    return () => {
-      cancelled = true;
-      debugLog("audio.setup.cleanup", {});
-      hlsInstance?.destroy();
-    };
-  }, [audioSrc]);
+  }, [audioSrc, videoSrc]);
 
   useEffect(() => {
     if (audioMuted !== undefined) {
