@@ -79,13 +79,11 @@ export function ComboPlayer({
   const autoPlayAttemptedRef = useRef(false);
   const playbackReadyNotifiedRef = useRef(false);
   const timelineEndedNotifiedRef = useRef(false);
-  const previousPhaseRef = useRef<ComboPlayerPhase>(ComboPlayerPhase.Loading);
   const [phase, setPhase] = useState<ComboPlayerPhase>(ComboPlayerPhase.Loading);
   const mediaReadyRef = useRef({ video: false, audio: false });
   const [message, setMessage] = useState<string | null>(null);
   const [durations, setDurations] = useState({ videoDuration: 0, audioDuration: 0 });
   const [currentTime, setCurrentTime] = useState(0);
-  const [isPortraitViewport, setIsPortraitViewport] = useState(false);
   const resolvedDefaultAudioMuted = defaultAudioMuted ?? audioMutedByDefault ?? true;
   const [uncontrolledAudioMuted, setUncontrolledAudioMuted] = useState(resolvedDefaultAudioMuted);
 
@@ -263,7 +261,7 @@ export function ComboPlayer({
   }
 
   function handlePlaybackStartedSignal() {
-    setPhase(ComboPlayerPhase.Playing);
+    transitionTo(ComboPlayerPhase.Playing);
   }
 
   function handlePlaybackPausedSignal() {
@@ -271,13 +269,29 @@ export function ComboPlayer({
       return;
     }
 
-    setPhase(shouldBePlayingRef.current ? ComboPlayerPhase.Stalled : ComboPlayerPhase.Ready);
+    transitionTo(shouldBePlayingRef.current ? ComboPlayerPhase.Stalled : ComboPlayerPhase.Ready);
   }
 
   function handlePlaybackWaitingSignal() {
     if (shouldBePlayingRef.current) {
-      setPhase(ComboPlayerPhase.Stalled);
+      transitionTo(ComboPlayerPhase.Stalled);
     }
+  }
+
+  function transitionTo(nextPhase: ComboPlayerPhase) {
+    setPhase((currentPhase) => {
+      if (currentPhase === nextPhase) {
+        return currentPhase;
+      }
+
+      debugLog("phase.transition", {
+        from: currentPhase,
+        to: nextPhase,
+        shouldBePlaying: shouldBePlayingRef.current,
+      });
+      onPlaybackStateChange?.(nextPhase);
+      return nextPhase;
+    });
   }
 
   function handleTimelineTimeUpdateSignal() {
@@ -315,7 +329,7 @@ export function ComboPlayer({
     }
 
     if (phase === ComboPlayerPhase.Loading) {
-      setPhase(ComboPlayerPhase.Ready);
+      transitionTo(ComboPlayerPhase.Ready);
     }
 
     if (autoPlay && !autoPlayAttemptedRef.current) {
@@ -351,7 +365,7 @@ export function ComboPlayer({
       timelineEndedNotifiedRef.current = true;
       onTimelineEnded?.();
     }
-    setPhase(ComboPlayerPhase.Ended);
+    transitionTo(ComboPlayerPhase.Ended);
   }
 
   function handleTrackEnded(kind: ComboTrackKind) {
@@ -374,7 +388,7 @@ export function ComboPlayer({
     follower.currentTime = 0;
     if (shouldBePlayingRef.current) {
       void follower.play().catch(() => {
-        setPhase(ComboPlayerPhase.Stalled);
+        transitionTo(ComboPlayerPhase.Stalled);
       });
     }
   }
@@ -394,7 +408,7 @@ export function ComboPlayer({
     debugLog("playback.restart", {
       playRequestId: playRequestRef.current,
     });
-    setPhase(ComboPlayerPhase.Ready);
+    transitionTo(ComboPlayerPhase.Ready);
   }
 
   useEffect(() => {
@@ -462,7 +476,7 @@ export function ComboPlayer({
           if (data.fatal && !cancelled) {
             setMessage("Video stream failed to load.");
             reportPlaybackError("video", "Video stream failed to load.");
-            setPhase(ComboPlayerPhase.Error);
+            transitionTo(ComboPlayerPhase.Error);
           }
         });
         hlsInstance = hls;
@@ -541,7 +555,7 @@ export function ComboPlayer({
           if (data.fatal && !cancelled) {
             setMessage("Audio stream failed to load.");
             reportPlaybackError("audio", "Audio stream failed to load.");
-            setPhase(ComboPlayerPhase.Error);
+            transitionTo(ComboPlayerPhase.Error);
           }
         });
         hlsInstance = hls;
@@ -569,21 +583,6 @@ export function ComboPlayer({
 
     setUncontrolledAudioMuted(resolvedDefaultAudioMuted);
   }, [audioMuted, resolvedDefaultAudioMuted]);
-
-  useEffect(() => {
-    const previousPhase = previousPhaseRef.current;
-    if (previousPhase === phase) {
-      return;
-    }
-
-    debugLog("phase.transition", {
-      from: previousPhase,
-      to: phase,
-      shouldBePlaying: shouldBePlayingRef.current,
-    });
-    onPlaybackStateChange?.(phase);
-    previousPhaseRef.current = phase;
-  }, [onPlaybackStateChange, phase]);
 
   async function startPlayback(errorMessage: string) {
     const playRequestId = ++playRequestRef.current;
@@ -641,7 +640,7 @@ export function ComboPlayer({
         playRequestId,
         audioPlayStarted: audioPlayResult.ok,
       });
-      setPhase(ComboPlayerPhase.Playing);
+      transitionTo(ComboPlayerPhase.Playing);
     } catch (error: unknown) {
       if (playRequestRef.current !== playRequestId) {
         return;
@@ -658,7 +657,7 @@ export function ComboPlayer({
         debugLog("playback.start.abort", {
           playRequestId,
         });
-        setPhase(ComboPlayerPhase.Stalled);
+        transitionTo(ComboPlayerPhase.Stalled);
         return;
       }
 
@@ -669,7 +668,7 @@ export function ComboPlayer({
         playRequestId,
         name,
       });
-      setPhase(ComboPlayerPhase.Error);
+      transitionTo(ComboPlayerPhase.Error);
     }
   }
 
@@ -687,7 +686,7 @@ export function ComboPlayer({
       elements.audio.pause();
       shouldBePlayingRef.current = false;
       playRequestRef.current += 1;
-      setPhase(ComboPlayerPhase.Ready);
+      transitionTo(ComboPlayerPhase.Ready);
       return;
     }
 
@@ -742,7 +741,7 @@ export function ComboPlayer({
       if (!elements.master.paused && !elements.follower.paused) {
         shouldBePlayingRef.current = true;
         setMessage(null);
-        setPhase(ComboPlayerPhase.Playing);
+        transitionTo(ComboPlayerPhase.Playing);
         return;
       }
 
@@ -759,7 +758,7 @@ export function ComboPlayer({
       if (playPromises.length === 0) {
         shouldBePlayingRef.current = true;
         setMessage(null);
-        setPhase(ComboPlayerPhase.Playing);
+        transitionTo(ComboPlayerPhase.Playing);
         return;
       }
 
@@ -770,7 +769,7 @@ export function ComboPlayer({
           }
           shouldBePlayingRef.current = true;
           setMessage(null);
-          setPhase(ComboPlayerPhase.Playing);
+          transitionTo(ComboPlayerPhase.Playing);
         })
         .catch((error: unknown) => {
           if (playRequestRef.current !== playRequestId) {
@@ -785,21 +784,21 @@ export function ComboPlayer({
                 : "";
 
           if (name === "AbortError") {
-            setPhase(ComboPlayerPhase.Stalled);
+            transitionTo(ComboPlayerPhase.Stalled);
             return;
           }
 
           shouldBePlayingRef.current = false;
-          setPhase(ComboPlayerPhase.Stalled);
+          transitionTo(ComboPlayerPhase.Stalled);
         });
       return;
     }
 
     if (phase === ComboPlayerPhase.Ended && clamped < duration) {
-      setPhase(ComboPlayerPhase.Ready);
+      transitionTo(ComboPlayerPhase.Ready);
     } else {
       handleTimelineTimeUpdateSignal();
-      setPhase(ComboPlayerPhase.Ready);
+      transitionTo(ComboPlayerPhase.Ready);
     }
   }
 
@@ -833,7 +832,7 @@ export function ComboPlayer({
           onError={() => {
             setMessage("Video failed to load.");
             reportPlaybackError("video", "Video failed to load.");
-            setPhase(ComboPlayerPhase.Error);
+            transitionTo(ComboPlayerPhase.Error);
           }}
           onDurationChange={syncDurations}
           onLoadedData={handleVideoCanPlay}
@@ -854,10 +853,10 @@ export function ComboPlayer({
           }}
           ref={assignVideoElement}
           style={{
-            objectFit: isPortraitViewport ? "contain" : "cover",
-            objectPosition: isPortraitViewport ? "50% 0%" : "50% 50%",
-            transform: isPortraitViewport ? "none" : "scale(1.08)",
-            transformOrigin: isPortraitViewport ? "center top" : "center center",
+            objectFit: "cover",
+            objectPosition: "50% 50%",
+            transform: "scale(1.08)",
+            transformOrigin: "center center",
           }}
         />
         <audio
@@ -868,7 +867,7 @@ export function ComboPlayer({
           onError={() => {
             setMessage("Audio failed to load.");
             reportPlaybackError("audio", "Audio failed to load.");
-            setPhase(ComboPlayerPhase.Error);
+            transitionTo(ComboPlayerPhase.Error);
           }}
           onDurationChange={syncDurations}
           onLoadedData={handleAudioCanPlay}
@@ -893,11 +892,6 @@ export function ComboPlayer({
           }}
           ref={audioRef}
         />
-        {!suppressUi ? (
-          <p className="pointer-events-none absolute bottom-4 right-4 z-20 rounded-md bg-black/45 px-2 py-1 text-[11px] text-white/90">
-            Viewport: {isPortraitViewport ? "portrait" : "landscape"}
-          </p>
-        ) : null}
         {!suppressUi &&
         !snapshot.isPlaying &&
         (snapshot.phase === ComboPlayerPhase.Ready ||
@@ -924,9 +918,6 @@ export function ComboPlayer({
         <p className="text-xs text-muted-foreground">
           Master: {snapshot.masterTrack} | State: {snapshot.phase}
         </p>
-        <p className="text-xs text-muted-foreground">
-          Viewport: {isPortraitViewport ? "portrait" : "landscape"}
-        </p>
         {comboId ? <p className="text-xs text-muted-foreground">Combo ID: {comboId}</p> : null}
       </header>
 
@@ -946,7 +937,7 @@ export function ComboPlayer({
           onError={() => {
             setMessage("Video failed to load.");
             reportPlaybackError("video", "Video failed to load.");
-            setPhase(ComboPlayerPhase.Error);
+            transitionTo(ComboPlayerPhase.Error);
           }}
           onDurationChange={syncDurations}
           onLoadedData={handleVideoCanPlay}
@@ -975,7 +966,7 @@ export function ComboPlayer({
           onError={() => {
             setMessage("Audio failed to load.");
             reportPlaybackError("audio", "Audio failed to load.");
-            setPhase(ComboPlayerPhase.Error);
+            transitionTo(ComboPlayerPhase.Error);
           }}
           onDurationChange={syncDurations}
           onLoadedData={handleAudioCanPlay}
