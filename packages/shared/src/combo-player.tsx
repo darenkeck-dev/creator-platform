@@ -12,7 +12,6 @@ import {
   ComboPlayerPhase,
   type ComboPlaybackSnapshot,
 } from "./combo-playback";
-import { BrowserEnv } from "./browser-env";
 import { ComboPlayerVariant } from "./combo-player-types";
 
 export type ComboPlayerProps = {
@@ -77,18 +76,15 @@ export function ComboPlayer({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const shouldBePlayingRef = useRef(false);
   const playRequestRef = useRef(0);
-  const isScrubbingRef = useRef(false);
-  const scrubTimeRef = useRef<number | null>(null);
   const autoPlayAttemptedRef = useRef(false);
+  const playbackReadyNotifiedRef = useRef(false);
   const timelineEndedNotifiedRef = useRef(false);
   const previousPhaseRef = useRef<ComboPlayerPhase>(ComboPlayerPhase.Loading);
   const [phase, setPhase] = useState<ComboPlayerPhase>(ComboPlayerPhase.Loading);
-  const [mediaReady, setMediaReady] = useState({ video: false, audio: false });
+  const mediaReadyRef = useRef({ video: false, audio: false });
   const [message, setMessage] = useState<string | null>(null);
   const [durations, setDurations] = useState({ videoDuration: 0, audioDuration: 0 });
   const [currentTime, setCurrentTime] = useState(0);
-  const [isScrubbing, setIsScrubbing] = useState(false);
-  const [scrubTime, setScrubTime] = useState<number | null>(null);
   const [isPortraitViewport, setIsPortraitViewport] = useState(false);
   const resolvedDefaultAudioMuted = defaultAudioMuted ?? audioMutedByDefault ?? true;
   const [uncontrolledAudioMuted, setUncontrolledAudioMuted] = useState(resolvedDefaultAudioMuted);
@@ -100,7 +96,6 @@ export function ComboPlayer({
   const effectiveAudioMuted = audioMuted ?? uncontrolledAudioMuted;
   const effectiveAudioVolume =
     typeof audioVolume === "number" ? Math.min(1, Math.max(0, audioVolume)) : undefined;
-  const isSafariBrowser = BrowserEnv.isSafari();
 
   function debugLog(event: string, details: Record<string, unknown>) {
     if (!ENABLE_COMBO_PLAYER_DEBUG_LOGS) {
@@ -115,6 +110,10 @@ export function ComboPlayer({
   }
 
   function publishTimeUpdate(nextCurrentTime: number, nextDuration: number) {
+    if (variant === ComboPlayerVariant.Background) {
+      return;
+    }
+
     onTimeUpdate?.({
       currentTime: nextCurrentTime,
       duration: nextDuration,
@@ -222,33 +221,23 @@ export function ComboPlayer({
   }
 
   function handleVideoCanPlay() {
-    setMediaReady((previous) => {
-      if (previous.video) {
-        return previous;
-      }
-
-      const next = { ...previous, video: true };
-      debugLog("readiness.video", {
-        videoReady: next.video,
-        audioReady: next.audio,
-      });
-      return next;
+    const nextReady = { ...mediaReadyRef.current, video: true };
+    mediaReadyRef.current = nextReady;
+    debugLog("readiness.video", {
+      videoReady: nextReady.video,
+      audioReady: nextReady.audio,
     });
+    handleMediaReadySignal();
   }
 
   function handleAudioCanPlay() {
-    setMediaReady((previous) => {
-      if (previous.audio) {
-        return previous;
-      }
-
-      const next = { ...previous, audio: true };
-      debugLog("readiness.audio", {
-        videoReady: next.video,
-        audioReady: next.audio,
-      });
-      return next;
+    const nextReady = { ...mediaReadyRef.current, audio: true };
+    mediaReadyRef.current = nextReady;
+    debugLog("readiness.audio", {
+      videoReady: nextReady.video,
+      audioReady: nextReady.audio,
     });
+    handleMediaReadySignal();
   }
 
   function handleVideoLoadedMetadata() {
@@ -261,64 +250,37 @@ export function ComboPlayer({
     handleAudioCanPlay();
   }
 
-  function logSafariVideoHealth(event: string) {
-    if (!isSafariBrowser) {
+  function applyAudioSettingsFromSignals() {
+    const audio = audioRef.current;
+    if (!audio) {
       return;
     }
 
-    const video = videoRef.current;
-    if (!video) {
+    audio.defaultMuted = effectiveAudioMuted;
+    if (effectiveAudioVolume !== undefined) {
+      audio.volume = effectiveAudioVolume;
+    }
+  }
+
+  function handlePlaybackStartedSignal() {
+    setPhase(ComboPlayerPhase.Playing);
+  }
+
+  function handlePlaybackPausedSignal() {
+    if (phase === ComboPlayerPhase.Ended) {
       return;
     }
 
-    const droppedFrameCount =
-      "webkitDroppedFrameCount" in video
-        ? (video as HTMLVideoElement & { webkitDroppedFrameCount?: number }).webkitDroppedFrameCount
-        : undefined;
-    const decodedFrameCount =
-      "webkitDecodedFrameCount" in video
-        ? (video as HTMLVideoElement & { webkitDecodedFrameCount?: number }).webkitDecodedFrameCount
-        : undefined;
-
-    debugLog("safari.video.health", {
-      event,
-      currentTime: Number(video.currentTime.toFixed(2)),
-      readyState: video.readyState,
-      networkState: video.networkState,
-      paused: video.paused,
-      playbackRate: video.playbackRate,
-      videoWidth: video.videoWidth,
-      videoHeight: video.videoHeight,
-      droppedFrameCount,
-      decodedFrameCount,
-    });
+    setPhase(shouldBePlayingRef.current ? ComboPlayerPhase.Stalled : ComboPlayerPhase.Ready);
   }
 
-  function startScrub() {
-    isScrubbingRef.current = true;
-    setIsScrubbing(true);
-    const nextScrubTime = (getElements()?.master.currentTime ?? currentTime) || 0;
-    scrubTimeRef.current = nextScrubTime;
-    setScrubTime(nextScrubTime);
-  }
-
-  function finishScrub() {
-    if (!isScrubbingRef.current) {
-      return;
-    }
-
-    isScrubbingRef.current = false;
-    setIsScrubbing(false);
-
-    const nextTime = scrubTimeRef.current;
-    scrubTimeRef.current = null;
-    setScrubTime(null);
-    if (typeof nextTime === "number") {
-      seekTo(nextTime);
+  function handlePlaybackWaitingSignal() {
+    if (shouldBePlayingRef.current) {
+      setPhase(ComboPlayerPhase.Stalled);
     }
   }
 
-  function syncPhaseFromMedia() {
+  function handleTimelineTimeUpdateSignal() {
     const elements = getElements();
     if (!elements) {
       return;
@@ -330,20 +292,31 @@ export function ComboPlayer({
         masterCurrentTime: elements.master.currentTime,
         timelineDuration: duration,
       });
-      setPhase(ComboPlayerPhase.Ended);
+      stopAtEnd();
       return;
     }
 
-    if (elements.master.paused) {
-      debugLog("phase.sync.master-paused", {
-        shouldBePlaying: shouldBePlayingRef.current,
-        masterCurrentTime: elements.master.currentTime,
+    setCurrentTime(elements.master.currentTime);
+    publishTimeUpdate(elements.master.currentTime, duration);
+  }
+
+  function handleMediaReadySignal() {
+    if (!mediaReadyRef.current.video || !mediaReadyRef.current.audio) {
+      return;
+    }
+
+    if (!playbackReadyNotifiedRef.current) {
+      playbackReadyNotifiedRef.current = true;
+      debugLog("readiness.both-ready", {
+        videoReady: mediaReadyRef.current.video,
+        audioReady: mediaReadyRef.current.audio,
       });
-      setPhase(shouldBePlayingRef.current ? ComboPlayerPhase.Stalled : ComboPlayerPhase.Ready);
-      return;
+      onPlaybackReady?.();
     }
 
-    setPhase(ComboPlayerPhase.Playing);
+    if (phase === ComboPlayerPhase.Loading) {
+      setPhase(ComboPlayerPhase.Ready);
+    }
   }
 
   function stopAtEnd() {
@@ -423,8 +396,10 @@ export function ComboPlayer({
     }
 
     autoPlayAttemptedRef.current = false;
+    playbackReadyNotifiedRef.current = false;
     timelineEndedNotifiedRef.current = false;
-    setMediaReady({ video: false, audio: false });
+    const nextReady = { video: false, audio: false };
+    mediaReadyRef.current = nextReady;
 
     video.muted = true;
     video.defaultMuted = true;
@@ -511,7 +486,9 @@ export function ComboPlayer({
 
     let cancelled = false;
     let hlsInstance: HlsInstance | null = null;
-    setMediaReady((previous) => ({ ...previous, audio: false }));
+    const nextReady = { ...mediaReadyRef.current, audio: false };
+    playbackReadyNotifiedRef.current = false;
+    mediaReadyRef.current = nextReady;
 
     const setup = async () => {
       debugLog("audio.setup.start", {
@@ -586,74 +563,6 @@ export function ComboPlayer({
   }, [audioMuted, resolvedDefaultAudioMuted]);
 
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) {
-      return;
-    }
-
-    audio.muted = effectiveAudioMuted;
-    audio.defaultMuted = effectiveAudioMuted;
-    if (!effectiveAudioMuted && audio.volume === 0) {
-      audio.volume = 1;
-    }
-    debugLog("audio.mute.state", {
-      isAudioMuted: effectiveAudioMuted,
-    });
-  }, [effectiveAudioMuted]);
-
-  useEffect(() => {
-    if (effectiveAudioVolume === undefined) {
-      return;
-    }
-
-    const audio = audioRef.current;
-    if (!audio) {
-      return;
-    }
-
-    audio.volume = effectiveAudioVolume;
-    debugLog("audio.volume.state", {
-      audioVolume: effectiveAudioVolume,
-    });
-  }, [effectiveAudioVolume]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) {
-      return;
-    }
-
-    if (!effectiveAudioMuted && shouldBePlayingRef.current && audio.paused) {
-      void audio.play().catch((error: unknown) => {
-        const name =
-          error instanceof DOMException
-            ? error.name
-            : typeof error === "object" && error && "name" in error
-              ? String((error as { name?: unknown }).name)
-              : "";
-        debugLog("audio.mute.unmute-play-failed", {
-          name,
-        });
-      });
-    }
-  }, [effectiveAudioMuted]);
-
-  useEffect(() => {
-    if (!mediaReady.video || !mediaReady.audio) {
-      return;
-    }
-
-    if (phase === ComboPlayerPhase.Loading) {
-      debugLog("readiness.both-ready", {
-        videoReady: mediaReady.video,
-        audioReady: mediaReady.audio,
-      });
-      onPlaybackReady?.();
-      setPhase(ComboPlayerPhase.Ready);
-    }
-  }, [mediaReady.audio, mediaReady.video, onPlaybackReady, phase]);
-
-  useEffect(() => {
     debugLog("mount", {
       videoSrc,
       audioSrc,
@@ -674,63 +583,6 @@ export function ComboPlayer({
       autoPlay,
     });
   }, [audioSrc, autoPlay, videoSrc]);
-
-  useEffect(() => {
-    const elements = getElements();
-    if (!elements) {
-      return;
-    }
-
-    const interval = window.setInterval(() => {
-      const next = getElements();
-      if (!next) {
-        return;
-      }
-
-      if (isScrubbingRef.current) {
-        return;
-      }
-
-      const timelineEnded = isTimelineEnded(next.master.currentTime, duration);
-      if (timelineEnded) {
-        stopAtEnd();
-        return;
-      }
-
-      if (next.master.paused) {
-        setCurrentTime(next.master.currentTime);
-        publishTimeUpdate(next.master.currentTime, duration);
-        syncPhaseFromMedia();
-        return;
-      }
-
-      const followerDuration =
-        masterTrack === ComboTrackKind.Video ? durations.audioDuration : durations.videoDuration;
-      const targetFollowerTime = mapFollowerTime(
-        next.master.currentTime,
-        followerDuration,
-        duration
-      );
-      const drift = Math.abs(next.follower.currentTime - targetFollowerTime);
-      if (drift > 0.2) {
-        next.follower.currentTime = targetFollowerTime;
-      }
-
-      if (isPlaying && next.follower.paused && !next.master.paused) {
-        void next.follower.play().catch(() => {
-          setPhase(ComboPlayerPhase.Stalled);
-        });
-      }
-
-      setCurrentTime(next.master.currentTime);
-      publishTimeUpdate(next.master.currentTime, duration);
-      syncPhaseFromMedia();
-    }, 200);
-
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, [duration, durations.audioDuration, durations.videoDuration, isPlaying, masterTrack]);
 
   useEffect(() => {
     debugLog("timeline", {
@@ -763,8 +615,8 @@ export function ComboPlayer({
   useEffect(() => {
     const onVisibility = () => {
       if (document.visibilityState === "visible") {
-        syncPhaseFromMedia();
         syncDurations();
+        handleTimelineTimeUpdateSignal();
       }
     };
 
@@ -773,25 +625,6 @@ export function ComboPlayer({
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
-
-  useEffect(() => {
-    if (!isSafariBrowser) {
-      return;
-    }
-
-    const video = videoRef.current;
-    if (!video) {
-      return;
-    }
-
-    const interval = window.setInterval(() => {
-      logSafariVideoHealth("interval");
-    }, 2000);
-
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, [comboId, isSafariBrowser, videoSrc]);
 
   // useEffect(() => {
   //   const mediaQuery = window.matchMedia("(orientation: portrait)");
@@ -1044,7 +877,8 @@ export function ComboPlayer({
     if (phase === ComboPlayerPhase.Ended && clamped < duration) {
       setPhase(ComboPlayerPhase.Ready);
     } else {
-      syncPhaseFromMedia();
+      handleTimelineTimeUpdateSignal();
+      setPhase(ComboPlayerPhase.Ready);
     }
   }
 
@@ -1084,32 +918,18 @@ export function ComboPlayer({
           onLoadedData={handleVideoCanPlay}
           onLoadedMetadata={handleVideoLoadedMetadata}
           onPlaying={() => {
-            syncPhaseFromMedia();
-            logSafariVideoHealth("playing");
+            handlePlaybackStartedSignal();
           }}
           onWaiting={() => {
-            logSafariVideoHealth("waiting");
+            handlePlaybackWaitingSignal();
           }}
           onStalled={() => {
-            logSafariVideoHealth("stalled");
+            handlePlaybackWaitingSignal();
           }}
-          onSuspend={() => {
-            logSafariVideoHealth("suspend");
-          }}
-          onEmptied={() => {
-            logSafariVideoHealth("emptied");
-          }}
-          onPause={syncPhaseFromMedia}
-          onPlay={syncPhaseFromMedia}
+          onPause={handlePlaybackPausedSignal}
+          onPlay={handlePlaybackStartedSignal}
           onTimeUpdate={() => {
-            if (isScrubbingRef.current) {
-              return;
-            }
-            const elements = getElements();
-            if (!elements) {
-              return;
-            }
-            setCurrentTime(elements.master.currentTime);
+            handleTimelineTimeUpdateSignal();
           }}
           ref={assignVideoElement}
           style={{
@@ -1132,17 +952,23 @@ export function ComboPlayer({
           onDurationChange={syncDurations}
           onLoadedData={handleAudioCanPlay}
           onLoadedMetadata={handleAudioLoadedMetadata}
-          onPause={syncPhaseFromMedia}
-          onPlay={syncPhaseFromMedia}
+          onPlaying={() => {
+            applyAudioSettingsFromSignals();
+            handlePlaybackStartedSignal();
+          }}
+          onWaiting={() => {
+            handlePlaybackWaitingSignal();
+          }}
+          onStalled={() => {
+            handlePlaybackWaitingSignal();
+          }}
+          onPause={handlePlaybackPausedSignal}
+          onPlay={() => {
+            applyAudioSettingsFromSignals();
+            handlePlaybackStartedSignal();
+          }}
           onTimeUpdate={() => {
-            if (isScrubbingRef.current) {
-              return;
-            }
-            const elements = getElements();
-            if (!elements) {
-              return;
-            }
-            setCurrentTime(elements.master.currentTime);
+            handleTimelineTimeUpdateSignal();
           }}
           ref={audioRef}
         />
@@ -1205,32 +1031,18 @@ export function ComboPlayer({
           onLoadedData={handleVideoCanPlay}
           onLoadedMetadata={handleVideoLoadedMetadata}
           onPlaying={() => {
-            syncPhaseFromMedia();
-            logSafariVideoHealth("playing");
+            handlePlaybackStartedSignal();
           }}
           onWaiting={() => {
-            logSafariVideoHealth("waiting");
+            handlePlaybackWaitingSignal();
           }}
           onStalled={() => {
-            logSafariVideoHealth("stalled");
+            handlePlaybackWaitingSignal();
           }}
-          onSuspend={() => {
-            logSafariVideoHealth("suspend");
-          }}
-          onEmptied={() => {
-            logSafariVideoHealth("emptied");
-          }}
-          onPause={syncPhaseFromMedia}
-          onPlay={syncPhaseFromMedia}
+          onPause={handlePlaybackPausedSignal}
+          onPlay={handlePlaybackStartedSignal}
           onTimeUpdate={() => {
-            if (isScrubbingRef.current) {
-              return;
-            }
-            const elements = getElements();
-            if (!elements) {
-              return;
-            }
-            setCurrentTime(elements.master.currentTime);
+            handleTimelineTimeUpdateSignal();
           }}
           ref={assignVideoElement}
         />
@@ -1247,17 +1059,23 @@ export function ComboPlayer({
           onDurationChange={syncDurations}
           onLoadedData={handleAudioCanPlay}
           onLoadedMetadata={handleAudioLoadedMetadata}
-          onPause={syncPhaseFromMedia}
-          onPlay={syncPhaseFromMedia}
+          onPlaying={() => {
+            applyAudioSettingsFromSignals();
+            handlePlaybackStartedSignal();
+          }}
+          onWaiting={() => {
+            handlePlaybackWaitingSignal();
+          }}
+          onStalled={() => {
+            handlePlaybackWaitingSignal();
+          }}
+          onPause={handlePlaybackPausedSignal}
+          onPlay={() => {
+            applyAudioSettingsFromSignals();
+            handlePlaybackStartedSignal();
+          }}
           onTimeUpdate={() => {
-            if (isScrubbingRef.current) {
-              return;
-            }
-            const elements = getElements();
-            if (!elements) {
-              return;
-            }
-            setCurrentTime(elements.master.currentTime);
+            handleTimelineTimeUpdateSignal();
           }}
           ref={audioRef}
         />
@@ -1295,26 +1113,13 @@ export function ComboPlayer({
           className="w-full"
           max={snapshot.duration || 0}
           min={0}
-          onBlur={finishScrub}
           onChange={(event) => {
             const value = Number(event.target.value);
-            if (isScrubbingRef.current) {
-              scrubTimeRef.current = value;
-              setScrubTime(value);
-              return;
-            }
             seekTo(value);
           }}
-          onPointerCancel={finishScrub}
-          onPointerDown={startScrub}
-          onPointerUp={finishScrub}
           step={0.1}
           type="range"
-          value={
-            isScrubbing && scrubTime !== null
-              ? scrubTime
-              : Math.min(snapshot.currentTime, snapshot.duration || snapshot.currentTime)
-          }
+          value={Math.min(snapshot.currentTime, snapshot.duration || snapshot.currentTime)}
         />
         <p className="text-xs text-muted-foreground">
           {snapshot.currentTime.toFixed(1)}s / {snapshot.duration.toFixed(1)}s
