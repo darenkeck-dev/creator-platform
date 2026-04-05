@@ -580,12 +580,10 @@ export function ComboPlayer({
       from: previousPhase,
       to: phase,
       shouldBePlaying: shouldBePlayingRef.current,
-      currentTime,
-      duration,
     });
     onPlaybackStateChange?.(phase);
     previousPhaseRef.current = phase;
-  }, [currentTime, duration, onPlaybackStateChange, phase]);
+  }, [onPlaybackStateChange, phase]);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -600,24 +598,6 @@ export function ComboPlayer({
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
-
-  // useEffect(() => {
-  //   const mediaQuery = window.matchMedia("(orientation: portrait)");
-
-  //   // const apply = () => {
-  //   //   setIsPortraitViewport(mediaQuery.matches);
-  //   //   debugLog("viewport.orientation", {
-  //   //     portrait: mediaQuery.matches,
-  //   //   });
-  //   // };
-
-  //   // apply();
-  //   mediaQuery.addEventListener("change", apply);
-
-  //   return () => {
-  //     mediaQuery.removeEventListener("change", apply);
-  //   };
-  // }, []);
 
   async function startPlayback(errorMessage: string) {
     const playRequestId = ++playRequestRef.current;
