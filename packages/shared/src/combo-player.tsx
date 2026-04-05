@@ -317,6 +317,14 @@ export function ComboPlayer({
     if (phase === ComboPlayerPhase.Loading) {
       setPhase(ComboPlayerPhase.Ready);
     }
+
+    if (autoPlay && !autoPlayAttemptedRef.current) {
+      autoPlayAttemptedRef.current = true;
+      debugLog("autoplay.attempt", {
+        phase,
+      });
+      void startPlayback("Autoplay is blocked. Tap to start playback.");
+    }
   }
 
   function stopAtEnd() {
@@ -563,38 +571,6 @@ export function ComboPlayer({
   }, [audioMuted, resolvedDefaultAudioMuted]);
 
   useEffect(() => {
-    debugLog("mount", {
-      videoSrc,
-      audioSrc,
-      autoPlay,
-      initialPhase: phase,
-    });
-
-    return () => {
-      debugLog("unmount", {});
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    debugLog("sources.updated", {
-      videoSrc,
-      audioSrc,
-      autoPlay,
-    });
-  }, [audioSrc, autoPlay, videoSrc]);
-
-  useEffect(() => {
-    debugLog("timeline", {
-      masterTrack,
-      timelineDuration: duration,
-      videoDuration: durations.videoDuration,
-      audioDuration: durations.audioDuration,
-      phase,
-    });
-  }, [duration, durations.audioDuration, durations.videoDuration, masterTrack, phase]);
-
-  useEffect(() => {
     const previousPhase = previousPhaseRef.current;
     if (previousPhase === phase) {
       return;
@@ -607,7 +583,6 @@ export function ComboPlayer({
       currentTime,
       duration,
     });
-    console.log("[ComboPlayer] phase", phase);
     onPlaybackStateChange?.(phase);
     previousPhaseRef.current = phase;
   }, [currentTime, duration, onPlaybackStateChange, phase]);
@@ -643,26 +618,6 @@ export function ComboPlayer({
   //     mediaQuery.removeEventListener("change", apply);
   //   };
   // }, []);
-
-  useEffect(() => {
-    if (!autoPlay) {
-      return;
-    }
-
-    if (autoPlayAttemptedRef.current) {
-      return;
-    }
-
-    if (phase !== ComboPlayerPhase.Ready) {
-      return;
-    }
-
-    autoPlayAttemptedRef.current = true;
-    debugLog("autoplay.attempt", {
-      phase,
-    });
-    void startPlayback("Autoplay is blocked. Tap to start playback.");
-  }, [autoPlay, phase]);
 
   async function startPlayback(errorMessage: string) {
     const playRequestId = ++playRequestRef.current;
