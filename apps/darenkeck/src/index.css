@@ -33,3 +33,45 @@ body {
   background: var(--panel);
   backdrop-filter: blur(10px);
 }
+
+.app-shell-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.app-shell-loader-cell {
+  width: 18px;
+  height: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 3px;
+  background: transparent;
+  animation: shell-cell-active 2s linear infinite;
+}
+
+.app-shell-loader-cell:nth-child(2) {
+  animation-delay: 0.5s;
+}
+
+.app-shell-loader-cell:nth-child(3) {
+  animation-delay: 1s;
+}
+
+.app-shell-loader-cell:nth-child(4) {
+  animation-delay: 1.5s;
+}
+
+@keyframes shell-cell-active {
+  0%,
+  24.999% {
+    border-color: rgba(255, 255, 255, 0.95);
+    background: rgba(255, 255, 255, 0.95);
+  }
+
+  25%,
+  100% {
+    border-color: rgba(255, 255, 255, 0.55);
+    background: transparent;
+  }
+}

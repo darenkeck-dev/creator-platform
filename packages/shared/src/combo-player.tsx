@@ -12,6 +12,7 @@ import {
   ComboPlayerPhase,
   type ComboPlaybackSnapshot,
 } from "./combo-playback";
+import { BrowserEnv } from "./browser-env";
 import { ComboPlayerVariant } from "./combo-player-types";
 
 export type ComboPlayerProps = {
@@ -99,10 +100,7 @@ export function ComboPlayer({
   const effectiveAudioMuted = audioMuted ?? uncontrolledAudioMuted;
   const effectiveAudioVolume =
     typeof audioVolume === "number" ? Math.min(1, Math.max(0, audioVolume)) : undefined;
-  const isSafariBrowser =
-    typeof navigator !== "undefined" &&
-    /Safari/i.test(navigator.userAgent) &&
-    !/Chrome|Chromium|CriOS|Edg|OPR|Firefox|FxiOS/i.test(navigator.userAgent);
+  const isSafariBrowser = BrowserEnv.isSafari();
 
   function debugLog(event: string, details: Record<string, unknown>) {
     if (!ENABLE_COMBO_PLAYER_DEBUG_LOGS) {
@@ -757,6 +755,7 @@ export function ComboPlayer({
       currentTime,
       duration,
     });
+    console.log("[ComboPlayer] phase", phase);
     onPlaybackStateChange?.(phase);
     previousPhaseRef.current = phase;
   }, [currentTime, duration, onPlaybackStateChange, phase]);
@@ -1069,8 +1068,11 @@ export function ComboPlayer({
         <video
           className="h-full w-full object-cover will-change-transform"
           controls={false}
+          disablePictureInPicture
+          disableRemotePlayback
           preload={preload}
           muted
+          playsInline
           onCanPlay={handleVideoCanPlay}
           onEnded={() => handleTrackEnded(ComboTrackKind.Video)}
           onError={() => {
@@ -1187,8 +1189,11 @@ export function ComboPlayer({
         <video
           className="w-full rounded-lg border bg-black"
           controls={false}
+          disablePictureInPicture
+          disableRemotePlayback
           preload={preload}
           muted
+          playsInline
           onCanPlay={handleVideoCanPlay}
           onEnded={() => handleTrackEnded(ComboTrackKind.Video)}
           onError={() => {

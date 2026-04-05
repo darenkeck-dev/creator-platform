@@ -4,7 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>darenkeck</title>
-    <link rel="preload" as="image" href="/images/written_title_700.webp" />
     <style>
       html,
       body {
@@ -18,8 +17,8 @@
         pointer-events: none;
         color: #fff;
         background:
-          radial-gradient(1200px 700px at 12% 18%, rgba(21, 91, 103, 0.55), transparent 60%),
-          radial-gradient(1000px 640px at 86% 12%, rgba(94, 52, 23, 0.5), transparent 58%),
+          radial-gradient(1200px 700px at 12% 18%, rgba(55, 63, 66, 0.55), transparent 60%),
+          radial-gradient(1000px 640px at 86% 12%, rgba(45, 36, 31, 0.5), transparent 58%),
           linear-gradient(135deg, #111523 0%, #0d1322 100%);
         z-index: 0;
       }
@@ -41,10 +40,9 @@
         padding: 0 0.25rem;
       }
 
-      .app-shell-title {
+      .app-shell-spacer {
+        width: 152px;
         height: 48px;
-        width: auto;
-        display: block;
       }
 
       .app-shell-button {
@@ -55,6 +53,55 @@
         background: transparent;
       }
 
+      .app-shell-loader {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+      }
+
+      .app-shell-top-loader {
+        position: fixed;
+        left: 50%;
+        top: calc(max(1.5rem, env(safe-area-inset-top)) + 24px);
+        transform: translate(-50%, -50%);
+      }
+
+      .app-shell-loader-cell {
+        width: 18px;
+        height: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.55);
+        border-radius: 3px;
+        background: transparent;
+        animation: shell-cell-active 2s linear infinite;
+      }
+
+      .app-shell-loader-cell:nth-child(2) {
+        animation-delay: 0.5s;
+      }
+
+      .app-shell-loader-cell:nth-child(3) {
+        animation-delay: 1s;
+      }
+
+      .app-shell-loader-cell:nth-child(4) {
+        animation-delay: 1.5s;
+      }
+
+      @keyframes shell-cell-active {
+        0%,
+        24.999% {
+          border-color: rgba(255, 255, 255, 0.95);
+          background: rgba(255, 255, 255, 0.95);
+        }
+
+        25%,
+        100% {
+          border-color: rgba(255, 255, 255, 0.55);
+          background: transparent;
+        }
+      }
+
       .app-shell-rail {
         height: 2px;
         background: rgba(144, 183, 214, 0.35);
@@ -63,9 +110,15 @@
   </head>
   <body>
     <div id="app-shell" aria-hidden="true">
+      <div class="app-shell-loader app-shell-top-loader">
+        <span class="app-shell-loader-cell"></span>
+        <span class="app-shell-loader-cell"></span>
+        <span class="app-shell-loader-cell"></span>
+        <span class="app-shell-loader-cell"></span>
+      </div>
       <div class="app-shell-card">
         <div class="app-shell-header">
-          <img class="app-shell-title" src="/images/written_title_700.webp" alt="Daren Keck" />
+          <div class="app-shell-spacer"></div>
           <button class="app-shell-button" aria-hidden="true" tabindex="-1"></button>
         </div>
         <div class="app-shell-rail"></div>

@@ -9,3 +9,4 @@
 - add 'Daren Keck' signature image
 - Audio mute can pop/clip waveform; investigate fade/ramp-down before mute (or similar anti-pop fix).
 - Mute/unmute button improvements: add intermediate "medium" volume state and align sound-wave icon paths (they currently sit slightly low).
+- Player phases are inconsistent between `stalled`, `playing`, and `ready`, which impacts loading-state visibility; fix phase state management in `combo-player`.

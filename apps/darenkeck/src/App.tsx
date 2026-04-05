@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 
 import { BulletinSection } from "./components/BulletinSection";
 import { LinksSection } from "./components/LinksSection";
+import { ShellLoader } from "./components/ShellLoader";
 import {
   SingleSlotKey,
   SlotManager,
@@ -70,7 +71,7 @@ async function fetchRandomCombo(): Promise<ComboPayload | null> {
 }
 
 export function App() {
-  type AudioLevel = "muted" | "medium" | "full";
+  type AudioLevel = "muted" | "full";
 
   const [slotAssignment, setSlotAssignment] = useState<SlotPlaybackAssignment | null>(null);
   const [comboLoading, setComboLoading] = useState(false);
@@ -166,15 +167,9 @@ export function App() {
   };
 
   const isAudioMuted = audioLevel === "muted";
-  const audioVolume = audioLevel === "medium" ? 0.5 : 1;
-  const nextAudioLevel: AudioLevel =
-    audioLevel === "full" ? "medium" : audioLevel === "medium" ? "muted" : "full";
-  const audioButtonTitle =
-    nextAudioLevel === "full"
-      ? "Set volume to 100%"
-      : nextAudioLevel === "medium"
-        ? "Set volume to 50%"
-        : "Mute audio";
+  const audioVolume = 1;
+  const nextAudioLevel: AudioLevel = audioLevel === "full" ? "muted" : "full";
+  const audioButtonTitle = nextAudioLevel === "full" ? "Unmute audio" : "Mute audio";
 
   const linkItems = [
     { label: "Github", href: "https://github.com/darenkeck-dev" },
@@ -255,10 +250,6 @@ export function App() {
               <path d="M16 9l5 6" />
               <path d="M21 9l-5 6" />
             </>
-          ) : audioLevel === "medium" ? (
-            <g transform="translate(0 -2)">
-              <path d="M16 10.5c1 .8 1.5 2 1.5 3.5s-.5 2.7-1.5 3.5" />
-            </g>
           ) : (
             <g transform="translate(0 -2)">
               <path d="M16 10.5c1 .8 1.5 2 1.5 3.5s-.5 2.7-1.5 3.5" />
@@ -271,7 +262,7 @@ export function App() {
       <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(0,0,0,0.1),rgba(0,0,0,0.68))]" />
 
       <section className="relative z-20 mx-auto flex h-full w-full max-w-xl items-end py-4 sm:py-8">
-        <div className="w-full">
+        <div className="relative w-full">
           <div
             className={`relative z-10 flex items-center justify-between px-1 transition-all duration-300 ease-in-out ${
               isBulletinOpen ? "mb-1 translate-y-[8px]" : "mb-0 translate-y-1"
@@ -362,19 +353,31 @@ export function App() {
                 </header>
                 <BulletinSection items={bulletinItems} />
                 <LinksSection links={linkItems} />
-                {!slotAssignment ? (
+                {/* {!slotAssignment ? (
                   <p className="text-xs text-white/70">
                     {comboLoading
                       ? "Loading combo player..."
                       : (comboError ?? "Combo playback unavailable. Set VITE_COMBO_API_BASE_URL.")}
                   </p>
-                ) : null}
+                ) : null} */}
                 {/* <p className="text-[11px] text-white/65">
                   manager: {managerState} | slot: {slotState} | combos played: {combosPlayedCount}
                 </p> */}
               </div>
             </div>
           </div>
+
+          {comboLoading ? (
+            <div className="pointer-events-none fixed z-40 left-1/2 [top:calc(max(1.5rem,env(safe-area-inset-top))+24px)] -translate-x-1/2 -translate-y-1/2">
+              <ShellLoader />
+            </div>
+          ) : null}
+
+          {!comboLoading && !slotAssignment && comboError ? (
+            <p className="pointer-events-none absolute left-1/2 top-full mt-3 -translate-x-1/2 text-xs text-white/70">
+              {comboError}
+            </p>
+          ) : null}
         </div>
       </section>
     </main>

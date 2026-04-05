@@ -28,7 +28,7 @@ export function SingleComboSlot({
   onPlaybackStateChange,
 }: SingleComboSlotProps) {
   return (
-    <div className="absolute inset-0 z-0">
+    <div className="pointer-events-none absolute inset-0 z-0">
       <ComboPlayer
         key={`${combo.comboId}-${playbackCycle}`}
         audioMuted={audioMuted}
