@@ -13,13 +13,16 @@
 8. Add focused debug logging/HUD for basic lifecycle events only (loaded, ready, ended, next-fetch start/success/fail).
 9. Validate this single-player flow in Chrome and Safari and smooth out basic playback mechanics.
 
-## Phase 2: Slots and preloading (separate problem)
+## Phase 2: Deployment and cutover
 
-10. Design and introduce slot orchestration (`slotList`) only after Phase 1 is stable.
-11. Add queued-slot preloading and slot-to-slot swap behavior.
-12. Validate long-running behavior (no stuck states, no dropped transitions) and tune Safari performance.
-
-## Phase 3: Deployment and cutover
-
-13. Hook up production API/env configuration for `/public/combos/random` in frontend-only deployment.
+10. Set deployment target as static S3 + CloudFront with separate staging and production distributions/buckets.
+11. Define environment configuration for each deploy mode (`.env.staging`, `.env.production`) with `VITE_COMBO_API_BASE_URL`.
+12. Add and validate environment-specific build commands for staging and production (`vite --mode staging|production`).
+13. Create deployment runbook for `dist` upload + CloudFront invalidation + smoke checks.
 14. Run final parity review against current `apps/darenkeck`, then prepare rename/cutover by removing `-v2`.
+
+## Phase 3: Slots and preloading (separate problem)
+
+15. Design and introduce slot orchestration (`slotList`) only after Phase 1 is stable.
+16. Add queued-slot preloading and slot-to-slot swap behavior.
+17. Validate long-running behavior (no stuck states, no dropped transitions) and tune Safari performance.

@@ -9,6 +9,8 @@
   "scripts": {
     "dev": "bunx --bun vite --host 0.0.0.0 --port 3002",
     "build": "bunx --bun vite build",
+    "build:staging": "bunx --bun vite build --mode staging",
+    "build:prod": "bunx --bun vite build --mode production",
     "preview": "bunx --bun vite preview --host 0.0.0.0 --port 3002",
     "lint": "bunx --bun eslint .",
     "typecheck": "bunx tsc --noEmit"
