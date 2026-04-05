@@ -585,20 +585,6 @@ export function ComboPlayer({
     previousPhaseRef.current = phase;
   }, [onPlaybackStateChange, phase]);
 
-  useEffect(() => {
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") {
-        syncDurations();
-        handleTimelineTimeUpdateSignal();
-      }
-    };
-
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, []);
-
   async function startPlayback(errorMessage: string) {
     const playRequestId = ++playRequestRef.current;
     debugLog("playback.start.attempt", {
