@@ -188,3 +188,25 @@ Imports:
   8. `ProcessingStack`
   9. `ObservabilityStack`
 - Project scripts in `infra/cdk/package.json` wrap these (for example `bun run deploy:api`).
+
+## Asset schema migrations
+
+Asset metadata records are versioned with `schemaVersion` in contracts.
+
+Current migration behavior:
+
+- Read paths in API/processing lambdas run assets through a version-aware upgrader before schema validation.
+- If an item is upgraded during read, the upgraded shape is written back to DynamoDB.
+- This enables forward rollout where existing records can be upgraded lazily as they are accessed.
+
+When introducing a new asset schema version:
+
+1. Add the next migration step in `lambda/shared/asset-record-versioning.ts`.
+2. Bump `ASSET_SCHEMA_VERSION` in `packages/contracts/src/index.ts`.
+3. Deploy lambdas/stacks.
+4. Optionally run an eager backfill so upgrades happen proactively instead of on first read.
+
+Backfill command:
+
+- Dry run: `bun run --cwd infra/cdk backfill:asset-schema-version`
+- Apply writes: `bun run --cwd infra/cdk backfill:asset-schema-version -- --apply`

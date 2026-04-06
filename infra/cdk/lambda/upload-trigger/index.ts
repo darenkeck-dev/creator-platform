@@ -8,6 +8,7 @@ import {
 } from "@aws-sdk/client-mediaconvert";
 import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { z } from "zod";
+import { upgradeAssetItemSchemaVersion } from "../shared/asset-record-versioning";
 
 type SqsEvent = {
   Records?: Array<{
@@ -38,7 +39,7 @@ type EventBridgeS3ObjectCreatedEvent = z.infer<typeof EventBridgeS3ObjectCreated
 
 type AssetRecord = {
   id: string;
-  type: "video" | "audio" | "image";
+  type: "video" | "audio" | "image" | "folder";
   status: "draft" | "uploaded" | "processing" | "ready" | "error";
   original: {
     bucket: string;
@@ -51,7 +52,7 @@ type AssetRecord = {
 
 const AssetRecordSchema = z.object({
   id: z.string().min(1),
-  type: z.enum(["video", "audio", "image"]),
+  type: z.enum(["video", "audio", "image", "folder"]),
   status: z.enum(["draft", "uploaded", "processing", "ready", "error"]),
   original: z.object({
     bucket: z.string().min(1),
@@ -543,7 +544,12 @@ async function getAsset(tableName: string, assetId: string): Promise<AssetRecord
     return null;
   }
 
-  const validated = AssetRecordSchema.safeParse(result.Item);
+  const upgraded = await upgradeAssetItemSchemaVersion({
+    db,
+    tableName,
+    item: result.Item,
+  });
+  const validated = AssetRecordSchema.safeParse(upgraded);
   if (!validated.success) {
     return null;
   }

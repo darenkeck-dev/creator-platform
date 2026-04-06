@@ -26,6 +26,10 @@ import {
 } from "@media-manager/contracts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import {
+  readAssetRecordWithUpgrade,
+  safeReadAssetRecordWithUpgrade,
+} from "../shared/asset-record-versioning";
 
 type HttpEvent = {
   requestContext?: {
@@ -171,7 +175,11 @@ async function getAssetById(tableName: string, id: string) {
     return null;
   }
 
-  return AssetRecordSchema.parse(result.Item);
+  return await readAssetRecordWithUpgrade({
+    db,
+    tableName,
+    item: result.Item,
+  });
 }
 
 async function getComboById(tableName: string, id: string): Promise<ComboRecord | null> {
@@ -755,12 +763,16 @@ async function scanPublicReadyAssetsByType(
     );
 
     for (const item of page.Items ?? []) {
-      const parsed = AssetRecordSchema.safeParse(item);
-      if (!parsed.success) {
+      const parsed = await safeReadAssetRecordWithUpgrade({
+        db,
+        tableName,
+        item,
+      });
+      if (!parsed) {
         continue;
       }
 
-      assets.push(parsed.data);
+      assets.push(parsed);
     }
 
     scannedPages += 1;

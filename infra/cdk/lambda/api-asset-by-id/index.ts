@@ -43,6 +43,10 @@ import {
   UpdateAssetInputSchema,
 } from "@media-manager/contracts";
 import { z } from "zod";
+import {
+  readAssetRecordWithUpgrade,
+  safeReadAssetRecordWithUpgrade,
+} from "../shared/asset-record-versioning";
 
 type HttpEvent = {
   requestContext?: {
@@ -186,6 +190,28 @@ function parseBody(body: string | null | undefined): unknown {
   return JSON.parse(body);
 }
 
+async function readAssetOrThrow(
+  tableName: string,
+  item: unknown
+): Promise<z.infer<typeof AssetRecordSchema>> {
+  return await readAssetRecordWithUpgrade({
+    db,
+    tableName,
+    item,
+  });
+}
+
+async function safeReadAsset(
+  tableName: string,
+  item: unknown
+): Promise<z.infer<typeof AssetRecordSchema> | null> {
+  return await safeReadAssetRecordWithUpgrade({
+    db,
+    tableName,
+    item,
+  });
+}
+
 function folderOperationNotAllowedResponse(): { statusCode: number; body: string } {
   return response(400, { message: "Folders do not support upload or playback operations" });
 }
@@ -208,7 +234,7 @@ async function fetchAssetById(
     return null;
   }
 
-  return AssetRecordSchema.parse(result.Item);
+  return await readAssetOrThrow(tableName, result.Item);
 }
 
 async function resolveDepthAndRoot(
@@ -292,7 +318,7 @@ async function getAsset(id: string): Promise<{ statusCode: number; body: string 
     return response(404, { message: "Asset not found" });
   }
 
-  const asset = AssetRecordSchema.parse(result.Item);
+  const asset = await readAssetOrThrow(tableName, result.Item);
   const payload = AssetDetailResponseSchema.parse({ asset });
 
   return response(200, payload);
@@ -334,12 +360,12 @@ async function getAssetChildren(
     })
   );
 
-  const children = (result.Items ?? [])
-    .map((item) => AssetRecordSchema.safeParse(item))
-    .filter(
-      (parsed): parsed is z.SafeParseSuccess<z.infer<typeof AssetRecordSchema>> => parsed.success
+  const children = (
+    await Promise.all(
+      (result.Items ?? []).map(async (item) => await safeReadAsset(tableName, item))
     )
-    .map((parsed) => parsed.data)
+  )
+    .filter((asset): asset is z.infer<typeof AssetRecordSchema> => asset !== null)
     .filter((asset) => asset.containerId === id);
   const payload = AssetChildrenResponseSchema.parse({
     parentId: id,
@@ -473,7 +499,7 @@ async function moveAsset(
     return response(404, { message: "Asset not found" });
   }
 
-  const asset = AssetRecordSchema.parse(updateResult.Attributes);
+  const asset = await readAssetOrThrow(tableName, updateResult.Attributes);
   const payload = MoveAssetResponseSchema.parse({ asset });
   return response(200, payload);
 }
@@ -506,7 +532,7 @@ async function patchAsset(
     return response(404, { message: "Asset not found" });
   }
 
-  const currentAsset = AssetRecordSchema.parse(current.Item);
+  const currentAsset = await readAssetOrThrow(tableName, current.Item);
 
   const names: Record<string, string> = {
     "#updatedAt": "updatedAt",
@@ -583,7 +609,7 @@ async function patchAsset(
     return response(404, { message: "Asset not found" });
   }
 
-  const asset = AssetRecordSchema.parse(result.Attributes);
+  const asset = await readAssetOrThrow(tableName, result.Attributes);
   const payload = AssetDetailResponseSchema.parse({ asset });
   return response(200, payload);
 }
@@ -615,7 +641,7 @@ async function createUploadUrl(
     return response(404, { message: "Asset not found" });
   }
 
-  const currentAsset = AssetRecordSchema.parse(current.Item);
+  const currentAsset = await readAssetOrThrow(tableName, current.Item);
   if (currentAsset.type === "folder") {
     return folderOperationNotAllowedResponse();
   }
@@ -668,7 +694,7 @@ async function createUploadUrl(
     return response(404, { message: "Asset not found" });
   }
 
-  const asset = AssetRecordSchema.parse(updated.Attributes);
+  const asset = await readAssetOrThrow(tableName, updated.Attributes);
   const payload = AssetUploadUrlResponseSchema.parse({
     uploadUrl,
     key: asset.original.key,
@@ -701,7 +727,7 @@ async function getPlaybackUrl(
     return response(404, { message: "Asset not found" });
   }
 
-  const asset = AssetRecordSchema.parse(current.Item);
+  const asset = await readAssetOrThrow(tableName, current.Item);
   if (asset.type === "folder") {
     return folderOperationNotAllowedResponse();
   }
@@ -757,7 +783,7 @@ async function initMultipartUpload(
     return response(404, { message: "Asset not found" });
   }
 
-  const currentAsset = AssetRecordSchema.parse(current.Item);
+  const currentAsset = await readAssetOrThrow(tableName, current.Item);
   if (currentAsset.type === "folder") {
     return folderOperationNotAllowedResponse();
   }
@@ -812,7 +838,7 @@ async function initMultipartUpload(
     return response(404, { message: "Asset not found" });
   }
 
-  const asset = AssetRecordSchema.parse(updated.Attributes);
+  const asset = await readAssetOrThrow(tableName, updated.Attributes);
   const payload = MultipartInitResponseSchema.parse({
     uploadId: created.UploadId,
     key: asset.original.key,
@@ -851,7 +877,7 @@ async function signMultipartPart(
     return response(404, { message: "Asset not found" });
   }
 
-  const asset = AssetRecordSchema.parse(current.Item);
+  const asset = await readAssetOrThrow(tableName, current.Item);
   if (asset.type === "folder") {
     return folderOperationNotAllowedResponse();
   }
@@ -906,7 +932,7 @@ async function completeMultipartUpload(
     return response(404, { message: "Asset not found" });
   }
 
-  const asset = AssetRecordSchema.parse(current.Item);
+  const asset = await readAssetOrThrow(tableName, current.Item);
   if (asset.type === "folder") {
     return folderOperationNotAllowedResponse();
   }
@@ -959,7 +985,7 @@ async function abortMultipartUpload(
     return response(404, { message: "Asset not found" });
   }
 
-  const asset = AssetRecordSchema.parse(current.Item);
+  const asset = await readAssetOrThrow(tableName, current.Item);
   if (asset.type === "folder") {
     return folderOperationNotAllowedResponse();
   }
@@ -1018,7 +1044,7 @@ async function confirmUpload(
     return response(404, { message: "Asset not found" });
   }
 
-  const currentAsset = AssetRecordSchema.parse(current.Item);
+  const currentAsset = await readAssetOrThrow(tableName, current.Item);
   if (currentAsset.type === "folder") {
     return folderOperationNotAllowedResponse();
   }
@@ -1091,7 +1117,7 @@ async function confirmUpload(
     return response(404, { message: "Asset not found" });
   }
 
-  const asset = AssetRecordSchema.parse(updated.Attributes);
+  const asset = await readAssetOrThrow(tableName, updated.Attributes);
   const payload = AssetDetailResponseSchema.parse({ asset });
   return response(200, payload);
 }
@@ -1151,7 +1177,7 @@ async function deleteAsset(
     return response(404, { message: "Asset not found" });
   }
 
-  const asset = AssetRecordSchema.parse(current.Item);
+  const asset = await readAssetOrThrow(tableName, current.Item);
   if (asset.ownerEmail !== ownerEmail) {
     return response(403, { message: "Forbidden" });
   }

@@ -16,6 +16,7 @@ import {
 } from "@media-manager/contracts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { safeReadAssetRecordWithUpgrade } from "../shared/asset-record-versioning";
 
 type HttpEvent = {
   requestContext?: {
@@ -210,8 +211,11 @@ async function getAssetById(tableName: string, id: string): Promise<AssetRecord 
     return null;
   }
 
-  const parsed = AssetRecordSchema.safeParse(item);
-  return parsed.success ? parsed.data : null;
+  return await safeReadAssetRecordWithUpgrade({
+    db,
+    tableName,
+    item,
+  });
 }
 
 async function createAsset(event: HttpEvent): Promise<{ statusCode: number; body: string }> {
@@ -315,10 +319,16 @@ async function listAssets(event: HttpEvent): Promise<{ statusCode: number; body:
   );
 
   const items = (result.Items ?? []) as Array<Record<string, unknown>>;
-  const assets = items
-    .map((item) => AssetRecordSchema.safeParse(item))
-    .filter((parsed): parsed is z.SafeParseSuccess<AssetRecord> => parsed.success)
-    .map((parsed) => parsed.data);
+  const parsedAssets = await Promise.all(
+    items.map(async (item) =>
+      safeReadAssetRecordWithUpgrade({
+        db,
+        tableName,
+        item,
+      })
+    )
+  );
+  const assets = parsedAssets.filter((asset): asset is AssetRecord => asset !== null);
   const filtered = assets.filter((asset) => {
     if (type && asset.type !== type) {
       return false;
