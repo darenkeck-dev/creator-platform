@@ -47,6 +47,7 @@ type HlsInstance = {
 };
 
 const ENABLE_COMBO_PLAYER_DEBUG_LOGS = false;
+const LOOP_TRANSITION_GUARD_MS = 400;
 
 export function ComboPlayer({
   comboId,
@@ -79,6 +80,7 @@ export function ComboPlayer({
   const autoPlayAttemptedRef = useRef(false);
   const playbackReadyNotifiedRef = useRef(false);
   const timelineEndedNotifiedRef = useRef(false);
+  const boundaryTransitionUntilRef = useRef(0);
   const [phase, setPhase] = useState<ComboPlayerPhase>(ComboPlayerPhase.Loading);
   const mediaReadyRef = useRef({ video: false, audio: false });
   const [message, setMessage] = useState<string | null>(null);
@@ -264,7 +266,23 @@ export function ComboPlayer({
     transitionTo(ComboPlayerPhase.Playing);
   }
 
-  function handlePlaybackPausedSignal() {
+  function isBoundaryTransitionActive() {
+    return Date.now() < boundaryTransitionUntilRef.current;
+  }
+
+  function markBoundaryTransition(reason: "timeline-ended" | "follower-loop") {
+    boundaryTransitionUntilRef.current = Date.now() + LOOP_TRANSITION_GUARD_MS;
+    debugLog("boundary.transition", {
+      reason,
+      guardMs: LOOP_TRANSITION_GUARD_MS,
+    });
+  }
+
+  function handlePlaybackPausedSignal(kind: ComboTrackKind) {
+    if (kind !== masterTrack && isBoundaryTransitionActive()) {
+      return;
+    }
+
     if (phase === ComboPlayerPhase.Ended) {
       return;
     }
@@ -272,7 +290,11 @@ export function ComboPlayer({
     transitionTo(shouldBePlayingRef.current ? ComboPlayerPhase.Stalled : ComboPlayerPhase.Ready);
   }
 
-  function handlePlaybackWaitingSignal() {
+  function handlePlaybackWaitingSignal(kind: ComboTrackKind) {
+    if (kind !== masterTrack && isBoundaryTransitionActive()) {
+      return;
+    }
+
     if (shouldBePlayingRef.current) {
       transitionTo(ComboPlayerPhase.Stalled);
     }
@@ -347,6 +369,7 @@ export function ComboPlayer({
       return;
     }
 
+    markBoundaryTransition("timeline-ended");
     elements.video.pause();
     elements.audio.pause();
     if (duration > 0) {
@@ -379,18 +402,7 @@ export function ComboPlayer({
       return;
     }
 
-    const elements = getElements();
-    if (!elements) {
-      return;
-    }
-
-    const follower = kind === ComboTrackKind.Video ? elements.video : elements.audio;
-    follower.currentTime = 0;
-    if (shouldBePlayingRef.current) {
-      void follower.play().catch(() => {
-        transitionTo(ComboPlayerPhase.Stalled);
-      });
-    }
+    markBoundaryTransition("follower-loop");
   }
 
   function restartFromBeginning() {
@@ -762,6 +774,7 @@ export function ComboPlayer({
           preload={preload}
           muted
           playsInline
+          loop={masterTrack !== ComboTrackKind.Video}
           onCanPlay={handleVideoCanPlay}
           onEnded={() => handleTrackEnded(ComboTrackKind.Video)}
           onError={() => {
@@ -776,12 +789,12 @@ export function ComboPlayer({
             handlePlaybackStartedSignal();
           }}
           onWaiting={() => {
-            handlePlaybackWaitingSignal();
+            handlePlaybackWaitingSignal(ComboTrackKind.Video);
           }}
           onStalled={() => {
-            handlePlaybackWaitingSignal();
+            handlePlaybackWaitingSignal(ComboTrackKind.Video);
           }}
-          onPause={handlePlaybackPausedSignal}
+          onPause={() => handlePlaybackPausedSignal(ComboTrackKind.Video)}
           onPlay={handlePlaybackStartedSignal}
           onTimeUpdate={() => {
             handleTimelineTimeUpdateSignal();
@@ -797,6 +810,7 @@ export function ComboPlayer({
         <audio
           muted={effectiveAudioMuted}
           preload={preload}
+          loop={masterTrack !== ComboTrackKind.Audio}
           onCanPlay={handleAudioCanPlay}
           onEnded={() => handleTrackEnded(ComboTrackKind.Audio)}
           onError={() => {
@@ -812,12 +826,12 @@ export function ComboPlayer({
             handlePlaybackStartedSignal();
           }}
           onWaiting={() => {
-            handlePlaybackWaitingSignal();
+            handlePlaybackWaitingSignal(ComboTrackKind.Audio);
           }}
           onStalled={() => {
-            handlePlaybackWaitingSignal();
+            handlePlaybackWaitingSignal(ComboTrackKind.Audio);
           }}
-          onPause={handlePlaybackPausedSignal}
+          onPause={() => handlePlaybackPausedSignal(ComboTrackKind.Audio)}
           onPlay={() => {
             applyAudioSettingsFromSignals();
             handlePlaybackStartedSignal();
@@ -867,6 +881,7 @@ export function ComboPlayer({
           preload={preload}
           muted
           playsInline
+          loop={masterTrack !== ComboTrackKind.Video}
           onCanPlay={handleVideoCanPlay}
           onEnded={() => handleTrackEnded(ComboTrackKind.Video)}
           onError={() => {
@@ -881,12 +896,12 @@ export function ComboPlayer({
             handlePlaybackStartedSignal();
           }}
           onWaiting={() => {
-            handlePlaybackWaitingSignal();
+            handlePlaybackWaitingSignal(ComboTrackKind.Video);
           }}
           onStalled={() => {
-            handlePlaybackWaitingSignal();
+            handlePlaybackWaitingSignal(ComboTrackKind.Video);
           }}
-          onPause={handlePlaybackPausedSignal}
+          onPause={() => handlePlaybackPausedSignal(ComboTrackKind.Video)}
           onPlay={handlePlaybackStartedSignal}
           onTimeUpdate={() => {
             handleTimelineTimeUpdateSignal();
@@ -896,6 +911,7 @@ export function ComboPlayer({
         <audio
           muted={effectiveAudioMuted}
           preload={preload}
+          loop={masterTrack !== ComboTrackKind.Audio}
           onCanPlay={handleAudioCanPlay}
           onEnded={() => handleTrackEnded(ComboTrackKind.Audio)}
           onError={() => {
@@ -911,12 +927,12 @@ export function ComboPlayer({
             handlePlaybackStartedSignal();
           }}
           onWaiting={() => {
-            handlePlaybackWaitingSignal();
+            handlePlaybackWaitingSignal(ComboTrackKind.Audio);
           }}
           onStalled={() => {
-            handlePlaybackWaitingSignal();
+            handlePlaybackWaitingSignal(ComboTrackKind.Audio);
           }}
-          onPause={handlePlaybackPausedSignal}
+          onPause={() => handlePlaybackPausedSignal(ComboTrackKind.Audio)}
           onPlay={() => {
             applyAudioSettingsFromSignals();
             handlePlaybackStartedSignal();
