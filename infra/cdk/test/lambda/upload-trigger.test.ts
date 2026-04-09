@@ -335,4 +335,88 @@ describe("upload-trigger lambda", () => {
     expect(hasUndefined(updateCalls[0]?.input.ExpressionAttributeValues)).toBe(false);
     expect(mc.calls).toHaveLength(0);
   });
+
+  it("submits MediaConvert for audio transcode profile", async () => {
+    const ddb = stubDdbSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return {
+          Item: {
+            id: "asset-a2",
+            type: "audio",
+            status: "uploaded",
+            original: {
+              bucket: "pending",
+              key: "incoming/asset-a2",
+              size: 0,
+              contentType: "audio/mpeg",
+            },
+            processingProfile: "audio-transcode-hls-v1",
+          },
+        };
+      }
+
+      return {};
+    });
+
+    const mc = stubMediaConvertSend(async (command) => {
+      if (command instanceof DescribeEndpointsCommand) {
+        return {
+          Endpoints: [{ Url: "https://abcd.mediaconvert.us-west-2.amazonaws.com" }],
+        };
+      }
+
+      return { Job: { Id: "job-audio-1" } };
+    });
+    const s3 = stubS3Send(async () => ({}));
+
+    const result = await handler({
+      Records: [
+        {
+          body: JSON.stringify({
+            source: "aws.s3",
+            "detail-type": "Object Created",
+            detail: {
+              bucket: { name: "media-originals-test" },
+              object: { key: "incoming/asset-a2", size: 1024 },
+            },
+          }),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.processed).toBe(1);
+
+    const updateCalls = ddb.calls.filter((command) => command instanceof UpdateCommand);
+    expect(updateCalls.length).toBeGreaterThanOrEqual(2);
+    expect(updateCalls[0]?.input.ExpressionAttributeValues?.[":conversion"]).toMatchObject({
+      status: "queued",
+      profile: "audio-transcode-hls-v1",
+    });
+    expect(updateCalls[1]?.input.ExpressionAttributeValues?.[":conversion"]).toMatchObject({
+      status: "processing",
+      profile: "audio-transcode-hls-v1",
+      jobId: "job-audio-1",
+    });
+
+    expect(mc.calls.some((command) => command instanceof CreateJobCommand)).toBe(true);
+    const createJobCall = mc.calls.find((command) => command instanceof CreateJobCommand) as
+      | CreateJobCommand
+      | undefined;
+    expect(createJobCall?.input.UserMetadata).toMatchObject({
+      assetId: "asset-a2",
+      processingProfile: "audio-transcode-hls-v1",
+    });
+    expect(createJobCall?.input.UserMetadata?.orientation).toBeUndefined();
+    expect(createJobCall?.input.Settings?.OutputGroups?.[0]?.Outputs?.[0]?.VideoDescription).toBe(
+      undefined
+    );
+    expect(
+      createJobCall?.input.Settings?.OutputGroups?.[0]?.Outputs?.[0]?.AudioDescriptions?.[0]
+        ?.CodecSettings
+    ).toMatchObject({
+      Codec: "AAC",
+    });
+    expect(s3.calls).toHaveLength(0);
+  });
 });

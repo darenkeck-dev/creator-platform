@@ -69,16 +69,22 @@ type ProcessingProfile = {
 };
 
 type ConversionState = "queued" | "processing" | "ready" | "error" | "passthrough_ready";
-type ProcessingProfileId = "video-standard-v1" | "audio-passthrough-v1" | "image-passthrough-v1";
+type ProcessingProfileId =
+  | "video-standard-v1"
+  | "audio-passthrough-v1"
+  | "audio-transcode-hls-v1"
+  | "image-passthrough-v1";
 type VideoOrientation = "landscape" | "portrait";
 
 const VIDEO_STANDARD_V1 = "video-standard-v1";
 const AUDIO_PASSTHROUGH_V1 = "audio-passthrough-v1";
+const AUDIO_TRANSCODE_HLS_V1 = "audio-transcode-hls-v1";
 const IMAGE_PASSTHROUGH_V1 = "image-passthrough-v1";
 
 const PROFILE_BY_ID: Record<ProcessingProfileId, ProcessingProfile> = {
   [VIDEO_STANDARD_V1]: { profileId: VIDEO_STANDARD_V1, mode: "mediaconvert" },
   [AUDIO_PASSTHROUGH_V1]: { profileId: AUDIO_PASSTHROUGH_V1, mode: "passthrough" },
+  [AUDIO_TRANSCODE_HLS_V1]: { profileId: AUDIO_TRANSCODE_HLS_V1, mode: "mediaconvert" },
   [IMAGE_PASSTHROUGH_V1]: { profileId: IMAGE_PASSTHROUGH_V1, mode: "passthrough" },
 };
 
@@ -177,7 +183,7 @@ function fallbackProfileForAssetType(assetType: AssetRecord["type"]): Processing
   }
 
   if (assetType === "audio") {
-    return AUDIO_PASSTHROUGH_V1;
+    return AUDIO_TRANSCODE_HLS_V1;
   }
 
   return IMAGE_PASSTHROUGH_V1;
@@ -186,7 +192,7 @@ function fallbackProfileForAssetType(assetType: AssetRecord["type"]): Processing
 function resolveProcessingProfile(asset: AssetRecord): ProcessingProfile {
   const profileId = asset.processingProfile ?? fallbackProfileForAssetType(asset.type);
   const parsedProfileId = z
-    .enum([VIDEO_STANDARD_V1, AUDIO_PASSTHROUGH_V1, IMAGE_PASSTHROUGH_V1])
+    .enum([VIDEO_STANDARD_V1, AUDIO_PASSTHROUGH_V1, AUDIO_TRANSCODE_HLS_V1, IMAGE_PASSTHROUGH_V1])
     .safeParse(profileId);
   if (!parsedProfileId.success) {
     logWarn("Invalid processing profile on asset; defaulting to video profile", {
@@ -457,6 +463,63 @@ function mediaConvertJobSettings(
   };
 }
 
+function mediaConvertAudioHlsJobSettings(
+  assetId: string,
+  originalsBucket: string,
+  key: string,
+  derivedBucket: string
+): JobSettings {
+  const destinationBase = `s3://${derivedBucket}/derived/${assetId}`;
+
+  return {
+    Inputs: [
+      {
+        FileInput: `s3://${originalsBucket}/${key}`,
+        AudioSelectors: {
+          "Audio Selector 1": {
+            DefaultSelection: "DEFAULT" as const,
+          },
+        },
+      },
+    ],
+    OutputGroups: [
+      {
+        Name: "HLS",
+        OutputGroupSettings: {
+          Type: "HLS_GROUP_SETTINGS",
+          HlsGroupSettings: {
+            Destination: `${destinationBase}/hls/`,
+            SegmentLength: 6,
+            MinSegmentLength: 0,
+            ManifestDurationFormat: "INTEGER",
+            OutputSelection: "MANIFESTS_AND_SEGMENTS",
+            ClientCache: "ENABLED",
+          },
+        },
+        Outputs: [
+          {
+            NameModifier: "_audio",
+            ContainerSettings: { Container: "M3U8" },
+            AudioDescriptions: [
+              {
+                AudioSourceName: "Audio Selector 1",
+                CodecSettings: {
+                  Codec: "AAC",
+                  AacSettings: {
+                    Bitrate: 128000,
+                    CodingMode: "CODING_MODE_2_0",
+                    SampleRate: 48000,
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function parsePositiveDimension(value: string | undefined): number | null {
   if (!value) {
     return null;
@@ -566,7 +629,12 @@ type ConversionUpdate = {
 
 const ConversionUpdateSchema = z.object({
   status: z.enum(["queued", "processing", "ready", "error", "passthrough_ready"]),
-  profile: z.enum([VIDEO_STANDARD_V1, AUDIO_PASSTHROUGH_V1, IMAGE_PASSTHROUGH_V1]),
+  profile: z.enum([
+    VIDEO_STANDARD_V1,
+    AUDIO_PASSTHROUGH_V1,
+    AUDIO_TRANSCODE_HLS_V1,
+    IMAGE_PASSTHROUGH_V1,
+  ]),
   jobId: z.string().min(1).optional(),
   errorMessage: z.string().min(1).optional(),
 });
@@ -641,15 +709,19 @@ async function submitMediaConvertJob(
   const roleArn = requiredEnv("MEDIACONVERT_ROLE_ARN");
   const client = await mediaConvertClient();
 
-  const orientation = await resolveVideoOrientation(bucketName, key);
-  const settings = mediaConvertJobSettings(
-    assetId,
-    bucketName,
-    key,
-    derivedBucket,
-    contentType,
-    orientation
-  );
+  const isVideoProfile = processingProfile === VIDEO_STANDARD_V1;
+  const orientation = isVideoProfile ? await resolveVideoOrientation(bucketName, key) : undefined;
+  const settings =
+    processingProfile === AUDIO_TRANSCODE_HLS_V1
+      ? mediaConvertAudioHlsJobSettings(assetId, bucketName, key, derivedBucket)
+      : mediaConvertJobSettings(
+          assetId,
+          bucketName,
+          key,
+          derivedBucket,
+          contentType,
+          orientation ?? "landscape"
+        );
   const hlsOutputs = settings.OutputGroups?.[0]?.Outputs ?? [];
   const ladder = hlsOutputs.map((output) => ({
     nameModifier: output.NameModifier,
@@ -675,7 +747,7 @@ async function submitMediaConvertJob(
       UserMetadata: {
         assetId,
         processingProfile,
-        orientation,
+        ...(orientation ? { orientation } : {}),
         sourceBucket: bucketName,
         sourceKey: key,
       },
@@ -695,7 +767,7 @@ async function submitMediaConvertJob(
     assetId,
     jobId,
     processingProfile,
-    orientation,
+    ...(orientation ? { orientation } : {}),
   });
 
   return jobId;

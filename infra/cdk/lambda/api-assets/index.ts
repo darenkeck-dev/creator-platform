@@ -133,7 +133,7 @@ function buildAssetRecord(
     (input.type === "video"
       ? "video-standard-v1"
       : input.type === "audio"
-        ? "audio-passthrough-v1"
+        ? "audio-transcode-hls-v1"
         : input.type === "image"
           ? "image-passthrough-v1"
           : "folder-meta-v1");

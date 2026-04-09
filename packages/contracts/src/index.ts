@@ -6,6 +6,7 @@ export const ASSET_ORIGINS = ["uploaded", "generated", "derived", "manual"] as c
 export const PROCESSING_PROFILES = [
   "video-standard-v1",
   "audio-passthrough-v1",
+  "audio-transcode-hls-v1",
   "image-passthrough-v1",
   "folder-meta-v1",
 ] as const;

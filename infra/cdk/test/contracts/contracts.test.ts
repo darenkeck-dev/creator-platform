@@ -62,6 +62,17 @@ describe("contracts", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("accepts audio transcode processing profile on create", () => {
+    const parsed = CreateAssetInputSchema.safeParse({
+      type: "audio",
+      title: "Podcast",
+      description: "Episode 2",
+      processingProfile: "audio-transcode-hls-v1",
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
   it("accepts generated provenance metadata on create", () => {
     const parsed = CreateAssetInputSchema.safeParse({
       type: "video",

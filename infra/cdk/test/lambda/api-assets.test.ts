@@ -194,6 +194,31 @@ describe("api-assets lambda", () => {
     expect((body.asset as { origin?: string }).origin).toBe("manual");
   });
 
+  it("defaults audio uploads to transcode profile on POST", async () => {
+    stubSend(async (command) => {
+      if (!(command instanceof PutCommand)) {
+        throw new Error("Expected PutCommand");
+      }
+
+      const item = command.input.Item as Record<string, unknown>;
+      expect(item.type).toBe("audio");
+      expect(item.processingProfile).toBe("audio-transcode-hls-v1");
+      return {};
+    });
+
+    const result = await handler(
+      createPostEvent({
+        type: "audio",
+        title: "Track",
+        description: "music",
+      })
+    );
+
+    expect(result.statusCode).toBe(201);
+    const body = parseBody(result) as { asset: { processingProfile?: string } };
+    expect(body.asset.processingProfile).toBe("audio-transcode-hls-v1");
+  });
+
   it("creates generated assets with provenance metadata", async () => {
     const result = await handler(
       createPostEvent({

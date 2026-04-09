@@ -245,6 +245,56 @@ describe("mediaconvert-status lambda", () => {
     ).rejects.toThrow("Missing HLS master manifest in MediaConvert playlistFilePaths");
   });
 
+  it("stores ready stream metadata for audio-only HLS jobs", async () => {
+    const { calls } = stubSend(async () => ({}));
+
+    const result = await handler({
+      source: "aws.mediaconvert",
+      "detail-type": "MediaConvert Job State Change",
+      detail: {
+        status: "COMPLETE",
+        userMetadata: {
+          assetId: "asset-audio-hls",
+          processingProfile: "audio-transcode-hls-v1",
+        },
+        outputGroupDetails: [
+          {
+            playlistFilePaths: ["s3://media-derived-test/derived/asset-audio-hls/hls/master.m3u8"],
+            outputDetails: [
+              {
+                outputFilePaths: [
+                  "s3://media-derived-test/derived/asset-audio-hls/hls/master.m3u8",
+                ],
+                audioDetails: [{ bitrate: 128000 }],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe("ready");
+    expect(calls).toHaveLength(1);
+
+    const stream = calls[0]?.input.ExpressionAttributeValues?.[":stream"] as {
+      hlsMasterUrl?: string;
+      renditions?: Array<{ type: string; bitrateKbps?: number }>;
+    };
+    expect(stream.hlsMasterUrl).toBe(
+      "https://media-derived-test.s3.amazonaws.com/derived/asset-audio-hls/hls/master.m3u8"
+    );
+    expect(stream.renditions?.[0]).toMatchObject({
+      type: "hls",
+      bitrateKbps: 128,
+    });
+
+    expect(calls[0]?.input.ExpressionAttributeValues?.[":conversion"]).toMatchObject({
+      status: "ready",
+      profile: "audio-transcode-hls-v1",
+    });
+  });
+
   it("ignores events without resolvable asset id", async () => {
     const { calls } = stubSend(async () => ({}));
 
