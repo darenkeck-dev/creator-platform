@@ -16,6 +16,35 @@ import { uploadFileViaMultipart } from "@/lib/multipart-upload";
 
 const MULTIPART_THRESHOLD_BYTES = 64 * 1024 * 1024;
 const POST_UPLOAD_VISIBLE_MS = 800;
+const COMMON_VIDEO_EXTENSIONS = new Set([
+  "mp4",
+  "m4v",
+  "mov",
+  "webm",
+  "mkv",
+  "avi",
+  "mpeg",
+  "mpg",
+  "ogv",
+  "ts",
+  "m2ts",
+  "3gp",
+  "3g2",
+]);
+const COMMON_AUDIO_EXTENSIONS = new Set([
+  "mp3",
+  "wav",
+  "aac",
+  "m4a",
+  "flac",
+  "ogg",
+  "oga",
+  "opus",
+  "aif",
+  "aiff",
+  "wma",
+  "alac",
+]);
 
 type ToastState = {
   open: boolean;
@@ -28,6 +57,48 @@ type FolderOption = {
   id: string;
   title: string;
 };
+
+type AssetVisibility = "private" | "public";
+
+function inferAssetTypeFromFile(file: File): "video" | "audio" | null {
+  const mime = file.type.toLowerCase();
+  if (mime.startsWith("video/")) {
+    return "video";
+  }
+
+  if (mime.startsWith("audio/")) {
+    return "audio";
+  }
+
+  const extension = file.name.toLowerCase().split(".").pop();
+  if (!extension) {
+    return null;
+  }
+
+  if (COMMON_VIDEO_EXTENSIONS.has(extension)) {
+    return "video";
+  }
+
+  if (COMMON_AUDIO_EXTENSIONS.has(extension)) {
+    return "audio";
+  }
+
+  return null;
+}
+
+function titleFromFileName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const dot = trimmed.lastIndexOf(".");
+  if (dot <= 0) {
+    return trimmed;
+  }
+
+  return trimmed.slice(0, dot);
+}
 
 async function putFileWithProgress(
   uploadUrl: string,
@@ -107,6 +178,10 @@ async function getVideoUploadMetadata(file: File): Promise<VideoUploadMetadata |
 
 export default function UploadPage() {
   const router = useRouter();
+  const [assetType, setAssetType] = useState<"video" | "audio" | "image">("video");
+  const [assetVisibility, setAssetVisibility] = useState<AssetVisibility>("private");
+  const [assetTitle, setAssetTitle] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -181,10 +256,9 @@ export default function UploadPage() {
 
     try {
       const formData = new FormData(event.currentTarget);
-      const rawType = String(formData.get("asset-type") ?? "");
-      const rawTitle = String(formData.get("asset-title") ?? "");
+      const rawType = String(formData.get("asset-type") ?? assetType);
       const rawDescription = String(formData.get("asset-description") ?? "");
-      const file = formData.get("asset-file");
+      const file = selectedFile;
 
       const parsedType = AssetTypeSchema.safeParse(rawType);
       if (!parsedType.success) {
@@ -194,7 +268,7 @@ export default function UploadPage() {
         throw new Error("Use Create Folder in Library to add folders.");
       }
 
-      const title = rawTitle.trim();
+      const title = assetTitle.trim();
       if (!title) {
         throw new Error("Title is required.");
       }
@@ -252,6 +326,7 @@ export default function UploadPage() {
           type: parsedType.data,
           title,
           description: rawDescription.trim(),
+          visibility: assetVisibility,
           ...(containerId ? { containerId } : {}),
         }),
       });
@@ -366,18 +441,66 @@ export default function UploadPage() {
       </header>
 
       <form onSubmit={onSubmit} className="space-y-4 rounded-xl border bg-card p-6 shadow-sm">
+        <label className="block text-sm font-medium" htmlFor="asset-file">
+          Media file
+        </label>
+        <input
+          id="asset-file"
+          name="asset-file"
+          type="file"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0] ?? null;
+            setSelectedFile(file);
+            if (!file) {
+              return;
+            }
+
+            setAssetTitle(titleFromFileName(file.name));
+            const inferredType = inferAssetTypeFromFile(file);
+            if (inferredType) {
+              setAssetType(inferredType);
+            }
+          }}
+          className="w-full rounded-md border bg-card px-3 py-2 text-sm"
+          required
+        />
+
         <label className="block text-sm font-medium" htmlFor="asset-type">
           Asset type
         </label>
         <select
           id="asset-type"
           name="asset-type"
-          defaultValue="video"
+          value={assetType}
+          onChange={(event) => {
+            const next = AssetTypeSchema.safeParse(event.target.value);
+            if (next.success && next.data !== "folder") {
+              setAssetType(next.data);
+            }
+          }}
           className="w-full rounded-md border bg-card px-3 py-2 text-sm"
         >
           <option value="video">Video</option>
           <option value="audio">Audio</option>
           <option value="image">Image</option>
+        </select>
+
+        <label className="block text-sm font-medium" htmlFor="asset-visibility">
+          Visibility
+        </label>
+        <select
+          id="asset-visibility"
+          name="asset-visibility"
+          value={assetVisibility}
+          onChange={(event) => {
+            if (event.target.value === "public" || event.target.value === "private") {
+              setAssetVisibility(event.target.value);
+            }
+          }}
+          className="w-full rounded-md border bg-card px-3 py-2 text-sm"
+        >
+          <option value="private">Private</option>
+          <option value="public">Public</option>
         </select>
 
         <fieldset className="space-y-2 rounded-md border p-3">
@@ -445,6 +568,8 @@ export default function UploadPage() {
           id="asset-title"
           name="asset-title"
           type="text"
+          value={assetTitle}
+          onChange={(event) => setAssetTitle(event.target.value)}
           placeholder="Summer campaign b-roll"
           className="w-full rounded-md border bg-card px-3 py-2 text-sm"
           required
@@ -458,16 +583,6 @@ export default function UploadPage() {
           rows={3}
           placeholder="Optional context about this asset"
           className="w-full rounded-md border bg-card px-3 py-2 text-sm"
-        />
-        <label className="block text-sm font-medium" htmlFor="asset-file">
-          Media file
-        </label>
-        <input
-          id="asset-file"
-          name="asset-file"
-          type="file"
-          className="w-full rounded-md border bg-card px-3 py-2 text-sm"
-          required
         />
         {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
         <Button type="submit" disabled={isSubmitting}>
