@@ -36,19 +36,16 @@ export function normalizeDuration(value: number): number {
 }
 
 export function getMasterTrackFromDurations(durations: ComboDurations): ComboTrackKind {
-  const { videoDuration, audioDuration } = durations;
-  if (videoDuration === 0 && audioDuration > 0) {
-    return ComboTrackKind.Audio;
-  }
-  if (audioDuration === 0 && videoDuration > 0) {
-    return ComboTrackKind.Video;
-  }
-
-  return videoDuration >= audioDuration ? ComboTrackKind.Video : ComboTrackKind.Audio;
+  void durations;
+  return ComboTrackKind.Audio;
 }
 
 export function getTimelineDuration(durations: ComboDurations): number {
-  return Math.max(durations.videoDuration, durations.audioDuration);
+  if (durations.audioDuration > 0) {
+    return durations.audioDuration;
+  }
+
+  return durations.videoDuration;
 }
 
 export function mapFollowerTime(
