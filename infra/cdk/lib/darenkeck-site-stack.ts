@@ -1,4 +1,4 @@
-import { CfnOutput, Stack, type StackProps } from "aws-cdk-lib";
+import { CfnOutput, Duration, Stack, type StackProps } from "aws-cdk-lib";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as s3 from "aws-cdk-lib/aws-s3";
@@ -38,6 +38,47 @@ export class DarenkeckSiteStack extends Stack {
       },
     });
 
+    const responseHeadersPolicy = new cloudfront.ResponseHeadersPolicy(
+      this,
+      "DarenkeckSiteSecurityHeadersPolicy",
+      {
+        responseHeadersPolicyName: withStageSuffix("darenkeck-site-security-headers", stage),
+        securityHeadersBehavior: {
+          contentSecurityPolicy: {
+            contentSecurityPolicy:
+              "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; media-src 'self' https: blob:; connect-src 'self' https:; font-src 'self' data:; form-action 'self'; upgrade-insecure-requests",
+            override: true,
+          },
+          strictTransportSecurity: {
+            accessControlMaxAge: Duration.days(365),
+            includeSubdomains: true,
+            override: true,
+          },
+          contentTypeOptions: {
+            override: true,
+          },
+          referrerPolicy: {
+            referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN,
+            override: true,
+          },
+          frameOptions: {
+            frameOption: cloudfront.HeadersFrameOption.DENY,
+            override: true,
+          },
+        },
+        customHeadersBehavior: {
+          customHeaders: [
+            {
+              header: "Permissions-Policy",
+              value:
+                "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()",
+              override: true,
+            },
+          ],
+        },
+      }
+    );
+
     const distribution = new cloudfront.CfnDistribution(this, "DarenkeckSiteDistribution", {
       distributionConfig: {
         enabled: true,
@@ -50,6 +91,7 @@ export class DarenkeckSiteStack extends Stack {
           cachedMethods: ["GET", "HEAD"],
           compress: true,
           cachePolicyId: "658327ea-f89d-4fab-a63d-7e88639e58f6",
+          responseHeadersPolicyId: responseHeadersPolicy.responseHeadersPolicyId,
         },
         customErrorResponses: [
           {
