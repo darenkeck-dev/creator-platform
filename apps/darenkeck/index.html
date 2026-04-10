@@ -3,7 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Daren Keck - personal page with projects, music links, and generative combo visuals."
+    />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://darenkeck.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Daren Keck" />
+    <meta
+      property="og:description"
+      content="Personal page for Daren Keck with music, links, and live combo visuals."
+    />
+    <meta property="og:url" content="https://darenkeck.com/" />
+    <meta property="og:image" content="https://darenkeck.com/images/written_title_700.webp" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Daren Keck" />
+    <meta
+      name="twitter:description"
+      content="Personal page for Daren Keck with music, links, and live combo visuals."
+    />
+    <meta name="twitter:image" content="https://darenkeck.com/images/written_title_700.webp" />
     <title>darenkeck</title>
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <style>
       html,
       body {
@@ -98,6 +122,14 @@
         25%,
         100% {
           border-color: rgba(255, 255, 255, 0.55);
+          background: transparent;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .app-shell-loader-cell {
+          animation: none;
+          border-color: rgba(255, 255, 255, 0.8);
           background: transparent;
         }
       }
