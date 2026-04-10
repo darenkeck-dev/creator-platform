@@ -2,6 +2,8 @@ import { ComboPlayer } from "@media-manager/shared";
 
 type ComboPayload = {
   comboId: string;
+  videoAssetId: string;
+  audioAssetId: string;
   videoTitle: string;
   audioTitle: string;
   videoSrc: string;

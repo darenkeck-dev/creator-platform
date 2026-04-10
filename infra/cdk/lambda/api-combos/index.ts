@@ -46,6 +46,7 @@ type HttpEvent = {
   pathParameters?: {
     id?: string;
   };
+  queryStringParameters?: Record<string, string | undefined>;
   body?: string | null;
 };
 
@@ -784,12 +785,17 @@ async function scanPublicReadyAssetsByType(
 
 async function pickDerivedPublicPairCandidate(
   tableName: string,
-  originalsBucketName: string
+  originalsBucketName: string,
+  previousAudioAssetId?: string
 ): Promise<PublicRandomCandidate | null> {
-  const [publicVideos, publicAudios] = await Promise.all([
+  const [publicVideos, allPublicAudios] = await Promise.all([
     scanPublicReadyAssetsByType(tableName, "video"),
     scanPublicReadyAssetsByType(tableName, "audio"),
   ]);
+
+  const publicAudios = previousAudioAssetId
+    ? allPublicAudios.filter((asset) => asset.id !== previousAudioAssetId)
+    : allPublicAudios;
 
   if (publicVideos.length === 0 || publicAudios.length === 0) {
     return null;
@@ -831,7 +837,8 @@ async function pickDerivedPublicPairCandidate(
 
 async function pickExistingPublicComboCandidate(
   tableName: string,
-  originalsBucketName: string
+  originalsBucketName: string,
+  previousAudioAssetId?: string
 ): Promise<PublicRandomCandidate | null> {
   const combos = await scanPublicComboMetaRecords(tableName);
   if (combos.length === 0) {
@@ -841,6 +848,10 @@ async function pickExistingPublicComboCandidate(
   shuffleInPlace(combos);
 
   for (const combo of combos) {
+    if (previousAudioAssetId && combo.audioAssetId === previousAudioAssetId) {
+      continue;
+    }
+
     const [videoAsset, audioAsset] = await Promise.all([
       getAssetById(tableName, combo.videoAssetId),
       getAssetById(tableName, combo.audioAssetId),
@@ -906,24 +917,48 @@ function buildPublicRandomPayload(
 async function pickPublicRandomCandidateBySource(
   source: PublicRandomSource,
   tableName: string,
-  originalsBucketName: string
+  originalsBucketName: string,
+  previousAudioAssetId?: string
 ): Promise<PublicRandomCandidate | null> {
   if (source === "derived") {
-    return await pickDerivedPublicPairCandidate(tableName, originalsBucketName);
+    return await pickDerivedPublicPairCandidate(
+      tableName,
+      originalsBucketName,
+      previousAudioAssetId
+    );
   }
 
-  return await pickExistingPublicComboCandidate(tableName, originalsBucketName);
+  return await pickExistingPublicComboCandidate(
+    tableName,
+    originalsBucketName,
+    previousAudioAssetId
+  );
 }
 
-async function getRandomPublicCombo(): Promise<{ statusCode: number; body: string }> {
+function parsePreviousAudioAssetId(event: HttpEvent): string | undefined {
+  const candidate =
+    event.queryStringParameters?.previousAudioAssetId ?? event.queryStringParameters?.previousTrack;
+  const parsed = z.string().min(1).safeParse(candidate);
+  if (!parsed.success) {
+    return undefined;
+  }
+
+  return parsed.data;
+}
+
+async function getRandomPublicCombo(
+  event: HttpEvent
+): Promise<{ statusCode: number; body: string }> {
   const tableName = getTableName();
   const originalsBucketName = getOriginalsBucketName();
+  const previousAudioAssetId = parsePreviousAudioAssetId(event);
   const [primarySource, secondarySource] = chooseRandomSourceOrder();
 
   const primaryCandidate = await pickPublicRandomCandidateBySource(
     primarySource,
     tableName,
-    originalsBucketName
+    originalsBucketName,
+    previousAudioAssetId
   );
   if (primaryCandidate) {
     const payload = buildPublicRandomPayload(primaryCandidate, primarySource, "primary");
@@ -933,7 +968,8 @@ async function getRandomPublicCombo(): Promise<{ statusCode: number; body: strin
   const fallbackCandidate = await pickPublicRandomCandidateBySource(
     secondarySource,
     tableName,
-    originalsBucketName
+    originalsBucketName,
+    previousAudioAssetId
   );
   if (fallbackCandidate) {
     const payload = buildPublicRandomPayload(fallbackCandidate, secondarySource, "fallback");
@@ -961,7 +997,7 @@ export async function handler(event: HttpEvent): Promise<{ statusCode: number; b
     }
 
     if (method === "GET" && routeKey === "GET /public/combos/random") {
-      return await getRandomPublicCombo();
+      return await getRandomPublicCombo(event);
     }
 
     const id = parseComboId(event);

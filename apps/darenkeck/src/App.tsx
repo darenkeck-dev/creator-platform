@@ -30,14 +30,17 @@ function getApiBaseUrl(): string | null {
   return raw.replace(/\/$/, "");
 }
 
-async function fetchRandomCombo(): Promise<ComboPayload | null> {
+async function fetchRandomCombo(previousAudioAssetId?: string): Promise<ComboPayload | null> {
   const apiBaseUrl = getApiBaseUrl();
 
   if (!apiBaseUrl && !import.meta.env.DEV) {
     return null;
   }
 
-  const response = await fetch(`${apiBaseUrl}/public/combos/random`, {
+  const query = previousAudioAssetId
+    ? `?previousAudioAssetId=${encodeURIComponent(previousAudioAssetId)}`
+    : "";
+  const response = await fetch(`${apiBaseUrl}/public/combos/random${query}`, {
     method: "GET",
     cache: "no-store",
   });
@@ -53,6 +56,8 @@ async function fetchRandomCombo(): Promise<ComboPayload | null> {
   const candidate = payload as Record<string, unknown>;
   if (
     typeof candidate.comboId !== "string" ||
+    typeof candidate.videoAssetId !== "string" ||
+    typeof candidate.audioAssetId !== "string" ||
     typeof candidate.videoTitle !== "string" ||
     typeof candidate.audioTitle !== "string" ||
     typeof candidate.videoSrc !== "string" ||
@@ -63,6 +68,8 @@ async function fetchRandomCombo(): Promise<ComboPayload | null> {
 
   return {
     comboId: candidate.comboId,
+    videoAssetId: candidate.videoAssetId,
+    audioAssetId: candidate.audioAssetId,
     videoTitle: candidate.videoTitle,
     audioTitle: candidate.audioTitle,
     videoSrc: candidate.videoSrc,

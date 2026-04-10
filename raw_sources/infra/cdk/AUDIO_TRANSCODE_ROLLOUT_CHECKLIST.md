@@ -49,11 +49,12 @@ Feature goal: keep original uploaded audio files, and generate a normalized stre
 
 ## Deploy
 
-- [ ] Commit feature changes with focused commit message(s)
-- [ ] Deploy API stack:
-  - [ ] `APP_STAGE=prod bun run --cwd infra/cdk deploy:api`
-- [ ] Deploy processing stack:
-  - [ ] `APP_STAGE=prod bun run --cwd infra/cdk deploy:processing`
+- [x] Commit feature changes with focused commit message(s)
+  - [x] Commit: `e25b0c5` (`feat(audio): transcode uploads to normalized HLS profile`)
+- [x] Deploy API stack:
+  - [x] `bun run deploy:api`
+- [x] Deploy processing stack:
+  - [x] `bun run deploy:processing`
 
 ## Data reset and re-upload
 

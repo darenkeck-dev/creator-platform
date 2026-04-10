@@ -28,6 +28,8 @@ export type SingleSlotKey = (typeof SingleSlotKey)[keyof typeof SingleSlotKey];
 
 export type ComboPayload = {
   comboId: string;
+  videoAssetId: string;
+  audioAssetId: string;
   videoTitle: string;
   audioTitle: string;
   videoSrc: string;
@@ -50,7 +52,7 @@ type SlotManagerEvents = {
 };
 
 type SlotManagerOptions = {
-  fetchRandomCombo: () => Promise<ComboPayload | null>;
+  fetchRandomCombo: (previousAudioAssetId?: string) => Promise<ComboPayload | null>;
   events: SlotManagerEvents;
 };
 
@@ -142,7 +144,7 @@ export class SlotManager {
       this.emitDebug("fetch.start", { reason });
 
       try {
-        const next = await this.options.fetchRandomCombo();
+        const next = await this.options.fetchRandomCombo(this.currentCombo?.audioAssetId);
         if (this.destroyed) {
           return;
         }

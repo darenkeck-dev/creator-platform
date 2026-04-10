@@ -20,6 +20,7 @@ type HttpEvent = {
     authorizer?: { jwt?: { claims?: Record<string, string> } };
   };
   pathParameters?: { id?: string };
+  queryStringParameters?: Record<string, string | undefined>;
   body?: string | null;
 };
 
@@ -398,6 +399,112 @@ describe("api-combos lambda", () => {
     expect(result.body).toContain('"comboId":"public-video-1-audio-1"');
     expect(result.body).toContain('"videoSrc":"https://cdn.example.com/video/master.m3u8"');
     expect(result.body).toContain('"audioSrc":"https://cdn.example.com/audio/master.m3u8"');
+  });
+
+  it("filters out previous audio asset id for derived random combos", async () => {
+    Math.random = () => 0;
+
+    stubSend(async (command) => {
+      if (command instanceof ScanCommand) {
+        const attrs = command.input.ExpressionAttributeValues as Record<string, string>;
+        if (attrs[":comboPrefix"] === "COMBO#") {
+          return { Items: [] };
+        }
+
+        if (attrs[":type"] === "video") {
+          return {
+            Items: [
+              {
+                ...videoAsset("video-1"),
+                visibility: "public",
+                stream: { hlsMasterUrl: "https://cdn.example.com/video/master.m3u8" },
+              },
+            ],
+          };
+        }
+
+        if (attrs[":type"] === "audio") {
+          return {
+            Items: [
+              {
+                ...audioAsset("audio-1"),
+                visibility: "public",
+                stream: { hlsMasterUrl: "https://cdn.example.com/audio/one.m3u8" },
+              },
+              {
+                ...audioAsset("audio-2"),
+                visibility: "public",
+                stream: { hlsMasterUrl: "https://cdn.example.com/audio/two.m3u8" },
+              },
+            ],
+          };
+        }
+      }
+
+      throw new Error("Unexpected command sequence");
+    });
+
+    const result = await handler({
+      requestContext: { http: { method: "GET" }, routeKey: "GET /public/combos/random" },
+      queryStringParameters: { previousAudioAssetId: "audio-1" },
+    });
+
+    expect(result.statusCode).toBe(200);
+    expect(result.body).toContain('"audioAssetId":"audio-2"');
+  });
+
+  it("filters out previous audio asset id for existing random combos", async () => {
+    Math.random = () => 0.99;
+
+    stubSend(async (command) => {
+      if (command instanceof ScanCommand) {
+        const attrs = command.input.ExpressionAttributeValues as Record<string, string>;
+        if (attrs[":comboPrefix"] === "COMBO#") {
+          return {
+            Items: [
+              comboItem("combo-existing-1", { videoAssetId: "video-1", audioAssetId: "audio-1" }),
+              comboItem("combo-existing-2", { videoAssetId: "video-1", audioAssetId: "audio-2" }),
+            ],
+          };
+        }
+
+        return { Items: [] };
+      }
+
+      if (command instanceof GetCommand) {
+        const key = command.input.Key as { pk: string };
+        if (key.pk === "ASSET#video-1") {
+          return {
+            Item: {
+              ...videoAsset("video-1"),
+              visibility: "public",
+              stream: { hlsMasterUrl: "https://cdn.example.com/video/master.m3u8" },
+            },
+          };
+        }
+
+        if (key.pk === "ASSET#audio-2") {
+          return {
+            Item: {
+              ...audioAsset("audio-2"),
+              visibility: "public",
+              stream: { hlsMasterUrl: "https://cdn.example.com/audio/two.m3u8" },
+            },
+          };
+        }
+      }
+
+      throw new Error("Unexpected command sequence");
+    });
+
+    const result = await handler({
+      requestContext: { http: { method: "GET" }, routeKey: "GET /public/combos/random" },
+      queryStringParameters: { previousAudioAssetId: "audio-1" },
+    });
+
+    expect(result.statusCode).toBe(200);
+    expect(result.body).toContain('"comboId":"combo-existing-2"');
+    expect(result.body).toContain('"audioAssetId":"audio-2"');
   });
 
   it("returns random public combo from existing combos", async () => {
