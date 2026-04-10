@@ -9,6 +9,14 @@
 - `3342a8c` - darenkeck site metadata/crawl baseline (robots/sitemap/favicon/meta tags).
 - `e25b0c5` - audio default profile switched to normalized HLS transcode path.
 
+## Recent operational updates
+
+- Deployed `MediaManagerDarenkeckSiteStack` with custom domain wiring enabled for `darenkeck.com` using existing ACM cert in `us-east-1`.
+- Cut over Route 53 apex alias from old CloudFront distribution to `EUQDAU6DH3BMC` (`d2fmm3qe2rclf2.cloudfront.net`).
+- Completed phase-3 DNS ownership migration: Route 53 apex `A/AAAA` records are now created/managed by `MediaManagerDarenkeckSiteStack`.
+- Bumped monorepo package versions to `1.0.0` across apps, shared packages, infra, and root workspace metadata.
+- Release checks passed for baseline: `bun run typecheck`, `bun run test:infra`.
+
 ## Playback evolution summary
 
 - `ComboPlayer` was simplified toward signal-driven state transitions.

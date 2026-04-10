@@ -14,6 +14,30 @@
 - `infra/cdk/lib/darenkeck-site-stack.ts` -> deploy darenkeck site infra stack.
 - `apps/darenkeck/*` runtime/static content -> deploy darenkeck static site.
 
+## Darenkeck custom domain wiring (optional)
+
+- `MediaManagerDarenkeckSiteStack` supports optional CloudFront custom-domain wiring via env vars:
+  - `DARENKECK_SITE_DOMAIN_NAME`
+  - `DARENKECK_SITE_CERT_ARN` (must be ACM in `us-east-1`)
+  - `DARENKECK_SITE_MANAGE_DNS` (`true`/`false`)
+  - `DARENKECK_SITE_HOSTED_ZONE_ID` (required when DNS management is enabled)
+  - `DARENKECK_SITE_DNS_RECORD_NAME` (optional; defaults to domain name)
+- Phased migration recommendation:
+  - deploy with domain + cert while `DARENKECK_SITE_MANAGE_DNS=false`
+  - cut over alias ownership/DNS in a controlled window
+  - optionally enable DNS management in stack after ownership is moved
+
+Current production status:
+
+- CloudFront distribution `EUQDAU6DH3BMC` is configured with alias `darenkeck.com`.
+- Route 53 apex `A` and `AAAA` aliases point to `d2fmm3qe2rclf2.cloudfront.net`.
+- DNS is now managed by CloudFormation in `MediaManagerDarenkeckSiteStack` (`DARENKECK_SITE_MANAGE_DNS=true`).
+
+Migration note:
+
+- `AWS::Route53::RecordSet` does not support CloudFormation resource import in this environment.
+- For existing manual apex records, takeover requires delete-then-create migration (remove manual records, then deploy stack-managed records immediately).
+
 ## Post-deploy quick checks
 
 - API health: call `GET /public/combos/random` and verify 200 payload with `videoSrc/audioSrc`.

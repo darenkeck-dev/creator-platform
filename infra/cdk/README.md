@@ -117,6 +117,21 @@ Exports:
 - `DARENKECK-SITE-BUCKET-NAME`
 - `DARENKECK-SITE-CLOUDFRONT-DOMAIN`
 - `DARENKECK-SITE-CLOUDFRONT-DISTRIBUTION-ID`
+- `DARENKECK-SITE-DOMAIN` (when custom domain inputs are provided)
+
+Optional custom domain inputs (environment variables):
+
+- `DARENKECK_SITE_DOMAIN_NAME`: CloudFront alternate domain (for example `darenkeck.com`).
+- `DARENKECK_SITE_CERT_ARN`: ACM cert ARN in `us-east-1` for the domain.
+- `DARENKECK_SITE_MANAGE_DNS`: set `true` to let this stack manage Route 53 alias records.
+- `DARENKECK_SITE_HOSTED_ZONE_ID`: required when `DARENKECK_SITE_MANAGE_DNS=true`.
+- `DARENKECK_SITE_DNS_RECORD_NAME`: optional Route 53 record name override (defaults to `DARENKECK_SITE_DOMAIN_NAME`).
+
+Notes:
+
+- Domain and cert must be set together.
+- Leaving these unset preserves CloudFront-domain-only behavior.
+- `DARENKECK_SITE_MANAGE_DNS` is safe to keep `false` during phased migration.
 
 ### `MediaManagerApiStack` (`lib/api-stack.ts`)
 

@@ -2,6 +2,8 @@
 
 Monorepo for media ingestion, processing, playback APIs, and frontend apps.
 
+Release status: `v1.0.0` baseline.
+
 ## Restarting Codex with context
 
 At the start of a new Codex session, send this as your first prompt:

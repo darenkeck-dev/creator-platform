@@ -3,6 +3,7 @@
 ## Live shape
 
 - Monorepo: `apps/web`, `apps/darenkeck`, `infra/cdk`, `packages/contracts`, `packages/shared`.
+- Workspace/package manifests are now versioned at `1.0.0` for release baseline tracking.
 - Primary runtime flows are working: upload -> processing -> ready -> combo playback.
 - `darenkeck` static site is deployed on S3 + CloudFront with security headers and crawl metadata.
 
@@ -19,9 +20,11 @@ Details: [Recent Changes](recent-changes.md).
 ## Most relevant deployed outputs
 
 - API URL: `https://adenvmeabg.execute-api.us-west-2.amazonaws.com`
+- Primary site domain: `https://darenkeck.com` (Route 53 apex alias -> `EUQDAU6DH3BMC`)
 - Darenkeck site bucket: `darenkeck-site-prod`
 - Darenkeck CloudFront distribution: `EUQDAU6DH3BMC`
 - Darenkeck CloudFront domain: `d2fmm3qe2rclf2.cloudfront.net`
+- Route 53 apex `A/AAAA` records for `darenkeck.com` are now stack-managed in `MediaManagerDarenkeckSiteStack`.
 
 ## Working assumptions
 
