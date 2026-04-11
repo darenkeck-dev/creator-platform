@@ -15,6 +15,8 @@ type SingleComboSlotProps = {
   playbackCycle: number;
   audioMuted: boolean;
   audioVolume: number;
+  onVideoElementChange?: (video: HTMLVideoElement | null) => void;
+  onAudioElementChange?: (audio: HTMLAudioElement | null) => void;
   onTimelineEnded?: () => void;
   onPlaybackReady?: () => void;
   onPlaybackStateChange?: (phase: string) => void;
@@ -25,6 +27,8 @@ export function SingleComboSlot({
   playbackCycle,
   audioMuted,
   audioVolume,
+  onVideoElementChange,
+  onAudioElementChange,
   onTimelineEnded,
   onPlaybackReady,
   onPlaybackStateChange,
@@ -40,9 +44,11 @@ export function SingleComboSlot({
         autoPlay
         className="h-full w-full"
         comboId={combo.comboId}
+        onAudioElementChange={onAudioElementChange}
         onPlaybackReady={onPlaybackReady}
         onPlaybackStateChange={onPlaybackStateChange}
         onTimelineEnded={onTimelineEnded}
+        onVideoElementChange={onVideoElementChange}
         preload="auto"
         suppressUi
         variant="background"

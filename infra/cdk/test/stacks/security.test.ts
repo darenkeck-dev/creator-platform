@@ -10,6 +10,7 @@ import { ApiStack } from "../../lib/api-stack";
 import { AuthStack } from "../../lib/auth-stack";
 import { DarenkeckSiteStack } from "../../lib/darenkeck-site-stack";
 import { StorageStack } from "../../lib/storage-stack";
+import { StreamingStack } from "../../lib/streaming-stack";
 
 const env = {
   account: "123456789012",
@@ -120,6 +121,43 @@ describe("security posture", () => {
           }),
         ]),
       },
+    });
+  });
+
+  it("adds CORS response headers on derived media CloudFront responses", () => {
+    const app = new App();
+    const stack = new StreamingStack(app, "StreamingStackCorsTest", {
+      stage: "test",
+      env,
+    });
+
+    const template = Template.fromStack(stack);
+    template.hasResourceProperties("AWS::CloudFront::ResponseHeadersPolicy", {
+      ResponseHeadersPolicyConfig: Match.objectLike({
+        CorsConfig: Match.objectLike({
+          OriginOverride: true,
+          AccessControlAllowOrigins: {
+            Items: ["*"],
+          },
+        }),
+      }),
+    });
+
+    template.hasResourceProperties("AWS::CloudFront::Distribution", {
+      DistributionConfig: Match.objectLike({
+        DefaultCacheBehavior: Match.objectLike({
+          OriginRequestPolicyId: Match.anyValue(),
+          ResponseHeadersPolicyId: Match.anyValue(),
+        }),
+      }),
+    });
+
+    template.hasResourceProperties("AWS::CloudFront::OriginRequestPolicy", {
+      OriginRequestPolicyConfig: Match.objectLike({
+        HeadersConfig: Match.objectLike({
+          HeaderBehavior: "whitelist",
+        }),
+      }),
     });
   });
 

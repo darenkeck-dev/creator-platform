@@ -44,6 +44,9 @@ Migration note:
 - Darenkeck: verify homepage loads + combo playback starts.
 - Crawl basics: check `/robots.txt` and `/sitemap.xml`.
 - Headers: verify CloudFront returns HSTS, CSP, nosniff, referrer, frame options, permissions policy.
+- Streaming CORS: verify HLS manifest responds with `Access-Control-Allow-Origin` for cross-origin requests:
+  - `curl -I -H "Origin: https://darenkeck.com" https://<streaming-cloudfront>/derived/<asset>/hls/<manifest>.m3u8`
+  - optional preflight check: `curl -i -X OPTIONS -H "Origin: https://darenkeck.com" -H "Access-Control-Request-Method: GET" -H "Access-Control-Request-Headers: range" https://<streaming-cloudfront>/derived/<asset>/hls/<manifest>.m3u8`
 
 ## Known operational nits
 

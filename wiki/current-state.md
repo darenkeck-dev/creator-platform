@@ -3,7 +3,7 @@
 ## Live shape
 
 - Monorepo: `apps/web`, `apps/darenkeck`, `infra/cdk`, `packages/contracts`, `packages/shared`.
-- Workspace/package manifests are now versioned at `1.0.0` for release baseline tracking.
+- Workspace/package manifests are now versioned at `1.0.1` for upcoming release tracking.
 - Primary runtime flows are working: upload -> processing -> ready -> combo playback.
 - `darenkeck` static site is deployed on S3 + CloudFront with security headers and crawl metadata.
 
@@ -13,7 +13,10 @@ See also: [Architecture Map](architecture-map.md), [Deploy and Ops](deploy-and-o
 
 - Audio uploads default to `audio-transcode-hls-v1` (normalized HLS output), originals still preserved.
 - Random public combo API accepts optional previous audio hint and avoids repeating prior audio track when possible.
-- `ComboPlayer` timeline master is now always audio (video is follower).
+- `ComboPlayer` now uses video timeline while muted and switches to audio timeline once unmuted playback is user-activated.
+- Streaming CloudFront now emits CORS headers for derived HLS objects and supports preflight header forwarding.
+- `apps/darenkeck` local playback debug overlay is currently disabled for release preparation.
+- `ComboPlayer` startup now avoids audio `play()` during muted autoplay; audio playback begins on user unmute interaction.
 
 Details: [Recent Changes](recent-changes.md).
 

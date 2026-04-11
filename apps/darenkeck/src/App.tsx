@@ -7,6 +7,8 @@ import {
   SingleSlotKey,
   SlotManager,
   type ComboPayload,
+  type SlotManagerState,
+  type SlotPlaybackState,
   type SlotPlaybackAssignment,
 } from "./lib/slot-manager";
 
@@ -16,6 +18,40 @@ const SingleComboSlot = lazy(async () => {
 });
 
 const ENABLE_DEBUG_LOGS = false;
+const SHOW_LOCAL_DEBUG_CONTROLS = false;
+
+function formatMediaDuration(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) {
+    return "?";
+  }
+
+  return value.toFixed(2);
+}
+
+function formatMediaSnapshot(element: HTMLMediaElement | null): string {
+  if (!element) {
+    return "unavailable";
+  }
+
+  return [
+    `paused=${element.paused}`,
+    `muted=${element.muted}`,
+    `vol=${element.volume.toFixed(2)}`,
+    `time=${element.currentTime.toFixed(2)}/${formatMediaDuration(element.duration)}`,
+    `ready=${element.readyState}`,
+    `network=${element.networkState}`,
+  ].join(" | ");
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof DOMException) {
+    return `${error.name}: ${error.message}`;
+  }
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`;
+  }
+  return String(error);
+}
 
 function getApiBaseUrl(): string | null {
   const raw = import.meta.env.VITE_COMBO_API_BASE_URL ?? import.meta.env.VITE_API_BASE_URL;
@@ -84,10 +120,19 @@ export function App() {
   const [comboLoading, setComboLoading] = useState(false);
   const [comboError, setComboError] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState<AudioLevel>("muted");
+  const [audioVolume, setAudioVolume] = useState(1);
   const [isBulletinOpen, setIsBulletinOpen] = useState(true);
   const [playerEnabled, setPlayerEnabled] = useState(false);
   const [managerEnabled, setManagerEnabled] = useState(false);
+  const [playbackPhase, setPlaybackPhase] = useState("loading");
+  const [managerState, setManagerState] = useState<SlotManagerState>("idle");
+  const [slotState, setSlotState] = useState<SlotPlaybackState>("idle");
+  const [combosPlayedCount, setCombosPlayedCount] = useState(0);
+  const [debugActionMessage, setDebugActionMessage] = useState<string | null>(null);
+  const [debugSampleCount, setDebugSampleCount] = useState(0);
   const managerRef = useRef<SlotManager | null>(null);
+  const videoElementRef = useRef<HTMLVideoElement | null>(null);
+  const audioElementRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -133,6 +178,20 @@ export function App() {
   }, [playerEnabled]);
 
   useEffect(() => {
+    if (!SHOW_LOCAL_DEBUG_CONTROLS) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setDebugSampleCount((current) => current + 1);
+    }, 500);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!managerEnabled) {
       return;
     }
@@ -143,6 +202,11 @@ export function App() {
         onComboChanged: setSlotAssignment,
         onLoadingChange: setComboLoading,
         onError: setComboError,
+        onManagerStateChange: setManagerState,
+        onSlotStateChange: (_slot, state) => {
+          setSlotState(state);
+        },
+        onCombosPlayedChange: setCombosPlayedCount,
         onDebug: (event, data) => {
           if (ENABLE_DEBUG_LOGS) {
             console.log("[darenkeck][SlotManager]", event, data ?? {});
@@ -170,13 +234,86 @@ export function App() {
   };
 
   const handlePlaybackStateChange = (phase: string) => {
+    setPlaybackPhase(phase);
     managerRef.current?.handleSlotPlaybackPhaseChange(SingleSlotKey.Primary, phase);
   };
 
+  const handlePauseBothForDebug = () => {
+    videoElementRef.current?.pause();
+    audioElementRef.current?.pause();
+    setDebugActionMessage("Paused both media elements");
+  };
+
+  const handleSyncAudioForDebug = () => {
+    const video = videoElementRef.current;
+    const audio = audioElementRef.current;
+    if (!video || !audio) {
+      setDebugActionMessage("Cannot sync: media elements unavailable");
+      return;
+    }
+
+    audio.currentTime = video.currentTime;
+    setDebugActionMessage(`Synced audio to video @ ${video.currentTime.toFixed(2)}s`);
+  };
+
+  const handleProbePlaybackForDebug = async () => {
+    const results: string[] = [];
+
+    if (!videoElementRef.current || !audioElementRef.current) {
+      setDebugActionMessage("Cannot probe: media elements unavailable");
+      return;
+    }
+
+    try {
+      await videoElementRef.current.play();
+      results.push("video play ok");
+    } catch (error) {
+      results.push(`video play failed (${getErrorMessage(error)})`);
+    }
+
+    try {
+      await audioElementRef.current.play();
+      results.push("audio play ok");
+    } catch (error) {
+      results.push(`audio play failed (${getErrorMessage(error)})`);
+    }
+
+    setDebugActionMessage(results.join(" | "));
+  };
+
+  const handleNextComboForDebug = () => {
+    void managerRef.current?.handleSlotPlaybackEnded(SingleSlotKey.Primary);
+    setDebugActionMessage("Requested next combo");
+  };
+
+  const handleAudioLevelToggle = () => {
+    const next = nextAudioLevel;
+    setAudioLevel(next);
+
+    if (next !== "full") {
+      return;
+    }
+
+    const video = videoElementRef.current;
+    const audio = audioElementRef.current;
+    if (!video || !audio) {
+      return;
+    }
+
+    audio.currentTime = video.currentTime;
+    void Promise.all([
+      video.paused ? video.play() : Promise.resolve(),
+      audio.paused ? audio.play() : Promise.resolve(),
+    ]).catch(() => {
+      // Keep UI responsive; ComboPlayer handles playback state/error reporting.
+    });
+  };
+
   const isAudioMuted = audioLevel === "muted";
-  const audioVolume = 1;
   const nextAudioLevel: AudioLevel = audioLevel === "full" ? "muted" : "full";
   const audioButtonTitle = nextAudioLevel === "full" ? "Unmute audio" : "Mute audio";
+  const audioDebugSnapshot = formatMediaSnapshot(audioElementRef.current);
+  const videoDebugSnapshot = formatMediaSnapshot(videoElementRef.current);
 
   const linkItems = [
     { label: "Github", href: "https://github.com/darenkeck-dev" },
@@ -222,9 +359,15 @@ export function App() {
               audioVolume={audioVolume}
               combo={slotAssignment.combo}
               playbackCycle={slotAssignment.playbackCycle}
+              onAudioElementChange={(audio) => {
+                audioElementRef.current = audio;
+              }}
               onPlaybackReady={handlePlaybackReady}
               onPlaybackStateChange={handlePlaybackStateChange}
               onTimelineEnded={handleTimelineEnded}
+              onVideoElementChange={(video) => {
+                videoElementRef.current = video;
+              }}
             />
           ) : null}
         </Suspense>
@@ -235,7 +378,7 @@ export function App() {
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          setAudioLevel(nextAudioLevel);
+          handleAudioLevelToggle();
         }}
         title={audioButtonTitle}
         type="button"
@@ -387,6 +530,101 @@ export function App() {
           ) : null}
         </div>
       </section>
+
+      {SHOW_LOCAL_DEBUG_CONTROLS ? (
+        <aside className="pointer-events-auto fixed bottom-3 right-3 z-[60] w-[min(92vw,420px)] rounded-xl border border-white/30 bg-black/70 p-3 text-[11px] text-white shadow-2xl backdrop-blur-sm">
+          <p className="font-semibold uppercase tracking-[0.14em] text-white/85">
+            Local playback debug
+          </p>
+          <p className="mt-1 text-white/70">sample: {debugSampleCount}</p>
+          <p className="mt-2 break-all text-white/80">
+            combo: {slotAssignment?.combo.comboId ?? "none"}
+          </p>
+          <p className="mt-1 text-white/80">
+            manager={managerState} | slot={slotState} | phase={playbackPhase}
+          </p>
+          <p className="mt-1 text-white/80">
+            loading={String(comboLoading)} | muted={String(isAudioMuted)} | played=
+            {combosPlayedCount}
+          </p>
+          <p className="mt-2 break-all text-white/75">audio: {audioDebugSnapshot}</p>
+          <p className="mt-1 break-all text-white/75">video: {videoDebugSnapshot}</p>
+
+          <label className="mt-2 block text-white/80" htmlFor="debug-audio-volume">
+            Debug audio volume: {audioVolume.toFixed(2)}
+          </label>
+          <input
+            className="mt-1 w-full"
+            id="debug-audio-volume"
+            max={1}
+            min={0}
+            onChange={(event) => {
+              setAudioVolume(Math.min(1, Math.max(0, Number(event.target.value) || 0)));
+            }}
+            step={0.05}
+            type="range"
+            value={audioVolume}
+          />
+
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              className="rounded border border-white/35 bg-white/10 px-2 py-1 text-left hover:bg-white/20"
+              onClick={() => {
+                handleAudioLevelToggle();
+                setDebugActionMessage("Requested unmute and playback resume");
+              }}
+              type="button"
+            >
+              Force unmute
+            </button>
+            <button
+              className="rounded border border-white/35 bg-white/10 px-2 py-1 text-left hover:bg-white/20"
+              onClick={() => {
+                setAudioLevel("muted");
+                setDebugActionMessage("Set audio state to muted");
+              }}
+              type="button"
+            >
+              Force mute
+            </button>
+            <button
+              className="rounded border border-white/35 bg-white/10 px-2 py-1 text-left hover:bg-white/20"
+              onClick={() => {
+                void handleProbePlaybackForDebug();
+              }}
+              type="button"
+            >
+              Probe play()
+            </button>
+            <button
+              className="rounded border border-white/35 bg-white/10 px-2 py-1 text-left hover:bg-white/20"
+              onClick={handlePauseBothForDebug}
+              type="button"
+            >
+              Pause both
+            </button>
+            <button
+              className="rounded border border-white/35 bg-white/10 px-2 py-1 text-left hover:bg-white/20"
+              onClick={handleSyncAudioForDebug}
+              type="button"
+            >
+              Sync audio to video
+            </button>
+            <button
+              className="rounded border border-white/35 bg-white/10 px-2 py-1 text-left hover:bg-white/20"
+              onClick={handleNextComboForDebug}
+              type="button"
+            >
+              Next combo
+            </button>
+          </div>
+
+          {debugActionMessage ? <p className="mt-2 text-white/70">{debugActionMessage}</p> : null}
+          <p className="mt-2 break-all text-white/65">
+            audioSrc: {slotAssignment?.combo.audioSrc ?? "none"}
+          </p>
+        </aside>
+      ) : null}
     </main>
   );
 }

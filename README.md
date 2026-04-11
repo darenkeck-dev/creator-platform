@@ -2,7 +2,7 @@
 
 Monorepo for media ingestion, processing, playback APIs, and frontend apps.
 
-Release status: `v1.0.0` baseline.
+Release status: `v1.0.1` candidate.
 
 ## Restarting Codex with context
 

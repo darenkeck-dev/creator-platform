@@ -4,8 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ComboTrackKind,
-  getMasterTrackFromDurations,
-  getTimelineDuration,
   isTimelineEnded,
   mapFollowerTime,
   normalizeDuration,
@@ -30,6 +28,7 @@ export type ComboPlayerProps = {
   showBuiltInMuteControl?: boolean;
   audioMutedByDefault?: boolean;
   onVideoElementChange?: (video: HTMLVideoElement | null) => void;
+  onAudioElementChange?: (audio: HTMLAudioElement | null) => void;
   preload?: "none" | "metadata" | "auto";
   suppressUi?: boolean;
   onTimelineEnded?: () => void;
@@ -65,6 +64,7 @@ export function ComboPlayer({
   showBuiltInMuteControl = false,
   audioMutedByDefault,
   onVideoElementChange,
+  onAudioElementChange,
   preload = "metadata",
   suppressUi = false,
   onTimelineEnded,
@@ -82,6 +82,7 @@ export function ComboPlayer({
   const timelineEndedNotifiedRef = useRef(false);
   const boundaryTransitionUntilRef = useRef(0);
   const [phase, setPhase] = useState<ComboPlayerPhase>(ComboPlayerPhase.Loading);
+  const previousPhaseRef = useRef<ComboPlayerPhase>(ComboPlayerPhase.Loading);
   const mediaReadyRef = useRef({ video: false, audio: false });
   const [message, setMessage] = useState<string | null>(null);
   const [durations, setDurations] = useState({ videoDuration: 0, audioDuration: 0 });
@@ -89,13 +90,28 @@ export function ComboPlayer({
   const resolvedDefaultAudioMuted = defaultAudioMuted ?? audioMutedByDefault ?? true;
   const [uncontrolledAudioMuted, setUncontrolledAudioMuted] = useState(resolvedDefaultAudioMuted);
 
-  const masterTrack = useMemo(() => getMasterTrackFromDurations(durations), [durations]);
-  const duration = useMemo(() => getTimelineDuration(durations), [durations]);
-  const isPlaying = phase === ComboPlayerPhase.Playing || phase === ComboPlayerPhase.Stalled;
-  const atEnd = phase === ComboPlayerPhase.Ended;
   const effectiveAudioMuted = audioMuted ?? uncontrolledAudioMuted;
   const effectiveAudioVolume =
     typeof audioVolume === "number" ? Math.min(1, Math.max(0, audioVolume)) : undefined;
+  const audioTimelineEnabled = !effectiveAudioMuted;
+  const masterTrack = audioTimelineEnabled ? ComboTrackKind.Audio : ComboTrackKind.Video;
+  const duration = useMemo(() => {
+    if (audioTimelineEnabled) {
+      if (durations.audioDuration > 0) {
+        return durations.audioDuration;
+      }
+
+      return durations.videoDuration;
+    }
+
+    if (durations.videoDuration > 0) {
+      return durations.videoDuration;
+    }
+
+    return durations.audioDuration;
+  }, [audioTimelineEnabled, durations]);
+  const isPlaying = phase === ComboPlayerPhase.Playing || phase === ComboPlayerPhase.Stalled;
+  const atEnd = phase === ComboPlayerPhase.Ended;
 
   function debugLog(event: string, details: Record<string, unknown>) {
     if (!ENABLE_COMBO_PLAYER_DEBUG_LOGS) {
@@ -137,6 +153,44 @@ export function ComboPlayer({
       next,
       controlled: audioMuted !== undefined,
     });
+
+    if (next) {
+      return;
+    }
+
+    const elements = getElements();
+    if (!elements) {
+      return;
+    }
+
+    elements.audio.muted = false;
+    elements.audio.defaultMuted = false;
+    elements.audio.currentTime = elements.video.currentTime;
+    shouldBePlayingRef.current = true;
+
+    const playPromises: Array<Promise<void>> = [];
+    if (elements.video.paused) {
+      playPromises.push(elements.video.play());
+    }
+    if (elements.audio.paused) {
+      playPromises.push(elements.audio.play());
+    }
+
+    if (playPromises.length === 0) {
+      setMessage(null);
+      transitionTo(ComboPlayerPhase.Playing);
+      return;
+    }
+
+    void Promise.all(playPromises)
+      .then(() => {
+        setMessage(null);
+        transitionTo(ComboPlayerPhase.Playing);
+      })
+      .catch(() => {
+        shouldBePlayingRef.current = false;
+        transitionTo(ComboPlayerPhase.Ready);
+      });
   }
 
   function renderAudioToggleButton(classNameValue: string) {
@@ -199,6 +253,11 @@ export function ComboPlayer({
     onVideoElementChange?.(video);
   }
 
+  function assignAudioElement(audio: HTMLAudioElement | null) {
+    audioRef.current = audio;
+    onAudioElementChange?.(audio);
+  }
+
   function syncDurations() {
     const elements = getElements();
     if (!elements) {
@@ -215,8 +274,14 @@ export function ComboPlayer({
       audioCurrentTime: elements.audio.currentTime,
       videoDuration: nextDurations.videoDuration,
       audioDuration: nextDurations.audioDuration,
-      nextMasterTrack: getMasterTrackFromDurations(nextDurations),
-      nextTimelineDuration: getTimelineDuration(nextDurations),
+      nextMasterTrack: audioTimelineEnabled ? ComboTrackKind.Audio : ComboTrackKind.Video,
+      nextTimelineDuration: audioTimelineEnabled
+        ? nextDurations.audioDuration > 0
+          ? nextDurations.audioDuration
+          : nextDurations.videoDuration
+        : nextDurations.videoDuration > 0
+          ? nextDurations.videoDuration
+          : nextDurations.audioDuration,
     });
   }
 
@@ -256,6 +321,7 @@ export function ComboPlayer({
       return;
     }
 
+    audio.muted = effectiveAudioMuted;
     audio.defaultMuted = effectiveAudioMuted;
     if (effectiveAudioVolume !== undefined) {
       audio.volume = effectiveAudioVolume;
@@ -263,6 +329,19 @@ export function ComboPlayer({
   }
 
   function handlePlaybackStartedSignal() {
+    const elements = getElements();
+    if (!elements) {
+      return;
+    }
+
+    if (elements.master.paused) {
+      return;
+    }
+
+    if (masterTrack === ComboTrackKind.Audio && elements.follower.paused) {
+      return;
+    }
+
     transitionTo(ComboPlayerPhase.Playing);
   }
 
@@ -279,8 +358,14 @@ export function ComboPlayer({
   }
 
   function handlePlaybackPausedSignal(kind: ComboTrackKind) {
-    if (kind !== masterTrack && isBoundaryTransitionActive()) {
-      return;
+    if (kind !== masterTrack) {
+      if (masterTrack === ComboTrackKind.Video) {
+        return;
+      }
+
+      if (isBoundaryTransitionActive()) {
+        return;
+      }
     }
 
     if (phase === ComboPlayerPhase.Ended) {
@@ -291,8 +376,14 @@ export function ComboPlayer({
   }
 
   function handlePlaybackWaitingSignal(kind: ComboTrackKind) {
-    if (kind !== masterTrack && isBoundaryTransitionActive()) {
-      return;
+    if (kind !== masterTrack) {
+      if (masterTrack === ComboTrackKind.Video) {
+        return;
+      }
+
+      if (isBoundaryTransitionActive()) {
+        return;
+      }
     }
 
     if (shouldBePlayingRef.current) {
@@ -306,15 +397,24 @@ export function ComboPlayer({
         return currentPhase;
       }
 
-      debugLog("phase.transition", {
-        from: currentPhase,
-        to: nextPhase,
-        shouldBePlaying: shouldBePlayingRef.current,
-      });
-      onPlaybackStateChange?.(nextPhase);
       return nextPhase;
     });
   }
+
+  useEffect(() => {
+    const previousPhase = previousPhaseRef.current;
+    if (previousPhase === phase) {
+      return;
+    }
+
+    debugLog("phase.transition", {
+      from: previousPhase,
+      to: phase,
+      shouldBePlaying: shouldBePlayingRef.current,
+    });
+    onPlaybackStateChange?.(phase);
+    previousPhaseRef.current = phase;
+  }, [onPlaybackStateChange, phase]);
 
   function handleTimelineTimeUpdateSignal() {
     const elements = getElements();
@@ -359,7 +459,7 @@ export function ComboPlayer({
       debugLog("autoplay.attempt", {
         phase,
       });
-      void startPlayback("Autoplay is blocked. Tap to start playback.");
+      void startPlayback("Autoplay is blocked. Tap to start playback.", "autoplay");
     }
   }
 
@@ -524,6 +624,10 @@ export function ComboPlayer({
   }, [audioSrc, videoSrc]);
 
   useEffect(() => {
+    applyAudioSettingsFromSignals();
+  }, [effectiveAudioMuted, effectiveAudioVolume]);
+
+  useEffect(() => {
     if (audioMuted !== undefined) {
       return;
     }
@@ -531,12 +635,13 @@ export function ComboPlayer({
     setUncontrolledAudioMuted(resolvedDefaultAudioMuted);
   }, [audioMuted, resolvedDefaultAudioMuted]);
 
-  async function startPlayback(errorMessage: string) {
+  async function startPlayback(errorMessage: string, source: "autoplay" | "user" = "user") {
     const playRequestId = ++playRequestRef.current;
     debugLog("playback.start.attempt", {
       playRequestId,
       phase,
       isAudioMuted: effectiveAudioMuted,
+      source,
     });
 
     try {
@@ -545,11 +650,24 @@ export function ComboPlayer({
         return;
       }
 
+      shouldBePlayingRef.current = true;
+      applyAudioSettingsFromSignals();
+
+      if (!audioTimelineEnabled && !current.audio.paused) {
+        current.audio.pause();
+      }
+
+      if (audioTimelineEnabled) {
+        const audioPlayResult = await current.audio.play().then(
+          () => ({ ok: true as const }),
+          (error: unknown) => ({ ok: false as const, error })
+        );
+        if (!audioPlayResult.ok) {
+          throw audioPlayResult.error;
+        }
+      }
+
       const videoPlayResult = await current.video.play().then(
-        () => ({ ok: true as const }),
-        (error: unknown) => ({ ok: false as const, error })
-      );
-      const audioPlayResult = await current.audio.play().then(
         () => ({ ok: true as const }),
         (error: unknown) => ({ ok: false as const, error })
       );
@@ -562,30 +680,10 @@ export function ComboPlayer({
         throw videoPlayResult.error;
       }
 
-      if (!audioPlayResult.ok && !effectiveAudioMuted) {
-        throw audioPlayResult.error;
-      }
-
-      if (!audioPlayResult.ok && effectiveAudioMuted) {
-        const name =
-          audioPlayResult.error instanceof DOMException
-            ? audioPlayResult.error.name
-            : typeof audioPlayResult.error === "object" &&
-                audioPlayResult.error &&
-                "name" in audioPlayResult.error
-              ? String((audioPlayResult.error as { name?: unknown }).name)
-              : "";
-        debugLog("playback.start.audio-muted-play-failed", {
-          playRequestId,
-          name,
-        });
-      }
-
-      shouldBePlayingRef.current = true;
       setMessage(null);
       debugLog("playback.start.success", {
         playRequestId,
-        audioPlayStarted: audioPlayResult.ok,
+        source,
       });
       transitionTo(ComboPlayerPhase.Playing);
     } catch (error: unknown) {
@@ -600,20 +698,37 @@ export function ComboPlayer({
             ? String((error as { name?: unknown }).name)
             : "";
 
+      const current = getElements();
+      current?.video.pause();
+      current?.audio.pause();
+      shouldBePlayingRef.current = false;
+
       if (name === "AbortError") {
         debugLog("playback.start.abort", {
           playRequestId,
+          source,
         });
         transitionTo(ComboPlayerPhase.Stalled);
         return;
       }
 
-      shouldBePlayingRef.current = false;
+      if (name === "NotAllowedError") {
+        setMessage(errorMessage);
+        reportPlaybackError("autoplay", errorMessage);
+        debugLog("playback.start.not-allowed", {
+          playRequestId,
+          source,
+        });
+        transitionTo(ComboPlayerPhase.Ready);
+        return;
+      }
+
       setMessage(errorMessage);
       reportPlaybackError("autoplay", errorMessage);
       debugLog("playback.start.error", {
         playRequestId,
         name,
+        source,
       });
       transitionTo(ComboPlayerPhase.Error);
     }
@@ -645,7 +760,7 @@ export function ComboPlayer({
       currentTime: elements.master.currentTime,
       atEnd,
     });
-    await startPlayback("Playback could not start. Try pressing play again.");
+    await startPlayback("Playback could not start. Try pressing play again.", "user");
   }
 
   function seekTo(nextTime: number) {
@@ -685,59 +800,7 @@ export function ComboPlayer({
     }
 
     if (shouldResume) {
-      if (!elements.master.paused && !elements.follower.paused) {
-        shouldBePlayingRef.current = true;
-        setMessage(null);
-        transitionTo(ComboPlayerPhase.Playing);
-        return;
-      }
-
-      const playRequestId = ++playRequestRef.current;
-      const playPromises: Array<Promise<void>> = [];
-
-      if (elements.video.paused) {
-        playPromises.push(elements.video.play());
-      }
-      if (elements.audio.paused) {
-        playPromises.push(elements.audio.play());
-      }
-
-      if (playPromises.length === 0) {
-        shouldBePlayingRef.current = true;
-        setMessage(null);
-        transitionTo(ComboPlayerPhase.Playing);
-        return;
-      }
-
-      void Promise.all(playPromises)
-        .then(() => {
-          if (playRequestRef.current !== playRequestId) {
-            return;
-          }
-          shouldBePlayingRef.current = true;
-          setMessage(null);
-          transitionTo(ComboPlayerPhase.Playing);
-        })
-        .catch((error: unknown) => {
-          if (playRequestRef.current !== playRequestId) {
-            return;
-          }
-
-          const name =
-            error instanceof DOMException
-              ? error.name
-              : typeof error === "object" && error && "name" in error
-                ? String((error as { name?: unknown }).name)
-                : "";
-
-          if (name === "AbortError") {
-            transitionTo(ComboPlayerPhase.Stalled);
-            return;
-          }
-
-          shouldBePlayingRef.current = false;
-          transitionTo(ComboPlayerPhase.Stalled);
-        });
+      void startPlayback("Playback could not resume after seeking.", "user");
       return;
     }
 
@@ -839,7 +902,7 @@ export function ComboPlayer({
           onTimeUpdate={() => {
             handleTimelineTimeUpdateSignal();
           }}
-          ref={audioRef}
+          ref={assignAudioElement}
         />
         {!suppressUi &&
         !snapshot.isPlaying &&
@@ -940,7 +1003,7 @@ export function ComboPlayer({
           onTimeUpdate={() => {
             handleTimelineTimeUpdateSignal();
           }}
-          ref={audioRef}
+          ref={assignAudioElement}
         />
 
         <div className="flex flex-wrap items-center gap-2">

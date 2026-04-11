@@ -16,13 +16,21 @@
 - Completed phase-3 DNS ownership migration: Route 53 apex `A/AAAA` records are now created/managed by `MediaManagerDarenkeckSiteStack`.
 - Bumped monorepo package versions to `1.0.0` across apps, shared packages, infra, and root workspace metadata.
 - Release checks passed for baseline: `bun run typecheck`, `bun run test:infra`.
+- Deployed streaming-stack CORS hardening: CloudFront now attaches a CORS response-headers policy and forwards preflight headers via origin request policy for derived HLS playback.
+- Added localhost-focused playback debug controls in `apps/darenkeck` and exposed audio element callbacks in shared `ComboPlayer` for Chrome/Firefox audio troubleshooting.
+- Simplified startup behavior in `ComboPlayer`: muted autoplay starts video only, and audio `play()` is deferred until unmute interaction.
+- Moved `ComboPlayer` phase-change callback emission out of React state updater and into an effect to avoid cross-component setState warnings.
+- Removed autoplay retry loop from `ComboPlayer` to keep startup behavior simpler/predictable in current release state.
+- Updated playback event handling so muted-video mode ignores follower-audio pause/wait transitions and avoids false stalled states.
+- Disabled local debug overlay rendering in `apps/darenkeck` and set shared `ComboPlayer` debug logging back to `false` for release readiness.
+- Bumped monorepo/package versions from `1.0.0` to `1.0.1` and updated root README release status.
 
 ## Playback evolution summary
 
 - `ComboPlayer` was simplified toward signal-driven state transitions.
 - Polling/drift/scrub complexity was reduced across several refactor commits.
 - Loop boundary jitter mitigations were added.
-- Latest invariant: audio track is authoritative timeline master.
+- Latest behavior: timeline authority is video while muted, then audio after unmute-driven audio start.
 
 ## API behavior deltas to remember
 

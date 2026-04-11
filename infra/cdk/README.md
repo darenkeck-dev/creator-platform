@@ -89,6 +89,8 @@ Creates:
 
 - CloudFront Origin Access Control (OAC).
 - CloudFront distribution backed by derived S3 bucket.
+- CloudFront response headers policy for derived media CORS (`Access-Control-Allow-Origin: *`).
+- CloudFront origin request policy that forwards CORS preflight headers to S3.
 - S3 bucket policy allowing CloudFront service principal read access.
 
 Imports:
