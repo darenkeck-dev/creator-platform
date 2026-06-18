@@ -5,12 +5,14 @@
 - Folder delete currently deletes folder record only; should recursively delete contained assets + storage objects.
 - Upload/delete UI context should consistently respect active folder path.
 - Random combo quality tuning may still need guardrails beyond audio-repeat filtering.
+- Darenkeck mobile focus-loss handling needs hardening (background/foreground transitions should not leave combo state machine desynced).
+- Darenkeck mobile native play/pause interactions need explicit state-machine handling so UI and media element state stay aligned.
 
 ## Playback and UX watchlist
 
-- Validate audio-master-only timeline behavior across long/short clip mismatches.
+- Validate timeline handoff behavior (video-master while muted -> audio-master after unmute) across long/short clip mismatches.
 - Keep monitoring loop-boundary artifacts on real browser/device matrix.
-- Optionally tighten deploy pipeline to exclude junk files (`.DS_Store`).
+- Validate combo-player transitions for interruption paths (`visibilitychange`, app switch, screen lock, native media control pause/play).
 
 ## Docs/process
 

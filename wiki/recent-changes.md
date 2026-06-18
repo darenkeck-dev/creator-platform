@@ -24,6 +24,8 @@
 - Updated playback event handling so muted-video mode ignores follower-audio pause/wait transitions and avoids false stalled states.
 - Disabled local debug overlay rendering in `apps/darenkeck` and set shared `ComboPlayer` debug logging back to `false` for release readiness.
 - Bumped monorepo/package versions from `1.0.0` to `1.0.1` and updated root README release status.
+- Updated `scripts/deploy-darenkeck-static.sh` to exclude and remove `.DS_Store` objects during S3 sync deployments.
+- Added tracked TODOs for mobile focus-loss and native play/pause state-machine handling in `wiki/open-issues.md`.
 
 ## Playback evolution summary
 

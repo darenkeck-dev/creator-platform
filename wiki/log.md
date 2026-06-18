@@ -86,3 +86,20 @@
 - Disabled local debug overlay rendering by setting `SHOW_LOCAL_DEBUG_CONTROLS=false` in `apps/darenkeck/src/App.tsx`.
 - Set `ENABLE_COMBO_PLAYER_DEBUG_LOGS=false` in `packages/shared/src/combo-player.tsx`.
 - Bumped workspace/package versions to `1.0.1` (`package.json`, `apps/*/package.json`, `packages/*/package.json`, `infra/cdk/package.json`) and updated `README.md` release status.
+
+## [2026-04-11] deploy | darenkeck static prod update
+
+- Ran `bun run deploy:darenkeck:prod` from repo root.
+- Built `apps/darenkeck` in production mode and synced to `s3://darenkeck-site-prod`.
+- Created CloudFront invalidation for distribution `EUQDAU6DH3BMC` (id `ID641RJ3EYBUDQ5UTOWHG370Q5`) and verified status `Completed`.
+
+## [2026-04-11] deploy | remove .DS_Store from static site pipeline
+
+- Updated `scripts/deploy-darenkeck-static.sh` to run `aws s3 sync` with `.DS_Store` excludes and to remove existing `.DS_Store` objects from the destination bucket.
+- Redeployed prod via `bun run deploy:darenkeck:prod`; confirmed deletion of stale object (`s3://darenkeck-site-prod/.DS_Store`).
+- Created CloudFront invalidation `I2RWPF93GYBEJAAO3IQT3HFNMY` and verified status `Completed`.
+
+## [2026-04-11] planning | darenkeck mobile playback TODO capture
+
+- Added high-priority follow-ups for mobile focus-loss and native play/pause handling in `wiki/open-issues.md`.
+- Added playback watchlist item for interruption-path state transitions (`visibilitychange`, app switch, screen lock, native media controls).
