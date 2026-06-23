@@ -103,3 +103,13 @@
 
 - Added high-priority follow-ups for mobile focus-loss and native play/pause handling in `wiki/open-issues.md`.
 - Added playback watchlist item for interruption-path state transitions (`visibilitychange`, app switch, screen lock, native media controls).
+
+## [2026-06-22] tooling | opencode branch command
+
+- Added repo-local opencode slash command `/open-branch` in `.opencode/commands/open-branch.md`.
+- Command workflow checks dirty worktree state, derives `<type>/<slug>` branch names, rejects duplicate local/remote branches, and creates the branch with `git switch -c`.
+
+## [2026-06-23] tooling | devflow MCP config
+
+- Added repo-local opencode MCP server config at `.opencode/opencode.json`.
+- Configured `devflow` to run from `/Users/daren/darenkeck-dev/devflow-mcp` via `uv run --directory ... devflow-mcp`.
