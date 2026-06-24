@@ -1,0 +1,29 @@
+{
+  "assets": [
+    {
+      "id": "audio-demo",
+      "type": "audio",
+      "title": "Audio Demo",
+      "source": {
+        "kind": "file",
+        "path": "./media/audio-demo.mp3"
+      }
+    },
+    {
+      "id": "video-demo",
+      "type": "video",
+      "title": "Video Demo",
+      "source": {
+        "kind": "file",
+        "path": "./media/video-demo.m4v"
+      }
+    }
+  ],
+  "combos": [
+    {
+      "id": "combo-demo",
+      "audioId": "audio-demo",
+      "videoId": "video-demo"
+    }
+  ]
+}

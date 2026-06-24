@@ -62,20 +62,51 @@ For V1, derive tone values through:
 
 ## Open Source Model Candidates
 
+No single open model is likely to reliably understand affective tone across music, speech, and video. Use an ensemble and keep the raw model outputs separate so later human feedback can calibrate the final `ToneVector`.
+
 ### Audio
 
 - Essentia music models: best first choice for music tone. Includes mood classifiers and arousal/valence models from DEAM, emoMusic, and MuSe, plus mood labels like happy, sad, aggressive, and relaxed.
 - LAION CLAP: useful for zero-shot prompt scoring against affective text labels, not just semantic labels.
+- MERT: strong modern music representation backbone for downstream tone learning, but not a direct tone model.
+- MuQ, MusicFM, and similar music representation models: useful for learned embeddings more than immediate tone scores.
 - emotion2vec+: useful for speech emotion recognition, especially audio with voice. Less directly applicable to instrumental music.
 - SpeechBrain `emotion-recognition-wav2vec2-IEMOCAP`: simple speech-emotion baseline with known limitations outside speech-like inputs.
+
+Recommended audio stack:
+
+- Essentia for direct music mood, valence, and arousal signals, using explicit embedding model and classifier/regression head artifacts.
+- CLAP for affect prompt similarity, such as `warm nostalgic music` vs `cold threatening music`.
+- MERT later as a learned embedding backbone once there is enough human-labeled combo data.
 
 ### Video
 
 - OpenCLIP: best first choice for visual tone via sampled frames and affective prompt scoring.
+- SigLIP / SigLIP2: often stronger than older CLIP-family models for image-text alignment; should be tested alongside or instead of OpenCLIP.
+- DINOv2: strong visual embedding backbone for clustering/similarity, but not text-aligned and not directly a tone labeler.
 - VideoMAE / TimeSformer: useful video feature extractors, but mostly action/scene-oriented unless fine-tuned.
 - HSEmotion: useful only when visible faces are present; predicts facial emotion.
 - ImageBind: useful for shared image/audio/text embedding experiments, but weights are non-commercial licensed.
 - InternVideo: stronger video foundation model family, but heavier operationally; better as a later option.
+- VLM captioning models such as Qwen2.5-VL, LLaVA, and Video-LLaVA: useful for generating affective scene descriptions that can be mapped into tone vectors.
+
+Recommended video stack:
+
+- SigLIP or OpenCLIP over sampled frames for affective prompt scoring.
+- DINOv2 for visual clustering and similarity checks.
+- A VLM caption pass for descriptions like `what mood or atmosphere does this scene convey?`.
+- InternVideo or VideoMAE later if frame-level scoring misses temporal tone.
+
+### Ensemble Strategy
+
+The app should support multiple model outputs per asset and combo:
+
+- Direct model scores, such as valence/arousal regressors.
+- Prompt-pair similarities, such as warm/cold and safe/threatening.
+- Embedding vectors for later supervised learning.
+- Optional freeform affect captions.
+
+The derived `ToneVector` should be treated as a calibrated aggregate, not as the raw output of any one model.
 
 ## Licensing Requirement
 
@@ -130,7 +161,7 @@ Use append-only JSONL or Parquet for training/export records:
 1. Create a standalone Python app skeleton.
 2. Support local media manifest input.
 3. Implement `ffmpeg` preprocessing.
-4. Add audio tone extraction with Essentia.
+4. Add audio tone extraction with Essentia as an optional adapter, with placeholder fallback when model files are not configured.
 5. Add video tone extraction with OpenCLIP frame prompt scoring.
 6. Compute congruence over shared tone dimensions.
 7. Export JSONL/Parquet training rows.

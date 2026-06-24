@@ -109,7 +109,22 @@
 - Added repo-local opencode slash command `/open-branch` in `.opencode/commands/open-branch.md`.
 - Command workflow checks dirty worktree state, derives `<type>/<slug>` branch names, rejects duplicate local/remote branches, and creates the branch with `git switch -c`.
 
+## [2026-06-23] planning | tone embedding app plan
+
+- Added root-level `TONE_EMBEDDING_APP_PLAN.md` for the proposed standalone tone embedding/training-data app.
+- Moved exploratory tone-based audio/video markdown files into `raw_sources/` as source material.
+
 ## [2026-06-23] tooling | devflow MCP config
 
 - Added repo-local opencode MCP server config at `.opencode/opencode.json`.
 - Configured `devflow` to run from `/Users/daren/darenkeck-dev/devflow-mcp` via `uv run --directory ... devflow-mcp`.
+
+## [2026-06-23] app | tone embedding skeleton
+
+- Added `apps/tone-embedding/` Python app skeleton for manifest validation, executable preprocessing, placeholder tone extraction, congruence scoring, and JSONL training-row export.
+- Added unit and CLI smoke-test coverage for the first implementation slice.
+- Added optional Essentia audio adapter scaffolding for music valence/arousal extraction and expanded model-stack guidance in `TONE_EMBEDDING_APP_PLAN.md`.
+- Added `scripts/setup-essentia-models.sh` to download ignored Essentia model artifacts for local tone extraction tests.
+- Added `scripts/run-essentia-audio-test.sh` and `docs/audio-tone-extraction.md` for Docker-based Essentia test runs and expected output shape.
+- Added dev-only tone-to-words descriptors to exported rows for quick audio/video tone verification.
+- Added a reusable local Essentia Docker smoke-test image to avoid reinstalling `essentia-tensorflow` on every run.
