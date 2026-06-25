@@ -17,15 +17,6 @@
         "kind": "file",
         "path": "./media/audio-demo-01.mp3"
       }
-    },
-    {
-      "id": "video-demo",
-      "type": "video",
-      "title": "Video Demo",
-      "source": {
-        "kind": "file",
-        "path": "./media/video-demo.m4v"
-      }
     }
   ]
 }

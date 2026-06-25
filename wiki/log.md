@@ -128,3 +128,12 @@
 - Added `scripts/run-essentia-audio-test.sh` and `docs/audio-tone-extraction.md` for Docker-based Essentia test runs and expected output shape.
 - Added dev-only tone-to-words descriptors to exported rows for quick audio/video tone verification.
 - Added a reusable local Essentia Docker smoke-test image to avoid reinstalling `essentia-tensorflow` on every run.
+
+## [2026-06-24] tooling | audio test covers two demo files
+
+- Updated `apps/tone-embedding/examples/manifest.example.json` to reference `audio-demo-00.mp3` and `audio-demo-01.mp3` as separate audio assets paired with the sample video.
+- Updated `apps/tone-embedding/scripts/run-essentia-audio-test.sh` to require both audio demos and default host-visible JSONL output to `apps/tone-embedding/tests/output/tone-training-essentia.jsonl`.
+- Git-ignored `apps/tone-embedding/tests/output/` and refreshed the audio extraction docs/readme references.
+- Cached Essentia TensorFlow predictor objects per adapter instance so batch extraction does not reload graph files for each audio asset.
+- Restructured default extraction around per-asset tone rows; combo congruence is deferred to a later combo-evaluation layer.
+- Added root `AUDIO_TONE_MODEL_RUNBOOK.md` explaining Essentia/TensorFlow setup, invocation, audio loading, score normalization, and output shape with code links.

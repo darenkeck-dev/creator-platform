@@ -1,13 +1,14 @@
 # Audio Tone Extraction Test Run
 
-This runbook verifies the Essentia audio adapter using the local sample audio file.
+This runbook verifies the Essentia audio adapter using the local sample audio files.
 
 ## Inputs
 
 Required local files:
 
 ```text
-apps/tone-embedding/examples/media/audio-demo.mp3
+apps/tone-embedding/examples/media/audio-demo-00.mp3
+apps/tone-embedding/examples/media/audio-demo-01.mp3
 apps/tone-embedding/models/msd-musicnn-1.pb
 apps/tone-embedding/models/deam-msd-musicnn-2.pb
 ```
@@ -16,7 +17,7 @@ Set up model files with:
 
 ```bash
 cd apps/tone-embedding
-bash scripts/setup-essentia-models.sh
+./scripts/setup-essentia-models.sh
 ```
 
 ## Docker Test
@@ -24,27 +25,29 @@ bash scripts/setup-essentia-models.sh
 Start Docker Desktop first. Then run from the repo root:
 
 ```bash
-bash apps/tone-embedding/scripts/run-essentia-audio-test.sh
+./apps/tone-embedding/scripts/run-essentia-audio-test.sh
 ```
 
 Optional custom output path:
 
 ```bash
-bash apps/tone-embedding/scripts/run-essentia-audio-test.sh /tmp/my-tone-output.jsonl
+./apps/tone-embedding/scripts/run-essentia-audio-test.sh apps/tone-embedding/tests/output/my-tone-output.jsonl
 ```
 
-On first run, the script builds `tone-embedding-essentia-audio-test:local` from `Dockerfile.essentia-audio-test` with `essentia-tensorflow` preinstalled. Later runs reuse that image, run the extractor, and print the generated JSONL.
+On first run, the script builds `tone-embedding-essentia-audio-test:local` from `Dockerfile.essentia-audio-test` with `essentia-tensorflow` preinstalled. Later runs reuse that image, run the extractor with `examples/audio-manifest.example.json`, write the generated asset-tone JSONL to `apps/tone-embedding/tests/output/asset-tones-essentia.jsonl` by default, and print it. `tests/output/` is git-ignored.
+
+Within one extraction process, the Essentia graph predictors are loaded once and reused across audio assets. Running the script again still starts a new Python process, so a fresh process must load the graphs again.
 
 Force a rebuild after Dockerfile/dependency changes:
 
 ```bash
-REBUILD_ESSENTIA_AUDIO_TEST_IMAGE=1 bash apps/tone-embedding/scripts/run-essentia-audio-test.sh
+REBUILD_ESSENTIA_AUDIO_TEST_IMAGE=1 ./apps/tone-embedding/scripts/run-essentia-audio-test.sh
 ```
 
 Use a custom image tag:
 
 ```bash
-ESSENTIA_AUDIO_TEST_IMAGE=my-essentia-test:local bash apps/tone-embedding/scripts/run-essentia-audio-test.sh
+ESSENTIA_AUDIO_TEST_IMAGE=my-essentia-test:local ./apps/tone-embedding/scripts/run-essentia-audio-test.sh
 ```
 
 ## Direct Command
@@ -54,8 +57,8 @@ Inside an environment where `essentia-tensorflow` is installed:
 ```bash
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=apps/tone-embedding/src \
 python -m tone_embedding extract \
-  apps/tone-embedding/examples/manifest.example.json \
-  --out /tmp/tone-training-essentia.jsonl \
+  apps/tone-embedding/examples/audio-manifest.example.json \
+  --out apps/tone-embedding/tests/output/asset-tones-essentia.jsonl \
   --audio-model essentia \
   --essentia-embedding-model apps/tone-embedding/models/msd-musicnn-1.pb \
   --essentia-valence-arousal-model apps/tone-embedding/models/deam-msd-musicnn-2.pb
@@ -63,48 +66,46 @@ python -m tone_embedding extract \
 
 ## Expected Output Shape
 
-The JSONL file should contain one row for `combo-demo`. The exact numbers depend on the model output, but the important fields are:
+The JSONL file should contain one row per asset. The exact numbers depend on the model output, but the important fields are:
 
 ```json
 {
-  "comboId": "combo-demo",
-  "audioId": "audio-demo",
-  "audioRawScores": {
+  "assetId": "audio-demo-00",
+  "assetType": "audio",
+  "rawScores": {
     "valence": 0.0,
     "arousal": 0.0
   },
-  "audioTone": {
+  "tone": {
     "valence": 0.0,
     "arousal": 0.0,
     "warmth": 0.0,
     "tension": 0.0,
     "menace": 0.0
   },
-  "models": {
-    "audio": {
-      "name": "essentia/music-tone",
-      "version": "adapter-0.1.0",
-      "license": "model-dependent-usually-cc-by-nc-sa-4.0"
-    }
+  "model": {
+    "name": "essentia/music-tone",
+    "version": "adapter-0.1.0",
+    "license": "model-dependent-usually-cc-by-nc-sa-4.0"
   }
 }
 ```
 
-`audioRawScores` stores the direct model output. `audioTone` stores normalized `-1..1` values. The default DEAM head uses `--essentia-output-range deam`, mapping DEAM-style `1..9` values into `-1..1`.
+`rawScores` stores the direct model output. `tone` stores normalized `-1..1` values. The default DEAM head uses `--essentia-output-range deam`, mapping DEAM-style `1..9` values into `-1..1`.
 
 TensorFlow may print CUDA/GPU warnings in the Docker run. They are expected for CPU-only local execution and do not indicate failure if the JSONL is produced.
 
 ## Verified Local Output
 
-The Docker test was run against `examples/media/audio-demo.mp3` and produced:
+The Docker test was run against `examples/media/audio-demo-00.mp3` and produced:
 
 ```json
 {
-  "audioRawScores": {
+  "rawScores": {
     "arousal": 3.79548,
     "valence": 3.92957
   },
-  "audioTone": {
+  "tone": {
     "arousal": -0.30113,
     "beauty": 0.0,
     "dominance": 0.0,
@@ -116,7 +117,7 @@ The Docker test was run against `examples/media/audio-demo.mp3` and produced:
     "valence": -0.267608,
     "warmth": -0.267608
   },
-  "audioToneWords": {
+  "toneWords": {
     "summary": "A subdued, calm, melancholic tone.",
     "primary": ["subdued", "calm", "melancholic"],
     "secondary": ["restrained", "introspective", "cool", "non-threatening"],

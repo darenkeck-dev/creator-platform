@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Protocol
 
 from .manifest import FileSource, MediaAsset
 from .tone import TONE_DIMENSIONS, ToneVector
@@ -71,6 +71,8 @@ class EssentiaAudioToneModel:
         self.embedding_model = embedding_model
         self.valence_arousal_model = valence_arousal_model
         self.output_range = output_range
+        self._embedding_predictor: object | None = None
+        self._valence_arousal_predictor: object | None = None
 
     def extract(self, asset: MediaAsset) -> ToneExtraction:
         if not isinstance(asset.source, FileSource):
@@ -95,16 +97,9 @@ class EssentiaAudioToneModel:
 
         audio = MonoLoader(filename=str(asset.source.path), sampleRate=16000, resampleQuality=4)()
 
-        embedding_model = TensorflowPredictMusiCNN(
-            graphFilename=str(self.embedding_model),
-            output="model/dense/BiasAdd",
-        )
+        embedding_model = self._get_embedding_predictor(TensorflowPredictMusiCNN)
         embeddings = embedding_model(audio)
-        predictions = TensorflowPredict2D(
-            graphFilename=str(self.valence_arousal_model),
-            input="model/Placeholder",
-            output="model/Identity",
-        )(embeddings)
+        predictions = self._get_valence_arousal_predictor(TensorflowPredict2D)(embeddings)
         raw_valence, raw_arousal = read_valence_arousal_values(predictions)
         valence = normalize_model_score(raw_valence, self.output_range)
         arousal = normalize_model_score(raw_arousal, self.output_range)
@@ -119,6 +114,23 @@ class EssentiaAudioToneModel:
             tone=tone,
             raw_scores={"valence": round(raw_valence, 6), "arousal": round(raw_arousal, 6)},
         )
+
+    def _get_embedding_predictor(self, constructor: Callable[..., object]) -> object:
+        if self._embedding_predictor is None:
+            self._embedding_predictor = constructor(
+                graphFilename=str(self.embedding_model),
+                output="model/dense/BiasAdd",
+            )
+        return self._embedding_predictor
+
+    def _get_valence_arousal_predictor(self, constructor: Callable[..., object]) -> object:
+        if self._valence_arousal_predictor is None:
+            self._valence_arousal_predictor = constructor(
+                graphFilename=str(self.valence_arousal_model),
+                input="model/Placeholder",
+                output="model/Identity",
+            )
+        return self._valence_arousal_predictor
 
 
 def deterministic_tone(asset_id: str, salt: str) -> ToneVector:

@@ -66,8 +66,10 @@ def parse_manifest(payload: Any) -> MediaManifest:
 
     if not isinstance(assets_payload, list):
         raise ValueError("manifest.assets must be an array")
+    if combos_payload is None:
+        combos_payload = []
     if not isinstance(combos_payload, list):
-        raise ValueError("manifest.combos must be an array")
+        raise ValueError("manifest.combos must be an array when provided")
 
     return MediaManifest(
         assets=[parse_asset(asset) for asset in assets_payload],

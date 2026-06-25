@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from tone_embedding.export import build_audio_model, build_training_rows
+from tone_embedding.export import build_asset_tone_rows, build_audio_model, build_training_rows
 from tone_embedding.manifest import (
     load_manifest,
     parse_manifest,
@@ -62,6 +62,33 @@ class ManifestTests(unittest.TestCase):
         self.assertIn("valence", rows[0]["audioTone"])
         self.assertIn("summary", rows[0]["audioToneWords"])
         self.assertIsInstance(rows[0]["congruence"], float)
+
+    def test_build_asset_tone_rows(self) -> None:
+        manifest = parse_manifest(valid_payload())
+
+        rows = build_asset_tone_rows(manifest)
+
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["assetId"], "audio-1")
+        self.assertEqual(rows[0]["assetType"], "audio")
+        self.assertEqual(rows[0]["source"]["kind"], "file")
+        self.assertIn("valence", rows[0]["tone"])
+        self.assertIn("summary", rows[0]["toneWords"])
+        self.assertEqual(rows[0]["rawScores"], {})
+        self.assertEqual(rows[0]["model"]["name"], "placeholder/audio-tone")
+        self.assertNotIn("congruence", rows[0])
+        self.assertEqual(rows[1]["assetId"], "video-1")
+        self.assertEqual(rows[1]["assetType"], "video")
+        self.assertEqual(rows[1]["model"]["name"], "placeholder/video-tone")
+
+    def test_parse_manifest_allows_assets_without_combos(self) -> None:
+        payload = valid_payload()
+        del payload["combos"]
+
+        manifest = parse_manifest(payload)
+
+        self.assertEqual(len(manifest.assets), 2)
+        self.assertEqual(manifest.combos, [])
 
     def test_preprocessing_plan_stages_s3_source(self) -> None:
         manifest = parse_manifest(valid_payload())
@@ -172,6 +199,32 @@ class ManifestTests(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "essentia-embedding-model"):
             model.extract(audio_asset)
+
+    def test_essentia_predictors_are_cached_per_model_instance(self) -> None:
+        calls = {"embedding": 0, "valence_arousal": 0}
+
+        class FakeEmbeddingPredictor:
+            def __init__(self, **_: object) -> None:
+                calls["embedding"] += 1
+
+        class FakeValenceArousalPredictor:
+            def __init__(self, **_: object) -> None:
+                calls["valence_arousal"] += 1
+
+        model = EssentiaAudioToneModel(
+            embedding_model=Path("embedding.pb"),
+            valence_arousal_model=Path("valence.pb"),
+        )
+
+        self.assertIs(
+            model._get_embedding_predictor(FakeEmbeddingPredictor),
+            model._get_embedding_predictor(FakeEmbeddingPredictor),
+        )
+        self.assertIs(
+            model._get_valence_arousal_predictor(FakeValenceArousalPredictor),
+            model._get_valence_arousal_predictor(FakeValenceArousalPredictor),
+        )
+        self.assertEqual(calls, {"embedding": 1, "valence_arousal": 1})
 
     def test_parse_valence_arousal_normalizes_unit_output(self) -> None:
         valence, arousal = parse_valence_arousal([[0.75, 0.25]], output_range="unit")

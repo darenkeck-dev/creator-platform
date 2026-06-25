@@ -16,6 +16,35 @@ from .models import (
 from .tone import compute_congruence, tone_to_words
 
 
+def build_asset_tone_rows(
+    manifest: MediaManifest,
+    audio_model: ToneModelAdapter | None = None,
+    video_model: ToneModelAdapter | None = None,
+) -> list[dict[str, Any]]:
+    audio_model = audio_model or PlaceholderAudioToneModel()
+    video_model = video_model or PlaceholderVideoToneModel()
+    created_at = datetime.now(UTC).isoformat()
+    rows: list[dict[str, Any]] = []
+
+    for asset in manifest.assets:
+        model = audio_model if asset.type == "audio" else video_model
+        extraction = model.extract(asset)
+        rows.append(
+            {
+                "assetId": asset.id,
+                "assetType": asset.type,
+                "source": source_to_dict(asset.source),
+                "tone": extraction.tone,
+                "toneWords": tone_to_words(extraction.tone),
+                "rawScores": extraction.raw_scores or {},
+                "model": ModelRun.from_adapter(model).to_dict(),
+                "createdAt": created_at,
+            }
+        )
+
+    return rows
+
+
 def build_training_rows(
     manifest: MediaManifest,
     audio_model: ToneModelAdapter | None = None,

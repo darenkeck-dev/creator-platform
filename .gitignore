@@ -26,3 +26,4 @@ __pycache__/
 
 apps/tone-embedding/examples/media/
 apps/tone-embedding/models/
+apps/tone-embedding/tests/output/

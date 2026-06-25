@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .export import build_audio_model, build_training_rows, write_jsonl
+from .export import build_asset_tone_rows, build_audio_model, write_jsonl
 from .manifest import load_manifest, validate_local_files
 from .preprocessing import build_preprocessing_plan, execute_preprocessing_plan
 
@@ -78,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
             essentia_output_range=args.essentia_output_range,
         )
         try:
-            rows = build_training_rows(manifest, audio_model=audio_model)
+            rows = build_asset_tone_rows(manifest, audio_model=audio_model)
         except RuntimeError as error:
             print(f"error: {error}", file=sys.stderr)
             return 1

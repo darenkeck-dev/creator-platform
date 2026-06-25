@@ -26,6 +26,7 @@
 - Bumped monorepo/package versions from `1.0.0` to `1.0.1` and updated root README release status.
 - Updated `scripts/deploy-darenkeck-static.sh` to exclude and remove `.DS_Store` objects during S3 sync deployments.
 - Added tracked TODOs for mobile focus-loss and native play/pause state-machine handling in `wiki/open-issues.md`.
+- Updated the tone-embedding Essentia audio smoke test to cover `audio-demo-00.mp3` and `audio-demo-01.mp3`, with default host-visible JSONL under ignored `apps/tone-embedding/tests/output/`.
 
 ## Playback evolution summary
 
