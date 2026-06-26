@@ -17,74 +17,86 @@ TONE_DIMENSIONS = (
 )
 
 ToneVector = dict[str, float]
+StructuredToneDescriptor = dict[str, str]
+
+STRENGTH_SCORES = {
+    "none": 0.0,
+    "weak": 0.25,
+    "medium": 0.55,
+    "strong": 0.85,
+    "extreme": 1.0,
+}
+
+DESCRIPTOR_RULES = (
+    ("valence", 0.25, "uplifting", "melancholic"),
+    ("arousal", 0.25, "energetic", "subdued"),
+    ("warmth", 0.25, "warm", "cold"),
+    ("tension", 0.25, "tense", "relaxed"),
+    ("menace", 0.2, "threatening", "safe"),
+    ("instability", 0.25, "unstable", "stable"),
+    ("beauty", 0.25, "beautiful", "harsh"),
+    ("nostalgia", 0.25, "nostalgic", "unsentimental"),
+    ("intimacy", 0.25, "intimate", "distant"),
+    ("dominance", 0.25, "commanding", "delicate"),
+)
+
+AVOID_RULES = {
+    "uplifting": "melancholic",
+    "melancholic": "joyful",
+    "energetic": "subdued",
+    "subdued": "energetic",
+    "warm": "cold",
+    "cold": "warm",
+    "tense": "peaceful",
+    "relaxed": "urgent",
+    "threatening": "safe",
+    "safe": "threatening",
+    "unstable": "orderly",
+    "stable": "chaotic",
+    "beautiful": "harsh",
+    "harsh": "polished",
+    "nostalgic": "clinical",
+    "unsentimental": "nostalgic",
+    "intimate": "impersonal",
+    "distant": "intimate",
+    "commanding": "delicate",
+    "delicate": "dominant",
+}
+
+DESCRIPTOR_TO_SCORE = {
+    positive_word: (dimension, 1.0)
+    for dimension, _, positive_word, _ in DESCRIPTOR_RULES
+} | {
+    negative_word: (dimension, -1.0)
+    for dimension, _, _, negative_word in DESCRIPTOR_RULES
+}
 
 
 def tone_to_words(tone: ToneVector) -> dict[str, list[str] | str]:
-    valence = tone.get("valence", 0.0)
-    arousal = tone.get("arousal", 0.0)
-    tension = tone.get("tension", arousal)
-    warmth = tone.get("warmth", valence)
-    menace = tone.get("menace", 0.0)
-    instability = tone.get("instability", 0.0)
-    beauty = tone.get("beauty", 0.0)
-    nostalgia = tone.get("nostalgia", 0.0)
-    intimacy = tone.get("intimacy", 0.0)
+    descriptors: list[tuple[float, str]] = []
 
-    primary: list[str] = []
-    secondary: list[str] = []
-    avoid: list[str] = []
+    for dimension, threshold, positive_word, negative_word in DESCRIPTOR_RULES:
+        value = tone.get(dimension, 0.0)
+        if abs(value) >= threshold:
+            descriptors.append((abs(value), positive_word if value > 0 else negative_word))
 
-    if valence <= -0.2 and arousal <= -0.2:
-        primary.extend(["subdued", "calm", "melancholic"])
-        secondary.extend(["restrained", "introspective"])
-        avoid.extend(["joyful", "energetic"])
-    elif valence <= -0.2 and arousal >= 0.2:
-        primary.extend(["tense", "uneasy", "urgent"])
-        secondary.extend(["restless", "pressurized"])
-        avoid.extend(["peaceful", "comforting"])
-    elif valence >= 0.2 and arousal >= 0.2:
-        primary.extend(["bright", "energetic", "uplifting"])
-        secondary.extend(["active", "confident"])
-        avoid.extend(["subdued", "melancholic"])
-    elif valence >= 0.2 and arousal <= -0.2:
-        primary.extend(["gentle", "peaceful", "warm"])
-        secondary.extend(["comfortable", "settled"])
-        avoid.extend(["threatening", "chaotic"])
-    else:
-        primary.extend(["neutral", "balanced"])
-        secondary.append("ambiguous")
+    descriptors.sort(key=lambda descriptor: descriptor[0], reverse=True)
+    ranked_words = unique([word for _, word in descriptors])
+    primary = ranked_words[:3]
+    secondary = ranked_words[3:8]
 
-    if warmth <= -0.2:
-        secondary.append("cool")
-    elif warmth >= 0.2:
-        secondary.append("warm")
+    if not primary:
+        primary = ["neutral", "balanced"]
+        secondary = ["ambiguous"]
 
-    if tension >= 0.35:
-        secondary.append("tense")
-    elif tension <= -0.35:
-        secondary.append("low-tension")
-
-    if menace >= 0.25:
-        primary.append("threatening")
-        avoid.append("safe")
-    elif menace <= 0.05:
-        secondary.append("non-threatening")
-
-    if instability >= 0.35:
-        secondary.append("unstable")
-    elif instability <= -0.35:
-        secondary.append("stable")
-
-    if beauty >= 0.35:
-        secondary.append("beautiful")
-    if nostalgia >= 0.35:
-        secondary.append("nostalgic")
-    if intimacy >= 0.35:
-        secondary.append("intimate")
-
-    primary = unique(primary)
-    secondary = unique([word for word in secondary if word not in primary])
-    avoid = unique([word for word in avoid if word not in primary and word not in secondary])
+    avoid = unique(
+        [
+            AVOID_RULES[word]
+            for word in primary + secondary
+            if word in AVOID_RULES
+        ]
+    )
+    avoid = [word for word in avoid if word not in primary and word not in secondary]
 
     return {
         "summary": summarize_descriptors(primary, secondary),
@@ -92,6 +104,32 @@ def tone_to_words(tone: ToneVector) -> dict[str, list[str] | str]:
         "secondary": secondary,
         "avoid": avoid,
     }
+
+
+def structured_descriptors_to_tone(descriptors: list[StructuredToneDescriptor]) -> ToneVector:
+    tone = {dimension: 0.0 for dimension in TONE_DIMENSIONS}
+
+    for descriptor in descriptors:
+        strength = descriptor.get("strength", "none")
+        word = descriptor.get("descriptor", "")
+        expected_dimension = descriptor.get("dimension")
+
+        if strength not in STRENGTH_SCORES:
+            raise ValueError(f"unsupported descriptor strength: {strength}")
+        if word not in DESCRIPTOR_TO_SCORE:
+            raise ValueError(f"unsupported tone descriptor: {word}")
+
+        dimension, sign = DESCRIPTOR_TO_SCORE[word]
+        if expected_dimension is not None and expected_dimension != dimension:
+            raise ValueError(
+                f"descriptor {word} belongs to {dimension}, not {expected_dimension}"
+            )
+
+        score = round(STRENGTH_SCORES[strength] * sign, 6)
+        if abs(score) > abs(tone[dimension]):
+            tone[dimension] = score
+
+    return tone
 
 
 def summarize_descriptors(primary: list[str], secondary: list[str]) -> str:

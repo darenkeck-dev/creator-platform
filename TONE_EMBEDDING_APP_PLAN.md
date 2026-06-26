@@ -83,7 +83,7 @@ Recommended audio stack:
 
 - OpenCLIP: best first choice for visual tone via sampled frames and affective prompt scoring.
 - SigLIP / SigLIP2: often stronger than older CLIP-family models for image-text alignment; should be tested alongside or instead of OpenCLIP.
-- DINOv2: strong visual embedding backbone for clustering/similarity, but not text-aligned and not directly a tone labeler.
+- DINOv2: strong visual embedding backbone for clustering/similarity, but not text-aligned and not directly a tone labeler. Initial adapter added under `apps/tone-embedding`.
 - VideoMAE / TimeSformer: useful video feature extractors, but mostly action/scene-oriented unless fine-tuned.
 - HSEmotion: useful only when visible faces are present; predicts facial emotion.
 - ImageBind: useful for shared image/audio/text embedding experiments, but weights are non-commercial licensed.
@@ -162,9 +162,53 @@ Use append-only JSONL or Parquet for training/export records:
 2. Support local media manifest input.
 3. Implement `ffmpeg` preprocessing.
 4. Add audio tone extraction with Essentia as an optional adapter, with placeholder fallback when model files are not configured.
-5. Add video tone extraction with OpenCLIP frame prompt scoring.
+5. Add video tone extraction and embedding support.
 6. Compute congruence over shared tone dimensions.
 7. Export JSONL/Parquet training rows.
 8. Add a small review UI for correcting tone labels.
 
 This produces useful V1 training data without needing to solve learned combo affect first.
+
+### Step 5 Detail: Video Tone Extraction and Embeddings
+
+Current implementation status:
+
+- Added OpenCLIP frame prompt scoring under `apps/tone-embedding` for interpretable video tone values.
+- Added SigLIP frame prompt scoring under `apps/tone-embedding` as the stronger prompt-pair baseline.
+- Added Qwen-VL scene-tone extraction under `apps/tone-embedding` for caption, tags, rationale, and semantic tone values.
+- Added DINOv2 frame embedding extraction under `apps/tone-embedding` for video clustering/similarity features.
+- Added separate smoke scripts for OpenCLIP, SigLIP, Qwen-VL, and DINOv2.
+- Added a combined video analysis script that runs all video models and merges results by `assetId`.
+- Updated asset output shape to distinguish tone-producing model runs from embedding-producing model runs.
+- Added per-asset `.tonebundle.tar.gz` bundle output containing `manifest.json`, single-row `asset-analysis.jsonl`, and bundle-relative embedding files.
+- DINOv2 embedding references are bundle-relative, such as `embeddings/<assetId>/dinov2.npy`; media workflows own upload/S3 placement.
+- Added extraction parameters to `modelRuns[]` for reproducibility, including OpenCLIP checkpoint/settings, SigLIP checkpoint/settings, Qwen-VL checkpoint/generation settings, DINOv2 checkpoint/settings, frame sampling settings, prompt/prompt-pair versions, and embedding dimensions.
+- Verified shell syntax for the Essentia, OpenCLIP, DINOv2, and combined video scripts; unit tests pass with 25 tests and 1 optional NumPy skip.
+- Verified placeholder single-asset bundle create/inspect/extract preserves `modelRuns[].parameters` and contains exactly one asset row.
+
+Remaining work before Step 5 is considered complete:
+
+1. Validate the combined video bundle output end-to-end.
+    - Run `./apps/tone-embedding/scripts/run-video-analysis-test.sh`.
+    - Inspect the generated `.tonebundle.tar.gz`.
+    - Confirm `asset-analysis.jsonl` contains OpenCLIP, SigLIP, Qwen-VL, and DINOv2 metadata for every video asset.
+    - Confirm `.npy` files are present under `embeddings/<assetId>/dinov2.npy` inside the bundle.
+2. Validate SigLIP and Qwen-VL output quality on representative local videos.
+   - Treat OpenCLIP as a baseline/backstop, not the primary quality bet.
+   - Prefer SigLIP for stable prompt-pair scores and Qwen-VL for scene semantics/rationale.
+   - Record prompt and prompt-pair versions so score changes are auditable.
+3. Update plan/docs to consistently use the asset-analysis/bundle model.
+   - Older planning language still references direct combo/training rows in places.
+   - Asset upload should produce asset analysis bundles; combo/congruence is a later layer.
+4. Add richer bundle inspection/summarization.
+   - `bundle inspect` currently returns bundle manifest metadata.
+   - Add a summary view that reports per-asset tone contributors, embedding kinds, embedding dimensions, and missing expected model runs.
+
+Step 5 acceptance criteria:
+
+- Running the combined video analysis script produces one `.tonebundle.tar.gz` artifact per video asset.
+- Each bundle contains `manifest.json`, single-row `asset-analysis.jsonl`, and that asset's referenced embedding files.
+- JSONL embedding paths are bundle-relative and contain no absolute local/container paths or S3 keys.
+- Each video asset has OpenCLIP, SigLIP, and Qwen-VL tone model runs plus a DINOv2 embedding model run.
+- Model runs record enough parameters to reproduce the extraction. Current support includes OpenCLIP model/pretrained checkpoint/frame sampling/prompt-pair version, SigLIP checkpoint/frame sampling/prompt-pair version, Qwen-VL checkpoint/frame sampling/generation settings/prompt version, and DINOv2 checkpoint/frame sampling/embedding dimension.
+- Unit tests cover bundle creation/inspection/extraction and the analysis output shape.

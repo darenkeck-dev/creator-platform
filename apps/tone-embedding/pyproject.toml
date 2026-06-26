@@ -1,12 +1,13 @@
 [project]
 name = "tone-embedding"
 version = "0.1.0"
-description = "Generate audio/video tone data and combo training rows."
+description = "Generate audio/video tone metadata."
 requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
 essentia = ["essentia-tensorflow"]
+video = ["accelerate", "numpy", "open_clip_torch", "opencv-python-headless", "pillow", "protobuf", "qwen-vl-utils", "sentencepiece", "torch", "torchvision", "transformers"]
 
 [project.scripts]
 tone-embedding = "tone_embedding.cli:main"

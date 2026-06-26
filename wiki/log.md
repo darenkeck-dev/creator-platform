@@ -135,5 +135,26 @@
 - Updated `apps/tone-embedding/scripts/run-essentia-audio-test.sh` to require both audio demos and default host-visible JSONL output to `apps/tone-embedding/tests/output/tone-training-essentia.jsonl`.
 - Git-ignored `apps/tone-embedding/tests/output/` and refreshed the audio extraction docs/readme references.
 - Cached Essentia TensorFlow predictor objects per adapter instance so batch extraction does not reload graph files for each audio asset.
-- Restructured default extraction around per-asset tone rows; combo congruence is deferred to a later combo-evaluation layer.
+- Restructured default extraction around per-asset analysis rows; combo congruence is deferred to a later combo-evaluation layer.
 - Added root `AUDIO_TONE_MODEL_RUNBOOK.md` explaining Essentia/TensorFlow setup, invocation, audio loading, score normalization, and output shape with code links.
+- Added initial OpenCLIP video tone adapter, video-only example manifest, Docker smoke-test script, and video extraction runbook.
+- Updated the OpenCLIP video test manifest/script to process `video-demo-00.m4v` and `video-demo-01.m4v` as separate asset analysis rows.
+- Added initial DINOv2 video embedding adapter, Docker smoke-test script, and runbook for visual embedding extraction.
+- Updated local video Dockerfiles to install CPU-only PyTorch wheels and avoid CUDA package disk exhaustion.
+- Added CPU-only `torchvision` to the DINOv2 test image because `transformers.AutoImageProcessor` requires it.
+- Restructured asset extraction output into asset analysis rows with `modelRuns`, aggregate `tone` only for tone models, and `embeddings` for DINOv2.
+- Added combined video analysis test script that runs OpenCLIP and DINOv2 and merges their outputs into upload-style asset analysis rows.
+- Added tone bundle creation with bundle-relative embedding paths and `bundle create/inspect/extract` CLI commands.
+- Expanded `TONE_EMBEDDING_APP_PLAN.md` Step 5 with remaining video tone/embedding work and acceptance criteria.
+- Updated tone bundle behavior to produce one bundle per asset instead of grouped multi-asset bundles.
+- Added extraction parameters to asset analysis `modelRuns[]` for OpenCLIP, DINOv2, and Essentia model runs.
+- Verified tone embedding script syntax for Essentia/OpenCLIP/DINOv2/combined video scripts and reran unit tests (`25` passed, `1` optional NumPy skip).
+- Verified placeholder single-asset bundle create/inspect/extract preserves `modelRuns[].parameters`.
+- Added SigLIP video prompt-pair scoring and Qwen-VL scene-tone extraction adapters, Docker smoke scripts/images, CLI options, combined pipeline merge support, and docs/plan updates for the stronger video analysis stack.
+- Updated SigLIP scoring to use positive-vs-negative raw logit deltas instead of sigmoid probability deltas, avoiding near-zero score collapse from probability compression.
+- Updated SigLIP scoring again to apply `tanh(delta / 4.0)` soft clamping so extreme logit deltas remain bounded without immediately saturating at `-1` or `1`.
+- Reworked dev-only `tone_to_words()` from quadrant-first labels to ranked descriptor selection across all tone dimensions so strong cold/unstable/menacing/etc. dimensions can drive summaries.
+- Added `apps/tone-embedding/docs/tone-terms.md` to define tone dimensions, descriptors, output groups, thresholds, examples, and caveats for dev-facing tone words.
+- Tuned the Qwen-VL Docker smoke path for local feasibility: default 2B model, 1 sampled frame, 96 generated tokens, automatic dtype/device mapping with possible offload, disabled mkldnn in the Qwen adapter, and a persistent Hugging Face cache under ignored test output.
+- Tightened the Qwen-VL prompt/decoder for JSON-only output, switched generation to deterministic `do_sample=False`, raised the local smoke token budget to 192, and added response previews to non-JSON parse errors.
+- Changed Qwen-VL from JSON score generation to freeform qualitative descriptor output only; added deterministic `structured_descriptors_to_tone()` for the later structured-output model stage.

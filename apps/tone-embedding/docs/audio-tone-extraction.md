@@ -72,26 +72,45 @@ The JSONL file should contain one row per asset. The exact numbers depend on the
 {
   "assetId": "audio-demo-00",
   "assetType": "audio",
-  "rawScores": {
-    "valence": 0.0,
-    "arousal": 0.0
-  },
   "tone": {
-    "valence": 0.0,
-    "arousal": 0.0,
-    "warmth": 0.0,
-    "tension": 0.0,
-    "menace": 0.0
+    "value": {
+      "valence": 0.0,
+      "arousal": 0.0,
+      "warmth": 0.0,
+      "tension": 0.0,
+      "menace": 0.0
+    },
+    "words": {
+      "summary": "A neutral, balanced tone.",
+      "primary": ["neutral", "balanced"],
+      "secondary": ["ambiguous"],
+      "avoid": []
+    },
+    "contributors": ["essentia/music-tone"]
   },
-  "model": {
-    "name": "essentia/music-tone",
-    "version": "adapter-0.1.0",
-    "license": "model-dependent-usually-cc-by-nc-sa-4.0"
-  }
+  "modelRuns": [
+    {
+      "kind": "tone",
+      "rawScores": {
+        "valence": 0.0,
+        "arousal": 0.0
+      },
+      "parameters": {
+        "embeddingModel": "apps/tone-embedding/models/msd-musicnn-1.pb",
+        "valenceArousalModel": "apps/tone-embedding/models/deam-msd-musicnn-2.pb",
+        "outputRange": "deam"
+      },
+      "model": {
+        "name": "essentia/music-tone",
+        "version": "adapter-0.1.0",
+        "license": "model-dependent-usually-cc-by-nc-sa-4.0"
+      }
+    }
+  ]
 }
 ```
 
-`rawScores` stores the direct model output. `tone` stores normalized `-1..1` values. The default DEAM head uses `--essentia-output-range deam`, mapping DEAM-style `1..9` values into `-1..1`.
+The tone-producing model run stores direct model output in `modelRuns[].rawScores`. Top-level `tone.value` stores normalized `-1..1` aggregate values. The default DEAM head uses `--essentia-output-range deam`, mapping DEAM-style `1..9` values into `-1..1`.
 
 TensorFlow may print CUDA/GPU warnings in the Docker run. They are expected for CPU-only local execution and do not indicate failure if the JSONL is produced.
 
@@ -101,28 +120,41 @@ The Docker test was run against `examples/media/audio-demo-00.mp3` and produced:
 
 ```json
 {
-  "rawScores": {
-    "arousal": 3.79548,
-    "valence": 3.92957
-  },
   "tone": {
-    "arousal": -0.30113,
-    "beauty": 0.0,
-    "dominance": 0.0,
-    "instability": 0.0,
-    "intimacy": 0.0,
-    "menace": 0.0,
-    "nostalgia": 0.0,
-    "tension": -0.30113,
-    "valence": -0.267608,
-    "warmth": -0.267608
+    "value": {
+      "arousal": -0.30113,
+      "beauty": 0.0,
+      "dominance": 0.0,
+      "instability": 0.0,
+      "intimacy": 0.0,
+      "menace": 0.0,
+      "nostalgia": 0.0,
+      "tension": -0.30113,
+      "valence": -0.267608,
+      "warmth": -0.267608
+    },
+    "words": {
+      "summary": "A subdued, calm, melancholic tone.",
+      "primary": ["subdued", "calm", "melancholic"],
+      "secondary": ["restrained", "introspective", "cool", "non-threatening"],
+      "avoid": ["joyful", "energetic"]
+    },
+    "contributors": ["essentia/music-tone"]
   },
-  "toneWords": {
-    "summary": "A subdued, calm, melancholic tone.",
-    "primary": ["subdued", "calm", "melancholic"],
-    "secondary": ["restrained", "introspective", "cool", "non-threatening"],
-    "avoid": ["joyful", "energetic"]
-  }
+  "modelRuns": [
+    {
+      "kind": "tone",
+      "rawScores": {
+        "arousal": 3.79548,
+        "valence": 3.92957
+      },
+      "parameters": {
+        "embeddingModel": "apps/tone-embedding/models/msd-musicnn-1.pb",
+        "valenceArousalModel": "apps/tone-embedding/models/deam-msd-musicnn-2.pb",
+        "outputRange": "deam"
+      }
+    }
+  ]
 }
 ```
 

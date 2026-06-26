@@ -49,24 +49,23 @@ Those exact arguments are wired in [`run-essentia-audio-test.sh:70`](apps/tone-e
 
 The CLI accepts `--audio-model essentia`, `--essentia-embedding-model`, `--essentia-valence-arousal-model`, and `--essentia-output-range` in [`cli.py:29`](apps/tone-embedding/src/tone_embedding/cli.py#L29)-[`cli.py:50`](apps/tone-embedding/src/tone_embedding/cli.py#L50).
 
-When `extract` runs, the CLI loads the manifest, builds the audio model adapter with the provided model paths, generates asset tone rows, and writes JSONL in [`cli.py:72`](apps/tone-embedding/src/tone_embedding/cli.py#L72)-[`cli.py:86`](apps/tone-embedding/src/tone_embedding/cli.py#L86).
+When `extract` runs, the CLI loads the manifest, builds the audio model adapter with the provided model paths, generates asset analysis rows, and writes JSONL in [`cli.py:72`](apps/tone-embedding/src/tone_embedding/cli.py#L72)-[`cli.py:86`](apps/tone-embedding/src/tone_embedding/cli.py#L86).
 
 ## Asset Row Generation
 
-Default extraction is asset-first. `build_asset_tone_rows()` loops over each manifest asset and chooses the audio adapter for audio assets in [`export.py:19`](apps/tone-embedding/src/tone_embedding/export.py#L19)-[`export.py:31`](apps/tone-embedding/src/tone_embedding/export.py#L31).
+Default extraction is asset-first. `build_asset_tone_rows()` loops over each manifest asset and chooses the audio adapter for audio assets in [`export.py:21`](apps/tone-embedding/src/tone_embedding/export.py#L21)-[`export.py:33`](apps/tone-embedding/src/tone_embedding/export.py#L33).
 
 Each output row includes:
 
 - `assetId`
 - `assetType`
 - `source`
-- `tone`
-- `toneWords`
-- `rawScores`
-- `model`
+- `tone` for tone-producing model runs
+- `embeddings` for embedding-producing model runs
+- `modelRuns`
 - `createdAt`
 
-Those fields are assembled in [`export.py:32`](apps/tone-embedding/src/tone_embedding/export.py#L32)-[`export.py:42`](apps/tone-embedding/src/tone_embedding/export.py#L42).
+Those fields are assembled in [`export.py:34`](apps/tone-embedding/src/tone_embedding/export.py#L34)-[`export.py:73`](apps/tone-embedding/src/tone_embedding/export.py#L73).
 
 ## Audio Loading
 
@@ -146,28 +145,41 @@ A successful audio extraction row currently looks like this:
     "path": "apps/tone-embedding/examples/media/audio-demo-00.mp3"
   },
   "tone": {
-    "valence": -0.267608,
-    "arousal": -0.30113,
-    "warmth": -0.267608,
-    "tension": -0.30113,
-    "menace": 0.0
+    "value": {
+      "valence": -0.267608,
+      "arousal": -0.30113,
+      "warmth": -0.267608,
+      "tension": -0.30113,
+      "menace": 0.0
+    },
+    "words": {
+      "summary": "A subdued, calm, melancholic tone.",
+      "primary": ["subdued", "calm", "melancholic"],
+      "secondary": ["restrained", "introspective", "cool", "non-threatening"],
+      "avoid": ["joyful", "energetic"]
+    },
+    "contributors": ["essentia/music-tone"]
   },
-  "toneWords": {
-    "summary": "A subdued, calm, melancholic tone.",
-    "primary": ["subdued", "calm", "melancholic"],
-    "secondary": ["restrained", "introspective", "cool", "non-threatening"],
-    "avoid": ["joyful", "energetic"]
-  },
-  "rawScores": {
-    "valence": 3.92957,
-    "arousal": 3.79548
-  },
-  "model": {
-    "name": "essentia/music-tone",
-    "version": "adapter-0.1.0",
-    "license": "model-dependent-usually-cc-by-nc-sa-4.0"
-  }
+  "modelRuns": [
+    {
+      "kind": "tone",
+      "model": {
+        "name": "essentia/music-tone",
+        "version": "adapter-0.1.0",
+        "license": "model-dependent-usually-cc-by-nc-sa-4.0"
+      },
+      "parameters": {
+        "embeddingModel": "apps/tone-embedding/models/msd-musicnn-1.pb",
+        "valenceArousalModel": "apps/tone-embedding/models/deam-msd-musicnn-2.pb",
+        "outputRange": "deam"
+      },
+      "rawScores": {
+        "valence": 3.92957,
+        "arousal": 3.79548
+      }
+    }
+  ]
 }
 ```
 
-Combo congruence is intentionally not produced here. Upload-time extraction creates reusable tone metadata for one asset. Later combo evaluation should reference an audio asset tone row and a video asset tone row, then compute pairing-specific congruence separately.
+Combo congruence is intentionally not produced here. Upload-time extraction creates reusable analysis metadata for one asset. Later combo evaluation should reference an audio asset analysis row and a video asset analysis row, then compute pairing-specific congruence separately.

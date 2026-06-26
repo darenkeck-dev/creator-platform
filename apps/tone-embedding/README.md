@@ -11,8 +11,12 @@ This is the first implementation slice from `TONE_EMBEDDING_APP_PLAN.md`. It int
 - Optionally verify local file sources exist.
 - Build deterministic placeholder tone vectors for audio/video assets.
 - Select an optional Essentia audio adapter for music valence/arousal extraction.
+- Select an optional OpenCLIP video adapter for frame prompt scoring.
+- Select an optional SigLIP video adapter for stronger frame prompt scoring.
+- Select an optional Qwen-VL video adapter for scene caption/mood/tone extraction.
+- Select an optional DINOv2 video adapter for visual embeddings.
 - Add deterministic dev-only tone descriptors for quick output verification.
-- Export append-only JSONL asset tone rows.
+- Export append-only JSONL asset analysis rows.
 - Generate `ffmpeg` preprocessing commands and optionally execute them.
 
 ## Manifest Shape
@@ -30,7 +34,7 @@ This is the first implementation slice from `TONE_EMBEDDING_APP_PLAN.md`. It int
       "id": "video-1",
       "type": "video",
       "title": "Video",
-      "source": { "kind": "file", "path": "./media/video-demo.m4v" }
+      "source": { "kind": "file", "path": "./media/video-demo-00.m4v" }
     }
   ]
 }
@@ -45,6 +49,10 @@ PYTHONPATH=src python -m tone_embedding manifest validate examples/manifest.exam
 PYTHONPATH=src python -m tone_embedding manifest validate examples/manifest.example.json --check-files
 PYTHONPATH=src python -m tone_embedding extract examples/manifest.example.json --out outputs/asset-tones.jsonl
 PYTHONPATH=src python -m tone_embedding extract examples/manifest.example.json --out outputs/asset-tones.jsonl --audio-model essentia --essentia-embedding-model ./models/msd-musicnn-1.pb --essentia-valence-arousal-model ./models/deam-msd-musicnn-2.pb
+PYTHONPATH=src python -m tone_embedding extract examples/video-manifest.example.json --out outputs/video-tones.jsonl --video-model openclip
+PYTHONPATH=src python -m tone_embedding extract examples/video-manifest.example.json --out outputs/video-tones-siglip.jsonl --video-model siglip
+PYTHONPATH=src python -m tone_embedding extract examples/video-manifest.example.json --out outputs/video-tones-qwen-vl.jsonl --video-model qwen-vl
+PYTHONPATH=src python -m tone_embedding extract examples/video-manifest.example.json --out outputs/video-embeddings.jsonl --video-model dinov2 --embedding-out-dir outputs/embeddings/dinov2
 PYTHONPATH=src python -m tone_embedding preprocess examples/manifest.example.json --out-dir outputs/preprocessed
 PYTHONPATH=src python -m tone_embedding preprocess examples/manifest.example.json --out-dir outputs/preprocessed --execute
 ```
@@ -94,13 +102,75 @@ Optional custom output path:
 ./apps/tone-embedding/scripts/run-essentia-audio-test.sh /tmp/my-tone-output.jsonl
 ```
 
+## OpenCLIP Video Adapter
+
+`--video-model openclip` is optional and requires `open_clip_torch`, `torch`, `pillow`, and `opencv-python-headless`. The adapter samples frames from the video file, scores each frame against affective prompt pairs, aggregates the frame scores, and emits a tone model run plus top-level aggregate tone.
+
+For the full Docker-based smoke test, see `docs/video-tone-extraction.md`.
+
+Run it from the repo root:
+
+```bash
+./apps/tone-embedding/scripts/run-openclip-video-test.sh
+```
+
+## SigLIP Video Adapter
+
+`--video-model siglip` uses the same affective prompt pairs as OpenCLIP but scores them with a SigLIP checkpoint. Prompt-pair tone values use positive-vs-negative raw logit deltas with a `tanh(delta / 4.0)` soft clamp, so the adapter preserves SigLIP's native ranking signal instead of subtracting compressed sigmoid probabilities or hard-clamping most extremes. It is intended as the stronger prompt-scoring path for visual affect dimensions while keeping scores interpretable and prompt-versioned.
+
+Run it from the repo root:
+
+```bash
+./apps/tone-embedding/scripts/run-siglip-video-test.sh
+```
+
+## Qwen-VL Video Adapter
+
+`--video-model qwen-vl` samples frames and asks Qwen-VL for qualitative tone descriptors. It does not parse Qwen output into scores. The intended chain is: Qwen freeform descriptor output -> a stronger structured-output text model -> deterministic descriptor-to-score conversion. The CLI default is `Qwen/Qwen2.5-VL-7B-Instruct`; the Docker smoke script defaults to `Qwen/Qwen2-VL-2B-Instruct`, 1 frame, 192 generated tokens, automatic dtype/device mapping, and a persistent Hugging Face cache under `tests/output/huggingface-cache` so local CPU runs are less likely to hang or be killed.
+
+Run it from the repo root:
+
+```bash
+./apps/tone-embedding/scripts/run-qwen-vl-video-test.sh
+```
+
+Use the larger model when you have enough local capacity:
+
+```bash
+QWEN_MODEL=Qwen/Qwen2.5-VL-7B-Instruct QWEN_VIDEO_MAX_FRAMES=6 QWEN_MAX_NEW_TOKENS=512 ./apps/tone-embedding/scripts/run-qwen-vl-video-test.sh
+```
+
+## Full Video Analysis Test
+
+Run every current video analysis model and merge the outputs into one asset analysis row per video. The combined row includes OpenCLIP, SigLIP, Qwen-VL, and DINOv2 model evidence:
+
+```bash
+./apps/tone-embedding/scripts/run-video-analysis-test.sh
+```
+
+This also writes one `.tonebundle.tar.gz` per asset containing `manifest.json`, a single-row `asset-analysis.jsonl`, and bundle-relative embedding files under `embeddings/<assetId>/`. See `docs/video-analysis-pipeline.md`.
+
+## DINOv2 Video Adapter
+
+`--video-model dinov2` is optional and requires `torch`, `torchvision`, `transformers`, `numpy`, `pillow`, and `opencv-python-headless`. The adapter samples frames from the video file, encodes them with DINOv2, writes an averaged `.npy` embedding, and emits an embedding model run for later clustering/similarity/calibration. Embedding references are bundle-relative, such as `embeddings/video-demo-00/dinov2.npy`. It does not emit top-level tone.
+
+For the full Docker-based smoke test, see `docs/dinov2-video-embeddings.md`.
+
+Run it from the repo root:
+
+```bash
+./apps/tone-embedding/scripts/run-dinov2-video-test.sh
+```
+
 ## Tone Words
 
-Exports include `toneWords` for developer verification only. These descriptors are deterministic labels derived from the current tone vector; they are not end-user ratings and should not be treated as ground truth.
+Tone-producing exports include tone words for developer verification only. These descriptors are deterministic labels derived from the current tone vector; they are not end-user ratings and should not be treated as ground truth.
+
+See `docs/tone-terms.md` for dimension and descriptor definitions.
 
 ## Combo Congruence
 
-Combo congruence is intentionally not part of upload-time asset extraction. Asset tone rows should be attached to the individual uploaded asset; later combo evaluation can reference two asset tone results and calculate congruence separately.
+Combo congruence is intentionally not part of upload-time asset extraction. Asset analysis rows should be attached to the individual uploaded asset; later combo evaluation can reference two asset analysis results and calculate congruence separately.
 
 ## Tests
 
