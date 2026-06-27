@@ -96,7 +96,7 @@ def main(argv: list[str] | None = None) -> int:
     extract_parser.add_argument(
         "--qwen-device-map",
         default="auto",
-        help="Transformers device_map for --video-model qwen-vl.",
+        help="Transformers device_map for --video-model qwen-vl. Use 'mps' for native macOS Apple Silicon GPU execution.",
     )
     extract_parser.add_argument(
         "--embedding-out-dir",

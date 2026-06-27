@@ -422,6 +422,22 @@ class ManifestTests(unittest.TestCase):
             },
         )
 
+    def test_build_video_model_selects_qwen_vl_mps_options(self) -> None:
+        model = build_video_model(
+            "qwen-vl",
+            qwen_model="Qwen/Qwen2-VL-2B-Instruct",
+            qwen_max_new_tokens=192,
+            qwen_torch_dtype="float16",
+            qwen_device_map="mps",
+            video_frame_rate=0.1,
+            video_max_frames=1,
+        )
+
+        self.assertIsInstance(model, QwenVLVideoToneModel)
+        self.assertEqual(model.parameters()["qwenModel"], "Qwen/Qwen2-VL-2B-Instruct")
+        self.assertEqual(model.parameters()["torchDtype"], "float16")
+        self.assertEqual(model.parameters()["deviceMap"], "mps")
+
     def test_dinov2_embedding_path_is_bundle_relative(self) -> None:
         try:
             import numpy  # noqa: F401

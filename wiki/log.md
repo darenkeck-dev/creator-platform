@@ -158,3 +158,5 @@
 - Tuned the Qwen-VL Docker smoke path for local feasibility: default 2B model, 1 sampled frame, 96 generated tokens, automatic dtype/device mapping with possible offload, disabled mkldnn in the Qwen adapter, and a persistent Hugging Face cache under ignored test output.
 - Tightened the Qwen-VL prompt/decoder for JSON-only output, switched generation to deterministic `do_sample=False`, raised the local smoke token budget to 192, and added response previews to non-JSON parse errors.
 - Changed Qwen-VL from JSON score generation to freeform qualitative descriptor output only; added deterministic `structured_descriptors_to_tone()` for the later structured-output model stage.
+- Added native macOS MPS support for Qwen-VL via `--qwen-device-map mps` and `scripts/run-qwen-vl-mps-test.sh`, keeping Docker as CPU correctness smoke only.
+- Simplified native Qwen/MPS setup with a `qwen-mps` optional dependency extra and updated the MPS runner to use `uv run --extra qwen-mps`.

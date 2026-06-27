@@ -61,6 +61,21 @@ Relative `file` paths are resolved relative to the manifest file. `--check-files
 
 Local sample media belongs in `examples/media/`. That directory is intentionally ignored so publishable branches do not include media files by default. The Essentia smoke-test manifest expects `audio-demo-00.mp3` and `audio-demo-01.mp3`.
 
+## Dependency Extras
+
+Dependencies are listed in `pyproject.toml` optional extras:
+
+- `qwen-mps`: native macOS Qwen/MPS dependencies for `run-qwen-vl-mps-test.sh`.
+- `video`: full local video stack dependencies for OpenCLIP, SigLIP, Qwen-VL, and DINOv2.
+- `essentia`: Essentia/TensorFlow audio adapter dependency.
+
+Use uv from `apps/tone-embedding/`:
+
+```bash
+uv run --extra qwen-mps python -m tone_embedding --help
+uv run --extra video python -m tone_embedding --help
+```
+
 ## Init Steps
 
 From `apps/tone-embedding/`:
@@ -132,6 +147,20 @@ Run it from the repo root:
 
 ```bash
 ./apps/tone-embedding/scripts/run-qwen-vl-video-test.sh
+```
+
+On Apple Silicon, you can try native macOS MPS instead of Docker CPU. This uses `uv` and the `qwen-mps` optional dependency list in `pyproject.toml`, so no manual virtualenv setup is needed:
+
+```bash
+./apps/tone-embedding/scripts/run-qwen-vl-mps-test.sh
+```
+
+The MPS path runs outside Docker because Linux containers cannot use Apple Metal/MPS acceleration. It loads Qwen with `--qwen-device-map mps` and defaults to `float16`.
+
+Equivalent direct command from `apps/tone-embedding/`:
+
+```bash
+uv run --extra qwen-mps python -m tone_embedding extract examples/video-manifest.example.json --out tests/output/asset-tones-qwen-vl-mps-video.jsonl --video-model qwen-vl --qwen-model Qwen/Qwen2-VL-2B-Instruct --qwen-device-map mps --qwen-torch-dtype float16 --video-max-frames 1 --qwen-max-new-tokens 192
 ```
 
 Use the larger model when you have enough local capacity:

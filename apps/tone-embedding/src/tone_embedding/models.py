@@ -260,6 +260,7 @@ class QwenVLVideoToneModel:
         self._torch: Any | None = None
         self._processor: Any | None = None
         self._model: Any | None = None
+        self._device: str | None = None
 
     def extract(self, asset: MediaAsset) -> ToneExtraction:
         if not isinstance(asset.source, FileSource):
@@ -296,7 +297,9 @@ class QwenVLVideoToneModel:
             padding=True,
             return_tensors="pt",
         )
-        if hasattr(model, "device"):
+        if self._device == "mps":
+            inputs = inputs.to("mps")
+        elif hasattr(model, "device"):
             inputs = inputs.to(model.device)
 
         with torch.no_grad():
@@ -343,6 +346,17 @@ class QwenVLVideoToneModel:
             if self.torch_dtype != "auto":
                 torch_dtype = getattr(torch, self.torch_dtype)
             device_map: Any = self.device_map
+            if self.device_map == "mps":
+                if not torch.backends.mps.is_available():
+                    raise RuntimeError("Qwen-VL requested --qwen-device-map mps, but torch MPS is not available")
+                self._model = qwen_model_class().from_pretrained(
+                    self.model_name,
+                    torch_dtype=torch_dtype,
+                )
+                self._model.to("mps")
+                self._device = "mps"
+                self._model.eval()
+                return self._torch, self._processor, self._model
             if self.device_map == "cpu":
                 device_map = {"": "cpu"}
             self._model = qwen_model_class().from_pretrained(
@@ -350,6 +364,7 @@ class QwenVLVideoToneModel:
                 torch_dtype=torch_dtype,
                 device_map=device_map,
             )
+            self._device = None
             self._model.eval()
 
         return self._torch, self._processor, self._model
