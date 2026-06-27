@@ -185,6 +185,8 @@ Current implementation status:
 - Added extraction parameters to `modelRuns[]` for reproducibility, including OpenCLIP checkpoint/settings, SigLIP checkpoint/settings, Qwen-VL checkpoint/generation settings, DINOv2 checkpoint/settings, frame sampling settings, prompt/prompt-pair versions, and embedding dimensions.
 - Verified shell syntax for the Essentia, OpenCLIP, DINOv2, and combined video scripts; unit tests pass with 25 tests and 1 optional NumPy skip.
 - Verified placeholder single-asset bundle create/inspect/extract preserves `modelRuns[].parameters` and contains exactly one asset row.
+- Added OpenAI audio descriptor generation using the same descriptor-score schema as OpenAI video so audio/video tone vectors can support future combo delta tracking.
+- Added V1 combo analysis that consumes asset analysis rows and computes relationship geometry only: `deltaTone`, `absDeltaTone`, `interactionTone`, descriptive congruence/contrast/intensity, strongest matches/contrasts, and a weighted nearest-neighbor vector. This intentionally avoids quality judgement or learned combo meaning until user evaluation data exists.
 
 Remaining work before Step 5 is considered complete:
 
@@ -203,6 +205,12 @@ Remaining work before Step 5 is considered complete:
 4. Add richer bundle inspection/summarization.
    - `bundle inspect` currently returns bundle manifest metadata.
    - Add a summary view that reports per-asset tone contributors, embedding kinds, embedding dimensions, and missing expected model runs.
+5. Validate OpenAI audio descriptor generation quality.
+    - Review audio output shape against OpenAI video output shape and keep descriptor-score metadata aligned where appropriate.
+    - Confirm the shared descriptor vocabulary produces useful audio/video combo delta tracking signals.
+6. Validate V1 combo analysis on representative OpenAI audio/video outputs.
+   - Confirm delta-heavy nearest-neighbor traversal groups pairings by relationship shape rather than asset/component similarity alone.
+   - Keep `combo-analysis/v1` descriptive; reserve meaning and value judgement for later user-trained layers.
 
 Step 5 acceptance criteria:
 

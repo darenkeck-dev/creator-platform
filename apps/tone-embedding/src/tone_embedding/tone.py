@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from typing import Any
 
 
 TONE_DIMENSIONS = (
@@ -17,7 +18,7 @@ TONE_DIMENSIONS = (
 )
 
 ToneVector = dict[str, float]
-StructuredToneDescriptor = dict[str, str]
+StructuredToneDescriptor = dict[str, Any]
 
 STRENGTH_SCORES = {
     "none": 0.0,
@@ -110,22 +111,31 @@ def structured_descriptors_to_tone(descriptors: list[StructuredToneDescriptor]) 
     tone = {dimension: 0.0 for dimension in TONE_DIMENSIONS}
 
     for descriptor in descriptors:
-        strength = descriptor.get("strength", "none")
+        strength = descriptor.get("strength") or descriptor.get("strengthLabel") or "none"
+        strength_value = descriptor.get("strengthValue")
         word = descriptor.get("descriptor", "")
-        expected_dimension = descriptor.get("dimension")
+        model_dimension = descriptor.get("dimension")
 
-        if strength not in STRENGTH_SCORES:
-            raise ValueError(f"unsupported descriptor strength: {strength}")
+        if strength_value is None:
+            if strength not in STRENGTH_SCORES:
+                raise ValueError(f"unsupported descriptor strength: {strength}")
+            magnitude = STRENGTH_SCORES[strength]
+        else:
+            try:
+                magnitude = float(strength_value)
+            except (TypeError, ValueError) as error:
+                raise ValueError("descriptor strengthValue must be numeric") from error
+            magnitude = max(0.0, min(1.0, magnitude))
+
         if word not in DESCRIPTOR_TO_SCORE:
             raise ValueError(f"unsupported tone descriptor: {word}")
 
         dimension, sign = DESCRIPTOR_TO_SCORE[word]
-        if expected_dimension is not None and expected_dimension != dimension:
-            raise ValueError(
-                f"descriptor {word} belongs to {dimension}, not {expected_dimension}"
-            )
+        if model_dimension is not None:
+            descriptor["mappedDimension"] = dimension
+            descriptor["modelDimension"] = model_dimension
 
-        score = round(STRENGTH_SCORES[strength] * sign, 6)
+        score = round(magnitude * sign, 6)
         if abs(score) > abs(tone[dimension]):
             tone[dimension] = score
 

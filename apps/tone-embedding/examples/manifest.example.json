@@ -27,5 +27,17 @@
         "path": "./media/video-demo.m4v"
       }
     }
+  ],
+  "combos": [
+    {
+      "id": "combo-demo-00",
+      "audioId": "audio-demo-00",
+      "videoId": "video-demo"
+    },
+    {
+      "id": "combo-demo-01",
+      "audioId": "audio-demo-01",
+      "videoId": "video-demo"
+    }
   ]
 }

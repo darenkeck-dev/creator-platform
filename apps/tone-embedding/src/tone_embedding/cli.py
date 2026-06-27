@@ -6,12 +6,14 @@ import sys
 from pathlib import Path
 
 from .bundle import create_bundle, extract_bundle, inspect_bundle
-from .export import build_asset_tone_rows, build_audio_model, build_video_model, write_jsonl
+from .combo import build_combo_analysis_rows
+from .export import build_asset_tone_rows, build_audio_model, build_video_model, read_jsonl, write_jsonl
 from .manifest import load_manifest, validate_local_files
 from .preprocessing import build_preprocessing_plan, execute_preprocessing_plan
 
 
 def main(argv: list[str] | None = None) -> int:
+    load_local_env_files()
     parser = argparse.ArgumentParser(prog="tone-embedding")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -30,13 +32,13 @@ def main(argv: list[str] | None = None) -> int:
     extract_parser.add_argument("--out", type=Path, required=True)
     extract_parser.add_argument(
         "--audio-model",
-        choices=["placeholder", "essentia"],
+        choices=["placeholder", "essentia", "openai"],
         default="placeholder",
         help="Audio tone adapter to use.",
     )
     extract_parser.add_argument(
         "--video-model",
-        choices=["placeholder", "openclip", "siglip", "qwen-vl", "dinov2"],
+        choices=["placeholder", "openclip", "openai", "siglip", "qwen-vl", "dinov2"],
         default="placeholder",
         help="Video tone adapter to use.",
     )
@@ -65,6 +67,27 @@ def main(argv: list[str] | None = None) -> int:
         "--openclip-pretrained",
         default="laion2b_s34b_b79k",
         help="OpenCLIP pretrained checkpoint used by --video-model openclip.",
+    )
+    extract_parser.add_argument(
+        "--openai-model",
+        default="gpt-5",
+        help="OpenAI vision model used by --video-model openai.",
+    )
+    extract_parser.add_argument(
+        "--openai-audio-model",
+        default="gpt-audio",
+        help="OpenAI audio-capable model used by --audio-model openai.",
+    )
+    extract_parser.add_argument(
+        "--openai-api-key-env",
+        default="OPENAI_API_KEY",
+        help="Environment variable containing the OpenAI API key for --video-model openai.",
+    )
+    extract_parser.add_argument(
+        "--openai-image-detail",
+        choices=["low", "high", "auto"],
+        default="low",
+        help="OpenAI image detail setting for sampled frames.",
     )
     extract_parser.add_argument(
         "--dinov2-model",
@@ -137,6 +160,13 @@ def main(argv: list[str] | None = None) -> int:
     bundle_extract_parser.add_argument("bundle", type=Path)
     bundle_extract_parser.add_argument("--out-dir", type=Path, required=True)
 
+    combo_parser = subparsers.add_parser("combo")
+    combo_subparsers = combo_parser.add_subparsers(dest="combo_command", required=True)
+    combo_analyze_parser = combo_subparsers.add_parser("analyze")
+    combo_analyze_parser.add_argument("manifest", type=Path)
+    combo_analyze_parser.add_argument("--analysis", type=Path, required=True)
+    combo_analyze_parser.add_argument("--out", type=Path, required=True)
+
     args = parser.parse_args(argv)
 
     if args.command == "manifest" and args.manifest_command == "validate":
@@ -155,11 +185,16 @@ def main(argv: list[str] | None = None) -> int:
             essentia_embedding_model=args.essentia_embedding_model,
             essentia_valence_arousal_model=args.essentia_valence_arousal_model,
             essentia_output_range=args.essentia_output_range,
+            openai_audio_model=args.openai_audio_model,
+            openai_api_key_env=args.openai_api_key_env,
         )
         video_model = build_video_model(
             args.video_model,
             openclip_model=args.openclip_model,
             openclip_pretrained=args.openclip_pretrained,
+            openai_model=args.openai_model,
+            openai_api_key_env=args.openai_api_key_env,
+            openai_image_detail=args.openai_image_detail,
             siglip_model=args.siglip_model,
             qwen_model=args.qwen_model,
             qwen_max_new_tokens=args.qwen_max_new_tokens,
@@ -212,7 +247,36 @@ def main(argv: list[str] | None = None) -> int:
         print(f"extracted bundle to {args.out_dir}")
         return 0
 
+    if args.command == "combo" and args.combo_command == "analyze":
+        manifest = load_manifest(args.manifest)
+        try:
+            rows = build_combo_analysis_rows(manifest, read_jsonl(args.analysis))
+        except RuntimeError as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 1
+        write_jsonl(args.out, rows)
+        print(f"wrote {len(rows)} combo analysis rows to {args.out}")
+        return 0
+
     parser.error("unsupported command")
+
+
+def load_local_env_files() -> None:
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+
+    app_dir = Path(__file__).resolve().parents[2]
+    cwd = Path.cwd()
+    for env_path in (
+        app_dir / ".env",
+        app_dir / ".env.local",
+        cwd / ".env",
+        cwd / ".env.local",
+    ):
+        if env_path.exists():
+            load_dotenv(env_path, override=False)
 
 
 if __name__ == "__main__":

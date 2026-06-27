@@ -160,3 +160,14 @@
 - Changed Qwen-VL from JSON score generation to freeform qualitative descriptor output only; added deterministic `structured_descriptors_to_tone()` for the later structured-output model stage.
 - Added native macOS MPS support for Qwen-VL via `--qwen-device-map mps` and `scripts/run-qwen-vl-mps-test.sh`, keeping Docker as CPU correctness smoke only.
 - Simplified native Qwen/MPS setup with a `qwen-mps` optional dependency extra and updated the MPS runner to use `uv run --extra qwen-mps`.
+- Added an OpenAI video tone adapter that requests structured descriptor scores, maps them into tone vectors deterministically, and keeps the provider isolated behind `--video-model openai` plus an `openai` optional dependency extra.
+- Added `python-dotenv` to OpenAI/video extras, automatic `.env`/`.env.local` loading in the tone CLI, and `apps/tone-embedding/.env.example` for local OpenAI API key setup.
+- Updated the OpenAI video tone adapter default model to `gpt-5`.
+- Updated descriptor-score conversion so canonical dimensions are derived from descriptor words; provider-supplied dimensions are advisory metadata to tolerate OpenAI/Gemini variance.
+- Added a tone-plan follow-up for OpenAI audio descriptor generation, including audio/video output-shape alignment and future combo delta tracking support.
+- Implemented OpenAI audio descriptor generation with the shared `tone-descriptor-scores/v1` schema and deterministic descriptor-to-tone mapping.
+- Updated OpenAI audio extraction to default to `gpt-audio` and use prompt-enforced JSON because `gpt-audio` accepts audio through Chat Completions but does not support strict structured outputs.
+- Updated the OpenAI audio request to include the documented Chat Completions audio fields (`modalities`, `audio`, and `input_audio`) so `gpt-audio` receives the attached file.
+- Updated OpenAI audio response parsing to read JSON from `message.audio.transcript` when `message.content` is empty.
+- Added initial V1 combo analysis over existing asset analysis rows, computing audio/video `deltaTone`, `absDeltaTone`, `interactionTone`, descriptive congruence/contrast/intensity, strongest matches/contrasts, and a delta-heavy nearest-neighbor vector without producing combo quality or meaning judgements.
+- Added `apps/tone-embedding/docs/combo-scoring-system.md` documenting the V1 combo-analysis shape, scoring definitions, nearest-neighbor vector layout, and future V2 user-input/training path.

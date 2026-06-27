@@ -6,6 +6,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from tone_embedding.bundle import create_bundle, extract_bundle, inspect_bundle
+from tone_embedding.combo import (
+    build_combo_analysis_rows,
+    combo_nearest_neighbor_vector,
+    compute_combo_features,
+)
 from tone_embedding.export import (
     build_asset_tone_rows,
     build_audio_model,
@@ -20,15 +25,19 @@ from tone_embedding.manifest import (
 )
 from tone_embedding.models import (
     DinoV2VideoEmbeddingModel,
+    OpenAIVideoToneModel,
     OpenClipVideoToneModel,
     QwenVLVideoToneModel,
     SiglipVideoToneModel,
     aggregate_video_prompt_scores,
     dino_embedding_stats,
+    openai_audio_response_text,
+    openai_tone_descriptor_schema,
     parse_qwen_scene_tone_response,
     parse_valence_arousal,
     score_siglip_prompt_pairs,
     EssentiaAudioToneModel,
+    OpenAIAudioToneModel,
     ToneExtraction,
     tone_from_vlm_payload,
 )
@@ -82,6 +91,98 @@ class ManifestTests(unittest.TestCase):
         self.assertIn("valence", rows[0]["audioTone"])
         self.assertIn("summary", rows[0]["audioToneWords"])
         self.assertIsInstance(rows[0]["congruence"], float)
+
+    def test_compute_combo_features_keeps_relationship_geometry(self) -> None:
+        audio_tone = {
+            "valence": -0.5,
+            "arousal": 0.2,
+            "dominance": 0.0,
+            "warmth": 0.8,
+            "tension": -0.4,
+            "intimacy": 0.6,
+            "instability": 0.0,
+            "nostalgia": 0.7,
+            "beauty": 0.2,
+            "menace": 0.0,
+        }
+        video_tone = {
+            "valence": 0.3,
+            "arousal": 0.1,
+            "dominance": 0.0,
+            "warmth": 0.4,
+            "tension": -0.2,
+            "intimacy": 0.5,
+            "instability": 0.6,
+            "nostalgia": 0.1,
+            "beauty": 0.9,
+            "menace": 0.0,
+        }
+
+        features = compute_combo_features(audio_tone, video_tone)
+
+        self.assertEqual(features["deltaTone"]["valence"], 0.8)
+        self.assertEqual(features["absDeltaTone"]["valence"], 0.8)
+        self.assertEqual(features["interactionTone"]["warmth"], 0.32)
+        self.assertIn("intimacy", features["strongestMatches"])
+        self.assertEqual(features["strongestContrasts"][:3], ["valence", "beauty", "nostalgia"])
+        self.assertIsInstance(features["congruence"], float)
+        self.assertNotIn("fitScore", features)
+
+    def test_combo_nearest_neighbor_vector_is_delta_heavy(self) -> None:
+        features = compute_combo_features(
+            {dimension: 0.0 for dimension in (
+                "valence",
+                "arousal",
+                "dominance",
+                "warmth",
+                "tension",
+                "intimacy",
+                "instability",
+                "nostalgia",
+                "beauty",
+                "menace",
+            )},
+            {"valence": 1.0},
+        )
+
+        vector = combo_nearest_neighbor_vector(features)
+
+        self.assertEqual(len(vector), 50)
+        self.assertEqual(vector[0], 0.0)
+        self.assertEqual(vector[10], 0.15)
+        self.assertEqual(vector[20], 0.35)
+        self.assertEqual(vector[30], 0.25)
+        self.assertEqual(vector[40], 0.0)
+
+    def test_build_combo_analysis_rows_from_asset_analysis(self) -> None:
+        manifest = parse_manifest(valid_payload())
+        asset_rows = [
+            {
+                "assetId": "audio-1",
+                "tone": {
+                    "value": {"valence": -0.5, "warmth": 0.4},
+                    "contributors": ["test/audio"],
+                },
+                "modelRuns": [{"kind": "tone"}],
+            },
+            {
+                "assetId": "video-1",
+                "tone": {
+                    "value": {"valence": 0.5, "warmth": 0.2},
+                    "contributors": ["test/video"],
+                },
+                "modelRuns": [{"kind": "tone"}],
+            },
+        ]
+
+        rows = build_combo_analysis_rows(manifest, asset_rows)
+
+        self.assertEqual(rows[0]["schemaVersion"], "combo-analysis/v1")
+        self.assertEqual(rows[0]["comboId"], "combo-1")
+        self.assertEqual(rows[0]["features"]["deltaTone"]["valence"], 1.0)
+        self.assertEqual(rows[0]["sourceAnalyses"]["audio"]["contributors"], ["test/audio"])
+        self.assertEqual(rows[0]["vectorLayout"]["blocks"][2]["name"], "deltaTone")
+        self.assertNotIn("fitScore", rows[0])
 
     def test_build_asset_tone_rows(self) -> None:
         manifest = parse_manifest(valid_payload())
@@ -329,6 +430,25 @@ class ManifestTests(unittest.TestCase):
             },
         )
 
+    def test_build_audio_model_selects_openai(self) -> None:
+        model = build_audio_model(
+            "openai",
+            openai_audio_model="gpt-audio",
+            openai_api_key_env="TEST_OPENAI_API_KEY",
+        )
+
+        self.assertIsInstance(model, OpenAIAudioToneModel)
+        self.assertEqual(
+            model.parameters(),
+            {
+                "openaiModel": "gpt-audio",
+                "apiKeyEnv": "TEST_OPENAI_API_KEY",
+                "modalities": ["text", "audio"],
+                "audioOutputFormat": "wav",
+                "schemaVersion": "tone-descriptor-scores/v1",
+            },
+        )
+
     def test_build_video_model_selects_openclip(self) -> None:
         model = build_video_model(
             "openclip",
@@ -349,6 +469,29 @@ class ManifestTests(unittest.TestCase):
                 "frameRate": 0.5,
                 "maxFrames": 4,
                 "promptPairVersion": "video-affect-v1",
+            },
+        )
+
+    def test_build_video_model_selects_openai(self) -> None:
+        model = build_video_model(
+            "openai",
+            openai_model="gpt-5",
+            openai_api_key_env="TEST_OPENAI_API_KEY",
+            openai_image_detail="low",
+            video_frame_rate=1.0,
+            video_max_frames=10,
+        )
+
+        self.assertIsInstance(model, OpenAIVideoToneModel)
+        self.assertEqual(
+            model.parameters(),
+            {
+                "openaiModel": "gpt-5",
+                "apiKeyEnv": "TEST_OPENAI_API_KEY",
+                "frameRate": 1.0,
+                "maxFrames": 10,
+                "imageDetail": "low",
+                "schemaVersion": "tone-descriptor-scores/v1",
             },
         )
 
@@ -602,6 +745,16 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(valence, 0.5)
         self.assertEqual(arousal, -0.5)
 
+    def test_openai_audio_response_text_reads_audio_transcript(self) -> None:
+        class FakeAudio:
+            transcript = '{"descriptorScores": []}'
+
+        class FakeMessage:
+            content = None
+            audio = FakeAudio()
+
+        self.assertEqual(openai_audio_response_text(FakeMessage()), '{"descriptorScores": []}')
+
     def test_aggregate_video_prompt_scores_builds_tone_and_raw_stats(self) -> None:
         tone, raw_scores = aggregate_video_prompt_scores(
             [
@@ -775,11 +928,36 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(tone["menace"], 0.25)
         self.assertEqual(tone["valence"], 1.0)
 
-    def test_structured_descriptors_to_tone_rejects_dimension_mismatch(self) -> None:
-        with self.assertRaisesRegex(ValueError, "belongs to warmth"):
-            structured_descriptors_to_tone(
-                [{"strength": "strong", "dimension": "valence", "descriptor": "cold"}]
-            )
+    def test_structured_descriptors_to_tone_prefers_strength_value(self) -> None:
+        tone = structured_descriptors_to_tone(
+            [
+                {
+                    "strengthLabel": "weak",
+                    "strengthValue": 0.72,
+                    "dimension": "warmth",
+                    "descriptor": "cold",
+                }
+            ]
+        )
+
+        self.assertEqual(tone["warmth"], -0.72)
+
+    def test_openai_tone_descriptor_schema_uses_descriptor_scores(self) -> None:
+        schema = openai_tone_descriptor_schema()
+
+        self.assertEqual(schema["name"], "tone_descriptor_scores")
+        self.assertTrue(schema["strict"])
+        self.assertIn("descriptorScores", schema["schema"]["properties"])
+
+    def test_structured_descriptors_to_tone_derives_dimension_from_descriptor(self) -> None:
+        descriptors = [{"strength": "strong", "dimension": "valence", "descriptor": "cold"}]
+
+        tone = structured_descriptors_to_tone(descriptors)
+
+        self.assertEqual(tone["warmth"], -0.85)
+        self.assertEqual(tone["valence"], 0.0)
+        self.assertEqual(descriptors[0]["mappedDimension"], "warmth")
+        self.assertEqual(descriptors[0]["modelDimension"], "valence")
 
 
 if __name__ == "__main__":

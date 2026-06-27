@@ -10,6 +10,8 @@ from .models import (
     EssentiaAudioToneModel,
     DinoV2VideoEmbeddingModel,
     ModelRun,
+    OpenAIAudioToneModel,
+    OpenAIVideoToneModel,
     OpenClipVideoToneModel,
     PlaceholderAudioToneModel,
     PlaceholderVideoToneModel,
@@ -166,6 +168,8 @@ def build_audio_model(
     essentia_embedding_model: Path | None = None,
     essentia_valence_arousal_model: Path | None = None,
     essentia_output_range: str = "unit",
+    openai_audio_model: str = "gpt-audio",
+    openai_api_key_env: str = "OPENAI_API_KEY",
 ) -> ToneModelAdapter:
     if model_name == "placeholder":
         return PlaceholderAudioToneModel()
@@ -175,6 +179,11 @@ def build_audio_model(
             valence_arousal_model=essentia_valence_arousal_model,
             output_range=essentia_output_range,
         )
+    if model_name == "openai":
+        return OpenAIAudioToneModel(
+            model_name=openai_audio_model,
+            api_key_env=openai_api_key_env,
+        )
 
     raise ValueError(f"unsupported audio model {model_name}")
 
@@ -183,6 +192,9 @@ def build_video_model(
     model_name: str,
     openclip_model: str = "ViT-B-32",
     openclip_pretrained: str = "laion2b_s34b_b79k",
+    openai_model: str = "gpt-5",
+    openai_api_key_env: str = "OPENAI_API_KEY",
+    openai_image_detail: str = "low",
     siglip_model: str = "google/siglip-base-patch16-224",
     qwen_model: str = "Qwen/Qwen2.5-VL-7B-Instruct",
     qwen_max_new_tokens: int = 512,
@@ -201,6 +213,14 @@ def build_video_model(
             pretrained=openclip_pretrained,
             frame_rate=video_frame_rate,
             max_frames=video_max_frames,
+        )
+    if model_name == "openai":
+        return OpenAIVideoToneModel(
+            model_name=openai_model,
+            api_key_env=openai_api_key_env,
+            frame_rate=video_frame_rate,
+            max_frames=video_max_frames,
+            image_detail=openai_image_detail,
         )
     if model_name == "siglip":
         return SiglipVideoToneModel(
@@ -233,3 +253,17 @@ def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8") as file:
         for row in rows:
             file.write(json.dumps(row, sort_keys=True) + "\n")
+
+
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as file:
+        for line_number, line in enumerate(file, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            row = json.loads(stripped)
+            if not isinstance(row, dict):
+                raise RuntimeError(f"JSONL row {line_number} in {path} must be an object")
+            rows.append(row)
+    return rows

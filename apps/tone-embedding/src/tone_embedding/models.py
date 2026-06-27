@@ -3,12 +3,15 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
+from base64 import b64encode
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Callable, Literal, Protocol
 
 from .manifest import FileSource, MediaAsset
-from .tone import TONE_DIMENSIONS, ToneVector
+from .tone import DESCRIPTOR_TO_SCORE, STRENGTH_SCORES, TONE_DIMENSIONS, ToneVector, structured_descriptors_to_tone
 
 
 @dataclass(frozen=True)
@@ -52,6 +55,83 @@ class PlaceholderAudioToneModel:
         return ToneExtraction(tone=deterministic_tone(asset.id, "audio"))
 
 
+class OpenAIAudioToneModel:
+    name = "openai/audio-tone-descriptors"
+    version = "adapter-0.1.0"
+    license = "provider-api"
+
+    def __init__(
+        self,
+        model_name: str = "gpt-audio",
+        api_key_env: str = "OPENAI_API_KEY",
+    ) -> None:
+        self.model_name = model_name
+        self.api_key_env = api_key_env
+
+    def extract(self, asset: MediaAsset) -> ToneExtraction:
+        if not isinstance(asset.source, FileSource):
+            raise RuntimeError("OpenAI audio extraction currently requires a local file source")
+        if not asset.source.path.exists():
+            raise RuntimeError(f"audio file not found: {asset.source.path}")
+        if not os.environ.get(self.api_key_env):
+            raise RuntimeError(f"OpenAI audio extraction requires {self.api_key_env}")
+
+        try:
+            from openai import OpenAI
+        except ImportError as error:
+            raise RuntimeError("OpenAI audio extraction requires the openai package") from error
+
+        client = OpenAI(api_key=os.environ[self.api_key_env])
+        response = client.chat.completions.create(
+            model=self.model_name,
+            modalities=["text", "audio"],
+            audio={"voice": "alloy", "format": "wav"},
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": openai_audio_tone_descriptor_prompt()},
+                        {
+                            "type": "input_audio",
+                            "input_audio": {
+                                "data": audio_to_base64(asset.source.path),
+                                "format": audio_format(asset.source.path),
+                            },
+                        },
+                    ],
+                }
+            ],
+        )
+        content = openai_audio_response_text(response.choices[0].message)
+        if not content:
+            raise RuntimeError("OpenAI returned an empty audio tone descriptor response")
+
+        payload = parse_json_object_response(content, "OpenAI audio")
+        descriptor_scores = payload.get("descriptorScores", [])
+        if not isinstance(descriptor_scores, list):
+            raise RuntimeError("OpenAI descriptorScores must be a list")
+
+        tone = structured_descriptors_to_tone(descriptor_scores)
+        raw_scores = {dimension: tone[dimension] for dimension in TONE_DIMENSIONS}
+        metadata = {
+            "caption": payload.get("caption"),
+            "tags": payload.get("tags", []),
+            "descriptorScores": descriptor_scores,
+            "rationale": payload.get("rationale"),
+            "targetStructuredSchema": "tone-descriptor-scores/v1",
+        }
+        return ToneExtraction(tone=tone, raw_scores=raw_scores, metadata=metadata)
+
+    def parameters(self) -> dict[str, Any]:
+        return {
+            "openaiModel": self.model_name,
+            "apiKeyEnv": self.api_key_env,
+            "modalities": ["text", "audio"],
+            "audioOutputFormat": "wav",
+            "schemaVersion": "tone-descriptor-scores/v1",
+        }
+
+
 class PlaceholderVideoToneModel:
     name = "placeholder/video-tone"
     version = "0.1.0"
@@ -59,6 +139,99 @@ class PlaceholderVideoToneModel:
 
     def extract(self, asset: MediaAsset) -> ToneExtraction:
         return ToneExtraction(tone=deterministic_tone(asset.id, "video"))
+
+
+class OpenAIVideoToneModel:
+    name = "openai/video-tone-descriptors"
+    version = "adapter-0.1.0"
+    license = "provider-api"
+
+    def __init__(
+        self,
+        model_name: str = "gpt-5",
+        api_key_env: str = "OPENAI_API_KEY",
+        frame_rate: float = 1.0,
+        max_frames: int = 24,
+        image_detail: str = "low",
+    ) -> None:
+        self.model_name = model_name
+        self.api_key_env = api_key_env
+        self.frame_rate = frame_rate
+        self.max_frames = max_frames
+        self.image_detail = image_detail
+
+    def extract(self, asset: MediaAsset) -> ToneExtraction:
+        if not isinstance(asset.source, FileSource):
+            raise RuntimeError("OpenAI video extraction currently requires a local file source")
+        if not asset.source.path.exists():
+            raise RuntimeError(f"video file not found: {asset.source.path}")
+        if not os.environ.get(self.api_key_env):
+            raise RuntimeError(f"OpenAI video extraction requires {self.api_key_env}")
+
+        frames = sample_video_frames(asset.source.path, self.frame_rate, self.max_frames)
+        if not frames:
+            raise RuntimeError(f"no video frames sampled from {asset.source.path}")
+
+        try:
+            from openai import OpenAI
+        except ImportError as error:
+            raise RuntimeError("OpenAI video extraction requires the openai package") from error
+
+        client = OpenAI(api_key=os.environ[self.api_key_env])
+        response = client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": openai_tone_descriptor_prompt()},
+                        *(
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": image_to_data_url(frame),
+                                    "detail": self.image_detail,
+                                },
+                            }
+                            for frame in frames
+                        ),
+                    ],
+                }
+            ],
+            response_format={
+                "type": "json_schema",
+                "json_schema": openai_tone_descriptor_schema(),
+            },
+        )
+        content = response.choices[0].message.content
+        if not content:
+            raise RuntimeError("OpenAI returned an empty tone descriptor response")
+
+        payload = json.loads(content)
+        descriptor_scores = payload.get("descriptorScores", [])
+        if not isinstance(descriptor_scores, list):
+            raise RuntimeError("OpenAI descriptorScores must be a list")
+
+        tone = structured_descriptors_to_tone(descriptor_scores)
+        raw_scores = {dimension: tone[dimension] for dimension in TONE_DIMENSIONS}
+        metadata = {
+            "caption": payload.get("caption"),
+            "tags": payload.get("tags", []),
+            "descriptorScores": descriptor_scores,
+            "rationale": payload.get("rationale"),
+            "targetStructuredSchema": "tone-descriptor-scores/v1",
+        }
+        return ToneExtraction(tone=tone, raw_scores=raw_scores, metadata=metadata)
+
+    def parameters(self) -> dict[str, Any]:
+        return {
+            "openaiModel": self.model_name,
+            "apiKeyEnv": self.api_key_env,
+            "frameRate": self.frame_rate,
+            "maxFrames": self.max_frames,
+            "imageDetail": self.image_detail,
+            "schemaVersion": "tone-descriptor-scores/v1",
+        }
 
 
 VIDEO_PROMPT_PAIRS = (
@@ -554,6 +727,16 @@ def zero_tone() -> ToneVector:
     return {dimension: 0.0 for dimension in TONE_DIMENSIONS}
 
 
+def openai_audio_response_text(message: Any) -> str | None:
+    content = getattr(message, "content", None)
+    if content:
+        return content
+    audio = getattr(message, "audio", None)
+    if audio is None:
+        return None
+    return getattr(audio, "transcript", None)
+
+
 def parse_valence_arousal(predictions: object, output_range: str = "unit") -> tuple[float, float]:
     valence, arousal = read_valence_arousal_values(predictions)
     return normalize_model_score(valence, output_range), normalize_model_score(arousal, output_range)
@@ -703,7 +886,112 @@ def qwen_scene_tone_prompt() -> str:
     )
 
 
+def openai_tone_descriptor_prompt() -> str:
+    descriptors = ", ".join(sorted(DESCRIPTOR_TO_SCORE))
+    strengths = ", ".join(STRENGTH_SCORES)
+    dimensions = ", ".join(TONE_DIMENSIONS)
+    return (
+        "Analyze these sampled video frames for visual tone matching. "
+        "Score only visible evidence; do not infer audio. "
+        "Return descriptorScores using the controlled descriptor vocabulary. "
+        f"Allowed descriptors: {descriptors}. "
+        f"Allowed dimensions: {dimensions}. "
+        f"Allowed strengthLabel values: {strengths}. "
+        "strengthValue is a 0.0 to 1.0 amplitude where 0 means absent and 1 means extreme. "
+        "Use 3 to 7 descriptors. Prefer descriptors a user could select in a rating UI."
+    )
+
+
+def openai_audio_tone_descriptor_prompt() -> str:
+    descriptors = ", ".join(sorted(DESCRIPTOR_TO_SCORE))
+    strengths = ", ".join(STRENGTH_SCORES)
+    dimensions = ", ".join(TONE_DIMENSIONS)
+    return (
+        "Analyze this audio for music/video pairing tone. "
+        "Return exactly one compact JSON object. Do not use markdown. "
+        "Score only audible evidence such as tempo, rhythm, dynamics, timbre, harmony, vocals, and production texture. "
+        "Use this schema: {\"caption\":string,\"tags\":[string],\"descriptorScores\":[{\"descriptor\":string,\"dimension\":string,\"strengthLabel\":string,\"strengthValue\":number,\"confidence\":number,\"evidence\":string}],\"rationale\":string}. "
+        "Return descriptorScores using the controlled descriptor vocabulary. "
+        f"Allowed descriptors: {descriptors}. "
+        f"Allowed dimensions: {dimensions}. "
+        f"Allowed strengthLabel values: {strengths}. "
+        "strengthValue is a 0.0 to 1.0 amplitude where 0 means absent and 1 means extreme. "
+        "Use 3 to 7 descriptors. Prefer descriptors a user could select in a rating UI."
+    )
+
+
+def openai_tone_descriptor_schema() -> dict[str, Any]:
+    descriptors = sorted(DESCRIPTOR_TO_SCORE)
+    return {
+        "name": "tone_descriptor_scores",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "caption": {"type": "string"},
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 8,
+                },
+                "descriptorScores": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 7,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "descriptor": {"type": "string", "enum": descriptors},
+                            "dimension": {"type": "string", "enum": list(TONE_DIMENSIONS)},
+                            "strengthLabel": {"type": "string", "enum": list(STRENGTH_SCORES)},
+                            "strengthValue": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                            "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                            "evidence": {"type": "string"},
+                        },
+                        "required": [
+                            "descriptor",
+                            "dimension",
+                            "strengthLabel",
+                            "strengthValue",
+                            "confidence",
+                            "evidence",
+                        ],
+                    },
+                },
+                "rationale": {"type": "string"},
+            },
+            "required": ["caption", "tags", "descriptorScores", "rationale"],
+        },
+    }
+
+
+def image_to_data_url(image: Any) -> str:
+    buffer = BytesIO()
+    image.save(buffer, format="JPEG", quality=85)
+    encoded = b64encode(buffer.getvalue()).decode("ascii")
+    return f"data:image/jpeg;base64,{encoded}"
+
+
+def audio_to_base64(path: Path) -> str:
+    return b64encode(path.read_bytes()).decode("ascii")
+
+
+def audio_format(path: Path) -> str:
+    suffix = path.suffix.lower().lstrip(".")
+    if suffix in {"mp3", "wav"}:
+        return suffix
+    if suffix in {"m4a", "mp4", "aac"}:
+        return "mp3"
+    raise RuntimeError(f"unsupported OpenAI audio input format: {path.suffix}")
+
+
 def parse_qwen_scene_tone_response(response: str) -> dict[str, Any]:
+    return parse_json_object_response(response, "Qwen-VL")
+
+
+def parse_json_object_response(response: str, label: str) -> dict[str, Any]:
     text = response.strip()
     if text.startswith("```"):
         lines = text.splitlines()
@@ -720,11 +1008,11 @@ def parse_qwen_scene_tone_response(response: str) -> dict[str, Any]:
         end = text.rfind("}")
         if start < 0 or end <= start:
             preview = text.replace("\n", " ")[:500]
-            raise RuntimeError(f"Qwen-VL response did not contain JSON: {preview}")
+            raise RuntimeError(f"{label} response did not contain JSON: {preview}")
         parsed = json.loads(text[start : end + 1])
 
     if not isinstance(parsed, dict):
-        raise RuntimeError("Qwen-VL response JSON must be an object")
+        raise RuntimeError(f"{label} response JSON must be an object")
     return parsed
 
 

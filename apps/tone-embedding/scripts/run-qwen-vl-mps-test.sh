@@ -46,7 +46,7 @@ fi
 
 UV_RUN=(uv --directory "${APP_DIR}" run --extra qwen-mps python)
 
-PYTHONDONTWRITEBYTECODE=1 \
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="${APP_DIR}/src" \
   "${UV_RUN[@]}" - <<'PY'
 import torch
 
@@ -57,7 +57,7 @@ print("torch:", torch.__version__)
 print("mps available:", torch.backends.mps.is_available())
 PY
 
-PYTHONDONTWRITEBYTECODE=1 \
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="${APP_DIR}/src" \
   "${UV_RUN[@]}" -m tone_embedding extract \
     "${APP_DIR}/examples/video-manifest.example.json" \
     --out "${HOST_OUTPUT_PATH}" \
@@ -70,6 +70,6 @@ PYTHONDONTWRITEBYTECODE=1 \
     --video-max-frames "${QWEN_VIDEO_MAX_FRAMES}"
 
 printf '\nGenerated JSONL:\n'
-"${UV_RUN[@]}" -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).read_text())' "${HOST_OUTPUT_PATH}"
+PYTHONPATH="${APP_DIR}/src" "${UV_RUN[@]}" -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).read_text())' "${HOST_OUTPUT_PATH}"
 
 log "Qwen-VL MPS video descriptor extraction complete"

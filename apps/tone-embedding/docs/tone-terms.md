@@ -85,7 +85,7 @@ Qwen-VL currently emits freeform descriptor text only. A later structured-output
 ]
 ```
 
-`structured_descriptors_to_tone()` maps those records into scores deterministically:
+`structured_descriptors_to_tone()` maps those records into scores deterministically. If `strengthValue` is present, it is used as the canonical amplitude. If only `strength` or `strengthLabel` is present, the label is mapped to a default magnitude:
 
 | Strength | Magnitude |
 |---|---:|
@@ -95,7 +95,9 @@ Qwen-VL currently emits freeform descriptor text only. A later structured-output
 | `strong` | `0.85` |
 | `extreme` | `1.0` |
 
-Descriptor words determine the dimension and sign. For example, `cold` maps to negative `warmth`, while `unstable` maps to positive `instability`.
+Descriptor words determine the dimension and sign. For example, `cold` maps to negative `warmth`, while `unstable` maps to positive `instability`. If a model supplies a mismatched `dimension`, the converter treats that field as advisory and derives the canonical dimension from `descriptor`.
+
+OpenAI descriptor-score output uses the same shape, with `strengthLabel`, `strengthValue`, `confidence`, and short `evidence` fields. This keeps room for high-fidelity model amplitudes while still allowing simple user rating UI labels.
 
 ## Caveats
 

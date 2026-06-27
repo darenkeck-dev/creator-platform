@@ -11,7 +11,9 @@ This is the first implementation slice from `TONE_EMBEDDING_APP_PLAN.md`. It int
 - Optionally verify local file sources exist.
 - Build deterministic placeholder tone vectors for audio/video assets.
 - Select an optional Essentia audio adapter for music valence/arousal extraction.
+- Select an optional OpenAI audio adapter for structured descriptor scores.
 - Select an optional OpenCLIP video adapter for frame prompt scoring.
+- Select an optional OpenAI video adapter for structured descriptor scores.
 - Select an optional SigLIP video adapter for stronger frame prompt scoring.
 - Select an optional Qwen-VL video adapter for scene caption/mood/tone extraction.
 - Select an optional DINOv2 video adapter for visual embeddings.
@@ -49,7 +51,9 @@ PYTHONPATH=src python -m tone_embedding manifest validate examples/manifest.exam
 PYTHONPATH=src python -m tone_embedding manifest validate examples/manifest.example.json --check-files
 PYTHONPATH=src python -m tone_embedding extract examples/manifest.example.json --out outputs/asset-tones.jsonl
 PYTHONPATH=src python -m tone_embedding extract examples/manifest.example.json --out outputs/asset-tones.jsonl --audio-model essentia --essentia-embedding-model ./models/msd-musicnn-1.pb --essentia-valence-arousal-model ./models/deam-msd-musicnn-2.pb
+PYTHONPATH=src python -m tone_embedding extract examples/audio-manifest.example.json --out outputs/audio-tones-openai.jsonl --audio-model openai
 PYTHONPATH=src python -m tone_embedding extract examples/video-manifest.example.json --out outputs/video-tones.jsonl --video-model openclip
+PYTHONPATH=src python -m tone_embedding extract examples/video-manifest.example.json --out outputs/video-tones-openai.jsonl --video-model openai --video-frame-rate 1.0
 PYTHONPATH=src python -m tone_embedding extract examples/video-manifest.example.json --out outputs/video-tones-siglip.jsonl --video-model siglip
 PYTHONPATH=src python -m tone_embedding extract examples/video-manifest.example.json --out outputs/video-tones-qwen-vl.jsonl --video-model qwen-vl
 PYTHONPATH=src python -m tone_embedding extract examples/video-manifest.example.json --out outputs/video-embeddings.jsonl --video-model dinov2 --embedding-out-dir outputs/embeddings/dinov2
@@ -66,6 +70,7 @@ Local sample media belongs in `examples/media/`. That directory is intentionally
 Dependencies are listed in `pyproject.toml` optional extras:
 
 - `qwen-mps`: native macOS Qwen/MPS dependencies for `run-qwen-vl-mps-test.sh`.
+- `openai`: OpenAI structured descriptor-score video adapter dependencies.
 - `video`: full local video stack dependencies for OpenCLIP, SigLIP, Qwen-VL, and DINOv2.
 - `essentia`: Essentia/TensorFlow audio adapter dependency.
 
@@ -73,6 +78,7 @@ Use uv from `apps/tone-embedding/`:
 
 ```bash
 uv run --extra qwen-mps python -m tone_embedding --help
+uv run --extra openai python -m tone_embedding --help
 uv run --extra video python -m tone_embedding --help
 ```
 
@@ -117,6 +123,18 @@ Optional custom output path:
 ./apps/tone-embedding/scripts/run-essentia-audio-test.sh /tmp/my-tone-output.jsonl
 ```
 
+## OpenAI Audio Adapter
+
+`--audio-model openai` sends audio to `gpt-audio` by default, asks for JSON matching the same descriptor-score schema used by OpenAI video, and maps those descriptors into the internal tone vector with `structured_descriptors_to_tone()`. `gpt-audio` supports audio input through Chat Completions but does not support strict structured outputs, so this path uses prompt-enforced JSON rather than `response_format=json_schema`. The request includes OpenAI's required audio chat shape: `modalities=["text", "audio"]`, an `audio` output config, and an `input_audio` content block; JSON is read from text content or the returned audio transcript. This keeps audio, video, and user ratings aligned around one descriptor vocabulary and prepares combo delta tracking across asset types.
+
+Create `apps/tone-embedding/.env.local` with `OPENAI_API_KEY`, then run from the repo root:
+
+```bash
+./apps/tone-embedding/scripts/run-openai-audio-test.sh
+```
+
+Override the audio model with `OPENAI_AUDIO_MODEL` if needed.
+
 ## OpenCLIP Video Adapter
 
 `--video-model openclip` is optional and requires `open_clip_torch`, `torch`, `pillow`, and `opencv-python-headless`. The adapter samples frames from the video file, scores each frame against affective prompt pairs, aggregates the frame scores, and emits a tone model run plus top-level aggregate tone.
@@ -127,6 +145,32 @@ Run it from the repo root:
 
 ```bash
 ./apps/tone-embedding/scripts/run-openclip-video-test.sh
+```
+
+## OpenAI Video Adapter
+
+`--video-model openai` samples frames at the requested frame rate, sends them to an OpenAI vision model, asks for structured descriptor scores, and maps those descriptors into the internal tone vector with `structured_descriptors_to_tone()`. Users and models can share the same descriptor vocabulary; internal dimensions remain implementation details.
+
+The adapter defaults to `1` frame per second through the smoke script and uses descriptor-score schema `tone-descriptor-scores/v1`. It records the exact OpenAI model, API-key env var name, frame sampling settings, image detail mode, and schema version in `modelRuns[].parameters`.
+
+Create `apps/tone-embedding/.env.local` with your API key:
+
+```bash
+OPENAI_API_KEY=sk-...
+```
+
+The CLI automatically loads `.env` and `.env.local` from `apps/tone-embedding/` and the current working directory when `python-dotenv` is installed through the `openai` or `video` extra.
+
+Run it from the repo root:
+
+```bash
+./apps/tone-embedding/scripts/run-openai-video-test.sh
+```
+
+Override the model without changing the contract:
+
+```bash
+OPENAI_MODEL=gpt-5-mini ./apps/tone-embedding/scripts/run-openai-video-test.sh
 ```
 
 ## SigLIP Video Adapter
@@ -197,9 +241,28 @@ Tone-producing exports include tone words for developer verification only. These
 
 See `docs/tone-terms.md` for dimension and descriptor definitions.
 
-## Combo Congruence
+## Combo Analysis
 
-Combo congruence is intentionally not part of upload-time asset extraction. Asset analysis rows should be attached to the individual uploaded asset; later combo evaluation can reference two asset analysis results and calculate congruence separately.
+Combo congruence is intentionally not part of upload-time asset extraction. Asset analysis rows should be attached to the individual uploaded asset; combo analysis references two asset analysis results and calculates relationship geometry separately.
+
+V1 combo analysis is descriptive only. It does not produce `fitScore`, quality judgement, or learned combo meaning. It computes the shape of the audio/video relationship for traversal and later user-trained meaning:
+
+- `deltaTone`: `videoTone - audioTone` per dimension.
+- `absDeltaTone`: mismatch magnitude per dimension.
+- `interactionTone`: `audioTone * videoTone` per dimension.
+- `congruence`: cosine similarity over the component tone vectors.
+- `nearestNeighborVector`: weighted blocks for cosine-style similar-combo traversal, currently biased toward `deltaTone` and `absDeltaTone`.
+
+Generate asset analysis first, then combo analysis:
+
+```bash
+PYTHONPATH=src python -m tone_embedding extract examples/manifest.example.json --out outputs/asset-tones.jsonl
+PYTHONPATH=src python -m tone_embedding combo analyze examples/manifest.example.json --analysis outputs/asset-tones.jsonl --out outputs/combo-analysis.jsonl
+```
+
+Future user evaluations should train combo meaning separately from this computed V1 geometry.
+
+See `docs/combo-scoring-system.md` for the full V1 output shape, scoring definitions, nearest-neighbor vector layout, and V2 plan for user-input-driven combo meaning.
 
 ## Tests
 
