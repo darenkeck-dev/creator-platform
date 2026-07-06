@@ -1,25 +1,124 @@
 # Tone Embedding
 
-Python app skeleton for generating tone metadata for individual audio/video assets.
+Python batch tool for generating versioned tone and semantic metadata for media assets. The primary V1 use is to run an audio pipeline or video pipeline from a manifest, then hand versioned JSONL/bundle artifacts back to Media Manager.
 
-This is the first implementation slice from `TONE_EMBEDDING_APP_PLAN.md`. It intentionally keeps model extraction behind adapters so the app can run locally without downloading model weights.
+## Primary Outputs
 
-## Current Capabilities
+- `asset-analysis/v1`: one JSONL row per asset.
+- `tone-analysis-bundle/v1`: one `.tonebundle.tar.gz` per asset, containing `manifest.json` and `asset-analysis.jsonl` plus any bundle-relative embedding files.
+- `combo-analysis/v1`: optional descriptive geometry over existing audio/video asset analysis rows.
+- `tone-taxonomy/v1`: versioned descriptor vocabulary, dimension mapping, strength scale, and avoid/opposite rules used to interpret user/model keywords.
 
-- Load a JSON media manifest with local file or S3 original sources.
-- Validate audio/video asset references.
-- Optionally verify local file sources exist.
-- Build deterministic placeholder tone vectors for audio/video assets.
-- Select an optional Essentia audio adapter for music valence/arousal extraction.
-- Select an optional OpenAI audio adapter for structured descriptor scores.
-- Select an optional OpenCLIP video adapter for frame prompt scoring.
-- Select an optional OpenAI video adapter for structured descriptor scores.
-- Select an optional SigLIP video adapter for stronger frame prompt scoring.
-- Select an optional Qwen-VL video adapter for scene caption/mood/tone extraction.
-- Select an optional DINOv2 video adapter for visual embeddings.
-- Add deterministic dev-only tone descriptors for quick output verification.
-- Export append-only JSONL asset analysis rows.
-- Generate `ffmpeg` preprocessing commands and optionally execute them.
+See `docs/media-manager-invocation.md` for the external invocation contract, schema versions, expected model output shapes, bundle artifacts, environment variables, and Media Manager ownership boundaries.
+
+## Prerequisites
+
+From this directory, install/check the local Python runner:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv --version
+```
+
+The app requires Python `3.11+`. Sync the local environment with the project installed non-editably so the `tone-embedding` console command works without `PYTHONPATH`:
+
+```bash
+uv sync --no-editable
+```
+
+For OpenAI-backed primary analysis, create `.env.local`:
+
+```bash
+OPENAI_API_KEY=sk-...
+```
+
+For local smoke examples, place sample files under ignored `examples/media/`:
+
+```text
+examples/media/audio-demo-00.mp3
+examples/media/audio-demo-01.mp3
+examples/media/video-demo-00.m4v
+examples/media/video-demo-01.m4v
+```
+
+Optional system tools:
+
+- `ffmpeg`: needed for `preprocess --execute` and some local media workflows.
+- Docker: only needed for the older standalone Docker smoke scripts.
+
+Useful first checks:
+
+```bash
+uv run tone-embedding --help
+uv run --extra openai tone-embedding analyze audio --help
+uv run --extra openai tone-embedding analyze video --help
+```
+
+## Primary Audio Pipeline
+
+Run the Python CLI directly from this directory:
+
+```bash
+uv run --extra openai tone-embedding analyze audio \
+  examples/media/audio-demo-00.mp3 \
+  --asset-id audio-demo-00 \
+  --out tests/output/audio-demo-00.analysis.json
+```
+
+The local smoke wrapper remains available:
+
+```bash
+./scripts/run-audio-analysis-test.sh
+```
+
+Default output:
+
+```text
+tests/output/asset-analysis-audio-all.jsonl
+tests/output/bundles/<audioAssetId>.tonebundle.tar.gz
+```
+
+The primary audio pipeline uses OpenAI in two steps:
+
+- `OPENAI_AUDIO_MODEL` (`gpt-audio` by default) listens to the audio and produces natural-language audible analysis.
+- `OPENAI_AUDIO_STRUCTURE_MODEL` (`gpt-5` by default) converts that analysis into strict `audio-semantic-tone/v1` JSON and calibrated descriptor scores.
+
+The output includes semantic fields such as `audioDescription`, `semanticSummary`, `mood`, `instrumentation`, `vocals`, and `audibleEvidence`, plus descriptor scores mapped into top-level `tone.value`.
+
+Optional custom output path:
+
+```bash
+./scripts/run-audio-analysis-test.sh /tmp/asset-analysis-audio.jsonl
+```
+
+## Primary Video Pipeline
+
+Run the Python CLI directly from this directory:
+
+```bash
+uv run --extra openai tone-embedding analyze video \
+  examples/media/video-demo-00.m4v \
+  --asset-id video-demo-00 \
+  --models primary \
+  --out tests/output/video-demo-00.analysis.json
+```
+
+`--models primary` runs OpenAI video semantic/tone analysis only. DINOv2 remains available as an explicit optional embedding model later. The local smoke wrapper remains available:
+
+```bash
+./scripts/run-video-analysis-test.sh
+```
+
+Default output:
+
+```text
+tests/output/asset-analysis-video-all.jsonl
+tests/output/bundles/<videoAssetId>.tonebundle.tar.gz
+```
+
+The primary video pipeline runs OpenAI video analysis for `video-semantic-tone/v1`: semantic scene description plus descriptor scores mapped into `tone.value`.
+
+See `docs/video-analysis-pipeline.md` for the full video pipeline shape.
 
 ## Manifest Shape
 
@@ -42,230 +141,205 @@ This is the first implementation slice from `TONE_EMBEDDING_APP_PLAN.md`. It int
 }
 ```
 
-## Usage
+Relative `file` paths are resolved relative to the manifest file. `--check-files` only checks `file` sources. S3 sources are designed for AWS execution contexts and can be staged by the preprocessing plan with `aws s3 cp` before `ffmpeg` runs.
 
-From this directory:
+Local sample media belongs in `examples/media/`. That directory is intentionally ignored.
 
-```bash
-PYTHONPATH=src python -m tone_embedding manifest validate examples/manifest.example.json
-PYTHONPATH=src python -m tone_embedding manifest validate examples/manifest.example.json --check-files
-PYTHONPATH=src python -m tone_embedding extract examples/manifest.example.json --out outputs/asset-tones.jsonl
-PYTHONPATH=src python -m tone_embedding extract examples/manifest.example.json --out outputs/asset-tones.jsonl --audio-model essentia --essentia-embedding-model ./models/msd-musicnn-1.pb --essentia-valence-arousal-model ./models/deam-msd-musicnn-2.pb
-PYTHONPATH=src python -m tone_embedding extract examples/audio-manifest.example.json --out outputs/audio-tones-openai.jsonl --audio-model openai
-PYTHONPATH=src python -m tone_embedding extract examples/video-manifest.example.json --out outputs/video-tones.jsonl --video-model openclip
-PYTHONPATH=src python -m tone_embedding extract examples/video-manifest.example.json --out outputs/video-tones-openai.jsonl --video-model openai --video-frame-rate 1.0
-PYTHONPATH=src python -m tone_embedding extract examples/video-manifest.example.json --out outputs/video-tones-siglip.jsonl --video-model siglip
-PYTHONPATH=src python -m tone_embedding extract examples/video-manifest.example.json --out outputs/video-tones-qwen-vl.jsonl --video-model qwen-vl
-PYTHONPATH=src python -m tone_embedding extract examples/video-manifest.example.json --out outputs/video-embeddings.jsonl --video-model dinov2 --embedding-out-dir outputs/embeddings/dinov2
-PYTHONPATH=src python -m tone_embedding preprocess examples/manifest.example.json --out-dir outputs/preprocessed
-PYTHONPATH=src python -m tone_embedding preprocess examples/manifest.example.json --out-dir outputs/preprocessed --execute
-```
+## Production Invocation
 
-Relative `file` paths are resolved relative to the manifest file. `--check-files` only checks `file` sources. S3 sources are designed for AWS execution contexts and are staged by the preprocessing plan with `aws s3 cp` before `ffmpeg` runs.
+Media Manager should stage original media to local files, invoke this CLI against those local paths, then upload the emitted analysis JSON and bundle artifacts. Production jobs should inject secrets and cache paths through environment variables; they should not rely on `.env.local`.
 
-Local sample media belongs in `examples/media/`. That directory is intentionally ignored so publishable branches do not include media files by default. The Essentia smoke-test manifest expects `audio-demo-00.mp3` and `audio-demo-01.mp3`.
-
-## Dependency Extras
-
-Dependencies are listed in `pyproject.toml` optional extras:
-
-- `qwen-mps`: native macOS Qwen/MPS dependencies for `run-qwen-vl-mps-test.sh`.
-- `openai`: OpenAI structured descriptor-score video adapter dependencies.
-- `video`: full local video stack dependencies for OpenCLIP, SigLIP, Qwen-VL, and DINOv2.
-- `essentia`: Essentia/TensorFlow audio adapter dependency.
-
-Use uv from `apps/tone-embedding/`:
+One-time environment setup in the job image or worker checkout:
 
 ```bash
-uv run --extra qwen-mps python -m tone_embedding --help
-uv run --extra openai python -m tone_embedding --help
-uv run --extra video python -m tone_embedding --help
+uv sync --no-editable --extra openai
 ```
 
-## Init Steps
-
-From `apps/tone-embedding/`:
+Analyze one audio asset:
 
 ```bash
-./scripts/setup-essentia-models.sh
-PYTHONPATH=src python -m tone_embedding manifest validate examples/manifest.example.json --check-files
-PYTHONPATH=src python -m tone_embedding preprocess examples/manifest.example.json --out-dir outputs/preprocessed --execute
+uv run --extra openai tone-embedding analyze audio \
+  /work/input/original-audio.mp3 \
+  --asset-id <assetId> \
+  --out /work/output/asset-analysis.json
 ```
 
-The setup script downloads Essentia model artifacts into `models/`. That directory is ignored by git.
-
-## Essentia Audio Adapter
-
-`--audio-model essentia` is optional and requires local Essentia model artifacts plus the `essentia-tensorflow` package. The app records the adapter/model metadata in exported rows, but model weights are not vendored in this repo.
-
-Expected setup:
-
-- Install `essentia-tensorflow` in the Python environment.
-- Download the chosen Essentia music embedding model and valence/arousal head with `./scripts/setup-essentia-models.sh`.
-- Pass both paths with `--essentia-embedding-model` and `--essentia-valence-arousal-model`.
-- Use `--essentia-output-range deam` for the default DEAM head, `unit` for heads that emit `0..1`, or `bipolar` for heads that already emit `-1..1`.
-
-If the package or model file is missing, extraction fails with a setup error instead of silently falling back.
-
-For the full Docker-based smoke test, see `docs/audio-tone-extraction.md`.
-
-The Docker smoke test auto-builds and reuses a local `tone-embedding-essentia-audio-test:local` image so `essentia-tensorflow` is not installed on every run.
-
-Run it from the repo root:
+Analyze one video asset with the primary V1 video path:
 
 ```bash
-./apps/tone-embedding/scripts/run-essentia-audio-test.sh
+uv run --extra openai tone-embedding analyze video \
+  /work/input/original-video.mp4 \
+  --asset-id <assetId> \
+  --models primary \
+  --out /work/output/asset-analysis.json
 ```
 
-Optional custom output path:
+Create the per-asset bundle:
 
 ```bash
-./apps/tone-embedding/scripts/run-essentia-audio-test.sh /tmp/my-tone-output.jsonl
+uv run tone-embedding bundle create \
+  --analysis /work/output/asset-analysis.json \
+  --asset-id <assetId> \
+  --out /work/output/<assetId>.tonebundle.tar.gz
 ```
 
-## OpenAI Audio Adapter
+Expected handoff back to Media Manager:
 
-`--audio-model openai` sends audio to `gpt-audio` by default, asks for JSON matching the same descriptor-score schema used by OpenAI video, and maps those descriptors into the internal tone vector with `structured_descriptors_to_tone()`. `gpt-audio` supports audio input through Chat Completions but does not support strict structured outputs, so this path uses prompt-enforced JSON rather than `response_format=json_schema`. The request includes OpenAI's required audio chat shape: `modalities=["text", "audio"]`, an `audio` output config, and an `input_audio` content block; JSON is read from text content or the returned audio transcript. This keeps audio, video, and user ratings aligned around one descriptor vocabulary and prepares combo delta tracking across asset types.
+- `/work/output/asset-analysis.json`
+- `/work/output/<assetId>.tonebundle.tar.gz`
+- Any embedding files referenced from the bundle manifest, when optional embedding models are run.
 
-Create `apps/tone-embedding/.env.local` with `OPENAI_API_KEY`, then run from the repo root:
+The OpenAI-only primary path is intended to be Lambda-friendly. DINOv2 remains available for a later container/Fargate/Batch path when local embedding generation is needed.
+
+## Direct CLI
+
+Common CLI usage from this directory:
 
 ```bash
-./apps/tone-embedding/scripts/run-openai-audio-test.sh
+uv run tone-embedding manifest validate examples/manifest.example.json
+uv run tone-embedding manifest validate examples/manifest.example.json --check-files
+uv run --extra openai tone-embedding analyze audio examples/media/audio-demo-00.mp3 --asset-id audio-demo-00 --out tests/output/audio-demo-00.analysis.json
+uv run --extra openai tone-embedding analyze video examples/media/video-demo-00.m4v --asset-id video-demo-00 --models primary --out tests/output/video-demo-00.analysis.json
+uv run tone-embedding combo build --audio-analysis tests/output/audio-demo-00.analysis.json --video-analysis tests/output/video-demo-00.analysis.json --combo-id combo-demo-00 --out tests/output/combo-demo-00.analysis.json
+uv run tone-embedding neighbors query --combo-analysis tests/output/combo-demo-00.analysis.json --candidates tests/output/combo-analysis.jsonl --top-k 20
+uv run --extra openai tone-embedding extract examples/audio-manifest.example.json --out outputs/audio.jsonl --audio-model openai
+uv run --extra openai tone-embedding extract examples/video-manifest.example.json --out outputs/video.jsonl --video-model openai --video-frame-rate 1.0
+uv run --extra video tone-embedding extract examples/video-manifest.example.json --out outputs/video-embeddings.jsonl --video-model dinov2 --embedding-out-dir outputs/embeddings
+uv run tone-embedding bundle create --analysis outputs/video.jsonl --asset-id video-1 --out outputs/video-1.tonebundle.tar.gz
 ```
 
-Override the audio model with `OPENAI_AUDIO_MODEL` if needed.
+`analyze audio` and `analyze video` write a single JSON asset-analysis object for direct file workflows. `extract` remains the manifest/JSONL batch path.
 
-## OpenCLIP Video Adapter
+## Environment
 
-`--video-model openclip` is optional and requires `open_clip_torch`, `torch`, `pillow`, and `opencv-python-headless`. The adapter samples frames from the video file, scores each frame against affective prompt pairs, aggregates the frame scores, and emits a tone model run plus top-level aggregate tone.
-
-For the full Docker-based smoke test, see `docs/video-tone-extraction.md`.
-
-Run it from the repo root:
-
-```bash
-./apps/tone-embedding/scripts/run-openclip-video-test.sh
-```
-
-## OpenAI Video Adapter
-
-`--video-model openai` samples frames at the requested frame rate, sends them to an OpenAI vision model, asks for structured descriptor scores, and maps those descriptors into the internal tone vector with `structured_descriptors_to_tone()`. Users and models can share the same descriptor vocabulary; internal dimensions remain implementation details.
-
-The adapter defaults to `1` frame per second through the smoke script and uses descriptor-score schema `tone-descriptor-scores/v1`. It records the exact OpenAI model, API-key env var name, frame sampling settings, image detail mode, and schema version in `modelRuns[].parameters`.
-
-Create `apps/tone-embedding/.env.local` with your API key:
+Local development can use `.env.local`:
 
 ```bash
 OPENAI_API_KEY=sk-...
 ```
 
-The CLI automatically loads `.env` and `.env.local` from `apps/tone-embedding/` and the current working directory when `python-dotenv` is installed through the `openai` or `video` extra.
-
-Run it from the repo root:
+Useful overrides:
 
 ```bash
-./apps/tone-embedding/scripts/run-openai-video-test.sh
+OPENAI_MODEL=gpt-5
+OPENAI_AUDIO_MODEL=gpt-audio
+OPENAI_AUDIO_STRUCTURE_MODEL=gpt-5
+OPENAI_API_KEY_ENV=OPENAI_API_KEY
+OPENAI_IMAGE_DETAIL=low
+OPENAI_VIDEO_FRAME_RATE=1.0
+OPENAI_VIDEO_MAX_FRAMES=24
 ```
 
-Override the model without changing the contract:
+Deployed jobs should inject secrets directly and use an IAM role for S3 access, not static AWS credentials.
+
+## Dependency Extras
+
+Dependencies are listed in `pyproject.toml` optional extras:
+
+- `openai`: OpenAI audio/video primary path dependencies.
+- `video`: local experimental video stack dependencies plus DINOv2 dependencies.
+- `qwen-mps`: native macOS Qwen/MPS dependencies for the experimental Qwen path.
+- `essentia`: Essentia/TensorFlow audio baseline dependency.
+
+Use `uv` from this directory:
 
 ```bash
-OPENAI_MODEL=gpt-5-mini ./apps/tone-embedding/scripts/run-openai-video-test.sh
+uv run --extra openai tone-embedding --help
+uv run --extra video tone-embedding --help
+uv run --extra qwen-mps tone-embedding --help
 ```
 
-## SigLIP Video Adapter
+## Combo Analysis
 
-`--video-model siglip` uses the same affective prompt pairs as OpenCLIP but scores them with a SigLIP checkpoint. Prompt-pair tone values use positive-vs-negative raw logit deltas with a `tanh(delta / 4.0)` soft clamp, so the adapter preserves SigLIP's native ranking signal instead of subtracting compressed sigmoid probabilities or hard-clamping most extremes. It is intended as the stronger prompt-scoring path for visual affect dimensions while keeping scores interpretable and prompt-versioned.
-
-Run it from the repo root:
+Combo analysis is not part of upload-time asset extraction. It references existing audio and video asset analysis rows and computes descriptive relationship geometry only: `deltaTone`, `absDeltaTone`, `interactionTone`, congruence, contrast, intensity, strongest matches/contrasts, and a nearest-neighbor vector.
 
 ```bash
-./apps/tone-embedding/scripts/run-siglip-video-test.sh
+uv run tone-embedding combo analyze examples/manifest.example.json --analysis outputs/asset-analysis.jsonl --out outputs/combo-analysis.jsonl
 ```
 
-## Qwen-VL Video Adapter
+No V1 combo output is a quality score or learned meaning. See `docs/combo-scoring-system.md`.
 
-`--video-model qwen-vl` samples frames and asks Qwen-VL for qualitative tone descriptors. It does not parse Qwen output into scores. The intended chain is: Qwen freeform descriptor output -> a stronger structured-output text model -> deterministic descriptor-to-score conversion. The CLI default is `Qwen/Qwen2.5-VL-7B-Instruct`; the Docker smoke script defaults to `Qwen/Qwen2-VL-2B-Instruct`, 1 frame, 192 generated tokens, automatic dtype/device mapping, and a persistent Hugging Face cache under `tests/output/huggingface-cache` so local CPU runs are less likely to hang or be killed.
+## Local Neighbor Lookup
 
-Run it from the repo root:
+`neighbors query` is a local development check for cosine similarity over `nearestNeighborVector`. Production lookup should use Media Manager plus a real vector database later. See `VECTOR_DB_PREP_PLAN.md` for the backend-agnostic prep plan.
+
+## Experimental And Standalone Runs
+
+These adapters remain available for comparison, local experiments, or baseline checks, but they are not part of the primary V1 audio/video pipelines.
+
+### Essentia Audio Baseline
 
 ```bash
-./apps/tone-embedding/scripts/run-qwen-vl-video-test.sh
+./scripts/setup-essentia-models.sh
+./scripts/run-essentia-audio-test.sh
 ```
 
-On Apple Silicon, you can try native macOS MPS instead of Docker CPU. This uses `uv` and the `qwen-mps` optional dependency list in `pyproject.toml`, so no manual virtualenv setup is needed:
+Essentia provides local coarse valence/arousal-style music mood scores. See `docs/audio-tone-extraction.md`.
+
+### OpenCLIP Video Baseline
 
 ```bash
-./apps/tone-embedding/scripts/run-qwen-vl-mps-test.sh
+./scripts/run-openclip-video-test.sh
 ```
 
-The MPS path runs outside Docker because Linux containers cannot use Apple Metal/MPS acceleration. It loads Qwen with `--qwen-device-map mps` and defaults to `float16`.
+OpenCLIP is a prompt-pair frame scoring baseline. It has been weak/near-neutral on current demo clips. See `docs/video-tone-extraction.md`.
 
-Equivalent direct command from `apps/tone-embedding/`:
+### SigLIP Video Baseline
 
 ```bash
-uv run --extra qwen-mps python -m tone_embedding extract examples/video-manifest.example.json --out tests/output/asset-tones-qwen-vl-mps-video.jsonl --video-model qwen-vl --qwen-model Qwen/Qwen2-VL-2B-Instruct --qwen-device-map mps --qwen-torch-dtype float16 --video-max-frames 1 --qwen-max-new-tokens 192
+./scripts/run-siglip-video-test.sh
 ```
 
-Use the larger model when you have enough local capacity:
+SigLIP is a stronger local prompt-pair experiment than OpenCLIP, but it is not the primary V1 path.
+
+### Qwen-VL Local Semantic Option
 
 ```bash
-QWEN_MODEL=Qwen/Qwen2.5-VL-7B-Instruct QWEN_VIDEO_MAX_FRAMES=6 QWEN_MAX_NEW_TOKENS=512 ./apps/tone-embedding/scripts/run-qwen-vl-video-test.sh
+./scripts/run-qwen-vl-mps-test.sh
 ```
 
-## Full Video Analysis Test
-
-Run every current video analysis model and merge the outputs into one asset analysis row per video. The combined row includes OpenCLIP, SigLIP, Qwen-VL, and DINOv2 model evidence:
+Qwen-VL emits natural-language scene/tone description only. It does not produce canonical tone values. The Docker CPU path remains available as a standalone correctness smoke test:
 
 ```bash
-./apps/tone-embedding/scripts/run-video-analysis-test.sh
+./scripts/run-qwen-vl-video-test.sh
 ```
 
-This also writes one `.tonebundle.tar.gz` per asset containing `manifest.json`, a single-row `asset-analysis.jsonl`, and bundle-relative embedding files under `embeddings/<assetId>/`. See `docs/video-analysis-pipeline.md`.
-
-## DINOv2 Video Adapter
-
-`--video-model dinov2` is optional and requires `torch`, `torchvision`, `transformers`, `numpy`, `pillow`, and `opencv-python-headless`. The adapter samples frames from the video file, encodes them with DINOv2, writes an averaged `.npy` embedding, and emits an embedding model run for later clustering/similarity/calibration. Embedding references are bundle-relative, such as `embeddings/video-demo-00/dinov2.npy`. It does not emit top-level tone.
-
-For the full Docker-based smoke test, see `docs/dinov2-video-embeddings.md`.
-
-Run it from the repo root:
+### DINOv2 Standalone Embeddings
 
 ```bash
-./apps/tone-embedding/scripts/run-dinov2-video-test.sh
+./scripts/run-dinov2-video-test.sh
+```
+
+DINOv2 emits visual embeddings only. See `docs/dinov2-video-embeddings.md`.
+
+### OpenAI Model-Specific Smoke Scripts
+
+The primary scripts above are preferred, but model-specific smoke scripts remain available:
+
+```bash
+./scripts/run-openai-audio-test.sh
+./scripts/run-openai-video-test.sh
 ```
 
 ## Tone Words
 
-Tone-producing exports include tone words for developer verification only. These descriptors are deterministic labels derived from the current tone vector; they are not end-user ratings and should not be treated as ground truth.
+Tone-producing exports include `tone.words` for developer verification only. These labels are deterministic summaries derived from the current tone vector, not end-user ratings or ground truth. See `docs/tone-terms.md`.
 
-See `docs/tone-terms.md` for dimension and descriptor definitions.
+## Tone Taxonomy
 
-## Combo Analysis
+The long-lived descriptor contract lives in `src/tone_embedding/taxonomies/tone-taxonomy.v1.json`. Current asset and combo outputs include `toneTaxonomyVersion` so future keyword/mapping changes can be migrated or recomputed explicitly.
 
-Combo congruence is intentionally not part of upload-time asset extraction. Asset analysis rows should be attached to the individual uploaded asset; combo analysis references two asset analysis results and calculates relationship geometry separately.
+## Schemas
 
-V1 combo analysis is descriptive only. It does not produce `fitScore`, quality judgement, or learned combo meaning. It computes the shape of the audio/video relationship for traversal and later user-trained meaning:
+Contract schema fixtures live in `schemas/`:
 
-- `deltaTone`: `videoTone - audioTone` per dimension.
-- `absDeltaTone`: mismatch magnitude per dimension.
-- `interactionTone`: `audioTone * videoTone` per dimension.
-- `congruence`: cosine similarity over the component tone vectors.
-- `nearestNeighborVector`: weighted blocks for cosine-style similar-combo traversal, currently biased toward `deltaTone` and `absDeltaTone`.
+- `schemas/asset-analysis.v1.schema.json`
+- `schemas/tone-taxonomy.v1.schema.json`
 
-Generate asset analysis first, then combo analysis:
-
-```bash
-PYTHONPATH=src python -m tone_embedding extract examples/manifest.example.json --out outputs/asset-tones.jsonl
-PYTHONPATH=src python -m tone_embedding combo analyze examples/manifest.example.json --analysis outputs/asset-tones.jsonl --out outputs/combo-analysis.jsonl
-```
-
-Future user evaluations should train combo meaning separately from this computed V1 geometry.
-
-See `docs/combo-scoring-system.md` for the full V1 output shape, scoring definitions, nearest-neighbor vector layout, and V2 plan for user-input-driven combo meaning.
+The test suite validates generated fixture rows and the packaged taxonomy against these schema contracts.
 
 ## Tests
 
 ```bash
-python -m unittest discover -s apps/tone-embedding/tests
+uv run python -m unittest discover -s tests
 ```

@@ -25,6 +25,13 @@ def create_bundle(analysis_path: Path, out_path: Path, asset_id: str | None = No
         "schema": BUNDLE_SCHEMA,
         "createdAt": datetime.now(UTC).isoformat(),
         "analysisPath": BUNDLE_ANALYSIS_PATH,
+        "analysisSchemas": sorted(
+            {
+                schema
+                for row in rows
+                if isinstance((schema := row.get("schemaVersion")), str)
+            }
+        ),
         "assetIds": [row["assetId"] for row in rows],
         "embeddings": embedding_paths,
     }

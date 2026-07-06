@@ -45,8 +45,7 @@ log "OpenAI model: ${OPENAI_MODEL}"
 log "Frame rate: ${OPENAI_VIDEO_FRAME_RATE}"
 log "Max frames: ${OPENAI_VIDEO_MAX_FRAMES}"
 
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="${APP_DIR}/src" \
-  uv --directory "${APP_DIR}" run --extra openai python -m tone_embedding extract \
+uv --directory "${APP_DIR}" run --extra openai tone-embedding extract \
     "${APP_DIR}/examples/video-manifest.example.json" \
     --out "${HOST_OUTPUT_PATH}" \
     --video-model openai \
@@ -57,6 +56,6 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="${APP_DIR}/src" \
     --video-max-frames "${OPENAI_VIDEO_MAX_FRAMES}"
 
 printf '\nGenerated JSONL:\n'
-PYTHONPATH="${APP_DIR}/src" uv --directory "${APP_DIR}" run --extra openai python -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).read_text())' "${HOST_OUTPUT_PATH}"
+uv --directory "${APP_DIR}" run --extra openai python -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).read_text())' "${HOST_OUTPUT_PATH}"
 
 log "OpenAI video tone extraction complete"

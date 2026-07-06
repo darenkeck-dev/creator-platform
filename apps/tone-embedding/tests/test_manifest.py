@@ -4,6 +4,7 @@ import unittest
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 
 from tone_embedding.bundle import create_bundle, extract_bundle, inspect_bundle
 from tone_embedding.combo import (
@@ -14,7 +15,6 @@ from tone_embedding.combo import (
 from tone_embedding.export import (
     build_asset_tone_rows,
     build_audio_model,
-    build_training_rows,
     build_video_model,
 )
 from tone_embedding.manifest import (
@@ -31,6 +31,7 @@ from tone_embedding.models import (
     SiglipVideoToneModel,
     aggregate_video_prompt_scores,
     dino_embedding_stats,
+    openai_audio_semantic_tone_schema,
     openai_audio_response_text,
     openai_tone_descriptor_schema,
     parse_qwen_scene_tone_response,
@@ -41,8 +42,24 @@ from tone_embedding.models import (
     ToneExtraction,
     tone_from_vlm_payload,
 )
+from tone_embedding.neighbors import cosine_similarity, top_k_neighbors
 from tone_embedding.preprocessing import build_preprocessing_plan
-from tone_embedding.tone import structured_descriptors_to_tone, tone_to_words
+from tone_embedding.taxonomy import (
+    TONE_TAXONOMY_VERSION,
+    downgrade_tone_taxonomy,
+    load_tone_taxonomy,
+    upgrade_tone_taxonomy,
+)
+from tone_embedding.tone import DESCRIPTOR_TO_SCORE, TONE_DIMENSIONS, structured_descriptors_to_tone, tone_to_words
+from tone_embedding.workflows import (
+    analyze_audio_file,
+    analyze_video_file,
+    build_combo_analysis_from_files,
+    combine_asset_analysis_rows,
+    expand_video_models,
+    read_analysis_rows,
+    write_json,
+)
 
 
 def valid_payload() -> dict[str, object]:
@@ -70,6 +87,50 @@ def valid_payload() -> dict[str, object]:
     }
 
 
+APP_ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_schema(name: str) -> dict[str, Any]:
+    with (APP_ROOT / "schemas" / name).open("r", encoding="utf-8") as file:
+        return json.load(file)
+
+
+def assert_schema_subset(test_case: unittest.TestCase, schema: dict[str, Any], payload: Any) -> None:
+    if "const" in schema:
+        test_case.assertEqual(payload, schema["const"])
+    if "enum" in schema:
+        test_case.assertIn(payload, schema["enum"])
+
+    schema_type = schema.get("type")
+    if schema_type == "object":
+        test_case.assertIsInstance(payload, dict)
+        for key in schema.get("required", []):
+            test_case.assertIn(key, payload)
+        for key, property_schema in schema.get("properties", {}).items():
+            if key in payload:
+                assert_schema_subset(test_case, property_schema, payload[key])
+    elif schema_type == "array":
+        test_case.assertIsInstance(payload, list)
+        min_items = schema.get("minItems")
+        if min_items is not None:
+            test_case.assertGreaterEqual(len(payload), int(min_items))
+        item_schema = schema.get("items")
+        if item_schema:
+            for item in payload:
+                assert_schema_subset(test_case, item_schema, item)
+    elif schema_type == "string":
+        test_case.assertIsInstance(payload, str)
+        min_length = schema.get("minLength")
+        if min_length is not None:
+            test_case.assertGreaterEqual(len(payload), int(min_length))
+    elif schema_type == "number":
+        test_case.assertIsInstance(payload, int | float)
+        if "minimum" in schema:
+            test_case.assertGreaterEqual(float(payload), float(schema["minimum"]))
+        if "maximum" in schema:
+            test_case.assertLessEqual(float(payload), float(schema["maximum"]))
+
+
 class ManifestTests(unittest.TestCase):
     def test_parse_valid_manifest(self) -> None:
         manifest = parse_manifest(valid_payload())
@@ -78,19 +139,6 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(len(manifest.combos), 1)
         self.assertEqual(manifest.assets[0].source.kind, "file")
         self.assertEqual(manifest.assets[1].source.kind, "s3")
-
-    def test_build_training_rows(self) -> None:
-        manifest = parse_manifest(valid_payload())
-
-        rows = build_training_rows(manifest)
-
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["comboId"], "combo-1")
-        self.assertEqual(rows[0]["audioSource"]["kind"], "file")
-        self.assertEqual(rows[0]["videoSource"]["kind"], "s3")
-        self.assertIn("valence", rows[0]["audioTone"])
-        self.assertIn("summary", rows[0]["audioToneWords"])
-        self.assertIsInstance(rows[0]["congruence"], float)
 
     def test_compute_combo_features_keeps_relationship_geometry(self) -> None:
         audio_tone = {
@@ -179,6 +227,7 @@ class ManifestTests(unittest.TestCase):
 
         self.assertEqual(rows[0]["schemaVersion"], "combo-analysis/v1")
         self.assertEqual(rows[0]["comboId"], "combo-1")
+        self.assertEqual(rows[0]["toneTaxonomyVersion"], "tone-taxonomy/v1")
         self.assertEqual(rows[0]["features"]["deltaTone"]["valence"], 1.0)
         self.assertEqual(rows[0]["sourceAnalyses"]["audio"]["contributors"], ["test/audio"])
         self.assertEqual(rows[0]["vectorLayout"]["blocks"][2]["name"], "deltaTone")
@@ -190,10 +239,13 @@ class ManifestTests(unittest.TestCase):
         rows = build_asset_tone_rows(manifest)
 
         self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["schemaVersion"], "asset-analysis/v1")
+        self.assertEqual(rows[0]["toneTaxonomyVersion"], "tone-taxonomy/v1")
         self.assertEqual(rows[0]["assetId"], "audio-1")
         self.assertEqual(rows[0]["assetType"], "audio")
         self.assertEqual(rows[0]["source"]["kind"], "file")
         self.assertIn("valence", rows[0]["tone"]["value"])
+        self.assertEqual(rows[0]["tone"]["taxonomyVersion"], "tone-taxonomy/v1")
         self.assertIn("summary", rows[0]["tone"]["words"])
         self.assertEqual(rows[0]["modelRuns"][0]["rawScores"], {})
         self.assertEqual(rows[0]["modelRuns"][0]["model"]["name"], "placeholder/audio-tone")
@@ -202,6 +254,136 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(rows[1]["assetId"], "video-1")
         self.assertEqual(rows[1]["assetType"], "video")
         self.assertEqual(rows[1]["modelRuns"][0]["model"]["name"], "placeholder/video-tone")
+
+    def test_asset_analysis_v1_fixture_matches_schema(self) -> None:
+        manifest = parse_manifest(valid_payload())
+        row = build_asset_tone_rows(manifest)[0]
+
+        assert_schema_subset(self, load_schema("asset-analysis.v1.schema.json"), row)
+
+    def test_tone_taxonomy_v1_fixture_matches_schema(self) -> None:
+        taxonomy = load_tone_taxonomy()
+
+        assert_schema_subset(self, load_schema("tone-taxonomy.v1.schema.json"), taxonomy)
+
+    def test_analyze_audio_file_outputs_single_asset_row(self) -> None:
+        row = analyze_audio_file(
+            Path("audio.mp3"),
+            asset_id="audio-1",
+            title="Audio",
+            model_name="placeholder",
+        )
+
+        self.assertEqual(row["schemaVersion"], "asset-analysis/v1")
+        self.assertEqual(row["toneTaxonomyVersion"], "tone-taxonomy/v1")
+        self.assertEqual(row["assetId"], "audio-1")
+        self.assertEqual(row["assetType"], "audio")
+        self.assertIn("tone", row)
+
+    def test_analyze_video_file_can_combine_model_rows(self) -> None:
+        row = analyze_video_file(
+            Path("video.mp4"),
+            asset_id="video-1",
+            title="Video",
+            model_names=["placeholder"],
+        )
+
+        self.assertEqual(row["schemaVersion"], "asset-analysis/v1")
+        self.assertEqual(row["assetId"], "video-1")
+        self.assertEqual(row["assetType"], "video")
+        self.assertEqual(len(row["modelRuns"]), 1)
+        self.assertIn("tone", row)
+
+    def test_primary_video_models_are_openai_only_for_lambda_path(self) -> None:
+        self.assertEqual(expand_video_models(["primary"]), ["openai"])
+        self.assertEqual(expand_video_models(["primary", "dinov2"]), ["openai", "dinov2"])
+
+    def test_combine_asset_analysis_rows_preserves_tone_and_embeddings(self) -> None:
+        rows = combine_asset_analysis_rows(
+            [
+                {
+                    "schemaVersion": "asset-analysis/v1",
+                    "assetId": "video-1",
+                    "assetType": "video",
+                    "source": {"kind": "file", "path": "video.mp4"},
+                    "tone": {"value": {"valence": 0.2}, "contributors": ["tone"]},
+                    "modelRuns": [{"kind": "tone"}],
+                    "createdAt": "2026-01-01T00:00:00+00:00",
+                },
+                {
+                    "schemaVersion": "asset-analysis/v1",
+                    "assetId": "video-1",
+                    "assetType": "video",
+                    "source": {"kind": "file", "path": "video.mp4"},
+                    "embeddings": {"dinov2": {"path": "embeddings/video-1/dinov2.npy"}},
+                    "modelRuns": [{"kind": "embedding"}],
+                    "createdAt": "2026-01-01T00:00:00+00:00",
+                },
+            ]
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["toneTaxonomyVersion"], "tone-taxonomy/v1")
+        self.assertIn("tone", rows[0])
+        self.assertEqual(rows[0]["embeddings"]["dinov2"]["path"], "embeddings/video-1/dinov2.npy")
+        self.assertEqual([run["kind"] for run in rows[0]["modelRuns"]], ["tone", "embedding"])
+
+    def test_build_combo_analysis_from_single_json_files(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            audio_path = Path(temp_dir) / "audio.json"
+            video_path = Path(temp_dir) / "video.json"
+            write_json(
+                audio_path,
+                {
+                    "assetId": "audio-1",
+                    "source": {"kind": "file", "path": "audio.mp3"},
+                    "tone": {"value": {"valence": -0.2}, "contributors": ["audio"]},
+                    "modelRuns": [{"kind": "tone"}],
+                },
+            )
+            write_json(
+                video_path,
+                {
+                    "assetId": "video-1",
+                    "source": {"kind": "file", "path": "video.mp4"},
+                    "tone": {"value": {"valence": 0.4}, "contributors": ["video"]},
+                    "modelRuns": [{"kind": "tone"}],
+                },
+            )
+
+            row = build_combo_analysis_from_files(audio_path, video_path, combo_id="combo-1")
+
+        self.assertEqual(row["schemaVersion"], "combo-analysis/v1")
+        self.assertEqual(row["comboId"], "combo-1")
+        self.assertEqual(row["features"]["deltaTone"]["valence"], 0.6)
+
+    def test_read_analysis_rows_accepts_json_and_jsonl(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            json_path = Path(temp_dir) / "analysis.json"
+            jsonl_path = Path(temp_dir) / "analysis.jsonl"
+            multi_jsonl_path = Path(temp_dir) / "multi-analysis.jsonl"
+            write_json(json_path, {"assetId": "asset-1"})
+            jsonl_path.write_text('{"assetId":"asset-2"}\n', encoding="utf-8")
+            multi_jsonl_path.write_text(
+                '{"assetId":"asset-3"}\n{"assetId":"asset-4"}\n',
+                encoding="utf-8",
+            )
+
+            self.assertEqual(read_analysis_rows(json_path)[0]["assetId"], "asset-1")
+            self.assertEqual(read_analysis_rows(jsonl_path)[0]["assetId"], "asset-2")
+            self.assertEqual([row["assetId"] for row in read_analysis_rows(multi_jsonl_path)], ["asset-3", "asset-4"])
+
+    def test_top_k_neighbors_uses_cosine_similarity(self) -> None:
+        query = {"comboId": "query", "nearestNeighborVector": [1.0, 0.0]}
+        candidates = [
+            {"comboId": "far", "nearestNeighborVector": [0.0, 1.0]},
+            {"comboId": "near", "nearestNeighborVector": [0.9, 0.1]},
+        ]
+
+        results = top_k_neighbors(query, candidates, top_k=1)
+
+        self.assertEqual(results[0]["comboId"], "near")
+        self.assertEqual(cosine_similarity([1.0, 0.0], [0.0, 1.0]), 0.0)
 
     def test_build_asset_tone_rows_includes_embedding_path(self) -> None:
         class FakeVideoEmbeddingModel:
@@ -445,7 +627,8 @@ class ManifestTests(unittest.TestCase):
                 "apiKeyEnv": "TEST_OPENAI_API_KEY",
                 "modalities": ["text", "audio"],
                 "audioOutputFormat": "wav",
-                "schemaVersion": "tone-descriptor-scores/v1",
+                "schemaVersion": "audio-semantic-tone/v1",
+                "structureModelEnv": "OPENAI_AUDIO_STRUCTURE_MODEL",
             },
         )
 
@@ -491,7 +674,7 @@ class ManifestTests(unittest.TestCase):
                 "frameRate": 1.0,
                 "maxFrames": 10,
                 "imageDetail": "low",
-                "schemaVersion": "tone-descriptor-scores/v1",
+                "schemaVersion": "video-semantic-tone/v1",
             },
         )
 
@@ -616,6 +799,7 @@ class ManifestTests(unittest.TestCase):
             analysis.write_text(
                 json.dumps(
                     {
+                        "schemaVersion": "asset-analysis/v1",
                         "assetId": "video-1",
                         "assetType": "video",
                         "embeddings": {
@@ -637,6 +821,7 @@ class ManifestTests(unittest.TestCase):
             manifest = create_bundle(analysis, bundle)
 
             self.assertEqual(manifest["schema"], "tone-analysis-bundle/v1")
+            self.assertEqual(manifest["analysisSchemas"], ["asset-analysis/v1"])
             self.assertEqual(manifest["analysisPath"], "asset-analysis.jsonl")
             self.assertEqual(manifest["embeddings"], ["embeddings/video-1/dinov2.npy"])
             self.assertEqual(inspect_bundle(bundle)["assetIds"], ["video-1"])
@@ -661,6 +846,7 @@ class ManifestTests(unittest.TestCase):
                 "\n".join(
                     json.dumps(
                         {
+                            "schemaVersion": "asset-analysis/v1",
                             "assetId": asset_id,
                             "assetType": "video",
                             "embeddings": {
@@ -945,9 +1131,24 @@ class ManifestTests(unittest.TestCase):
     def test_openai_tone_descriptor_schema_uses_descriptor_scores(self) -> None:
         schema = openai_tone_descriptor_schema()
 
-        self.assertEqual(schema["name"], "tone_descriptor_scores")
+        self.assertEqual(schema["name"], "video_semantic_tone")
         self.assertTrue(schema["strict"])
         self.assertIn("descriptorScores", schema["schema"]["properties"])
+        self.assertIn("sceneDescription", schema["schema"]["properties"])
+        self.assertIn("semanticSummary", schema["schema"]["properties"])
+        self.assertIn("visualEvidence", schema["schema"]["properties"])
+        self.assertIn("sceneDescription", schema["schema"]["required"])
+
+    def test_openai_audio_semantic_tone_schema_uses_audio_fields(self) -> None:
+        schema = openai_audio_semantic_tone_schema()
+
+        self.assertEqual(schema["name"], "audio_semantic_tone")
+        self.assertTrue(schema["strict"])
+        self.assertIn("descriptorScores", schema["schema"]["properties"])
+        self.assertIn("audioDescription", schema["schema"]["properties"])
+        self.assertIn("semanticSummary", schema["schema"]["properties"])
+        self.assertIn("audibleEvidence", schema["schema"]["properties"])
+        self.assertIn("audioDescription", schema["schema"]["required"])
 
     def test_structured_descriptors_to_tone_derives_dimension_from_descriptor(self) -> None:
         descriptors = [{"strength": "strong", "dimension": "valence", "descriptor": "cold"}]
@@ -958,6 +1159,23 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(tone["valence"], 0.0)
         self.assertEqual(descriptors[0]["mappedDimension"], "warmth")
         self.assertEqual(descriptors[0]["modelDimension"], "valence")
+
+    def test_tone_taxonomy_v1_loads_current_descriptor_contract(self) -> None:
+        taxonomy = load_tone_taxonomy()
+
+        self.assertEqual(taxonomy["schemaVersion"], TONE_TAXONOMY_VERSION)
+        self.assertEqual(TONE_TAXONOMY_VERSION, "tone-taxonomy/v1")
+        self.assertEqual(TONE_DIMENSIONS[0], "valence")
+        self.assertEqual(TONE_DIMENSIONS[-1], "menace")
+        self.assertEqual(DESCRIPTOR_TO_SCORE["uplifting"], ("valence", 1.0))
+        self.assertEqual(DESCRIPTOR_TO_SCORE["cold"], ("warmth", -1.0))
+        self.assertEqual(taxonomy["strengthScale"]["strong"], 0.85)
+
+    def test_tone_taxonomy_upgrade_downgrade_are_explicit_stubs(self) -> None:
+        with self.assertRaises(NotImplementedError):
+            upgrade_tone_taxonomy({}, "tone-taxonomy/v2")
+        with self.assertRaises(NotImplementedError):
+            downgrade_tone_taxonomy({}, "tone-taxonomy/v0")
 
 
 if __name__ == "__main__":

@@ -46,10 +46,9 @@ OPENCLIP_VIDEO_TEST_IMAGE=my-openclip-test:local ./apps/tone-embedding/scripts/r
 Inside an environment where the `video` optional dependencies are installed:
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=apps/tone-embedding/src \
-python -m tone_embedding extract \
-  apps/tone-embedding/examples/video-manifest.example.json \
-  --out apps/tone-embedding/tests/output/asset-tones-openclip-video.jsonl \
+uv run --extra video tone-embedding extract \
+  examples/video-manifest.example.json \
+  --out tests/output/asset-tones-openclip-video.jsonl \
   --video-model openclip
 ```
 

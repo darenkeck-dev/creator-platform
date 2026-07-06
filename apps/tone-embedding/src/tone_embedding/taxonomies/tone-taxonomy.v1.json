@@ -1,0 +1,131 @@
+{
+  "schemaVersion": "tone-taxonomy/v1",
+  "toneDimensions": [
+    "valence",
+    "arousal",
+    "dominance",
+    "warmth",
+    "tension",
+    "intimacy",
+    "instability",
+    "nostalgia",
+    "beauty",
+    "menace"
+  ],
+  "dimensions": [
+    {
+      "id": "valence",
+      "descriptorThreshold": 0.25,
+      "positiveDescriptor": "uplifting",
+      "negativeDescriptor": "melancholic"
+    },
+    {
+      "id": "arousal",
+      "descriptorThreshold": 0.25,
+      "positiveDescriptor": "energetic",
+      "negativeDescriptor": "subdued"
+    },
+    {
+      "id": "warmth",
+      "descriptorThreshold": 0.25,
+      "positiveDescriptor": "warm",
+      "negativeDescriptor": "cold"
+    },
+    {
+      "id": "tension",
+      "descriptorThreshold": 0.25,
+      "positiveDescriptor": "tense",
+      "negativeDescriptor": "relaxed"
+    },
+    {
+      "id": "menace",
+      "descriptorThreshold": 0.2,
+      "positiveDescriptor": "threatening",
+      "negativeDescriptor": "safe"
+    },
+    {
+      "id": "instability",
+      "descriptorThreshold": 0.25,
+      "positiveDescriptor": "unstable",
+      "negativeDescriptor": "stable"
+    },
+    {
+      "id": "beauty",
+      "descriptorThreshold": 0.25,
+      "positiveDescriptor": "beautiful",
+      "negativeDescriptor": "harsh"
+    },
+    {
+      "id": "nostalgia",
+      "descriptorThreshold": 0.25,
+      "positiveDescriptor": "nostalgic",
+      "negativeDescriptor": "unsentimental"
+    },
+    {
+      "id": "intimacy",
+      "descriptorThreshold": 0.25,
+      "positiveDescriptor": "intimate",
+      "negativeDescriptor": "distant"
+    },
+    {
+      "id": "dominance",
+      "descriptorThreshold": 0.25,
+      "positiveDescriptor": "commanding",
+      "negativeDescriptor": "delicate"
+    }
+  ],
+  "descriptors": [
+    { "id": "mood.uplifting", "slug": "uplifting", "label": "Uplifting", "status": "active", "description": "Positive, hopeful, emotionally bright." },
+    { "id": "mood.melancholic", "slug": "melancholic", "label": "Melancholic", "status": "active", "description": "Sad, subdued, emotionally downcast." },
+    { "id": "energy.energetic", "slug": "energetic", "label": "Energetic", "status": "active", "description": "Active, stimulating, high-motion or high-intensity." },
+    { "id": "energy.subdued", "slug": "subdued", "label": "Subdued", "status": "active", "description": "Quiet, restrained, low-energy." },
+    { "id": "temperature.warm", "slug": "warm", "label": "Warm", "status": "active", "description": "Inviting, soft, emotionally open." },
+    { "id": "temperature.cold", "slug": "cold", "label": "Cold", "status": "active", "description": "Distant, cool, emotionally removed." },
+    { "id": "pressure.tense", "slug": "tense", "label": "Tense", "status": "active", "description": "Pressurized, suspenseful, uneasy." },
+    { "id": "pressure.relaxed", "slug": "relaxed", "label": "Relaxed", "status": "active", "description": "Calm, low-pressure, settled." },
+    { "id": "danger.threatening", "slug": "threatening", "label": "Threatening", "status": "active", "description": "Ominous, dangerous, hostile, or intimidating." },
+    { "id": "danger.safe", "slug": "safe", "label": "Safe", "status": "active", "description": "Comforting, non-threatening, protected." },
+    { "id": "motion.unstable", "slug": "unstable", "label": "Unstable", "status": "active", "description": "Chaotic, volatile, disorienting, unbalanced." },
+    { "id": "motion.stable", "slug": "stable", "label": "Stable", "status": "active", "description": "Ordered, grounded, visually settled." },
+    { "id": "aesthetic.beautiful", "slug": "beautiful", "label": "Beautiful", "status": "active", "description": "Aesthetically pleasing, graceful, visually attractive." },
+    { "id": "aesthetic.harsh", "slug": "harsh", "label": "Harsh", "status": "active", "description": "Abrasive, unpleasant, rough, visually severe." },
+    { "id": "memory.nostalgic", "slug": "nostalgic", "label": "Nostalgic", "status": "active", "description": "Wistful, memory-like, retro, sentimental." },
+    { "id": "memory.unsentimental", "slug": "unsentimental", "label": "Unsentimental", "status": "active", "description": "Clinical, present-tense, emotionally dry." },
+    { "id": "proximity.intimate", "slug": "intimate", "label": "Intimate", "status": "active", "description": "Close, personal, private, emotionally near." },
+    { "id": "proximity.distant", "slug": "distant", "label": "Distant", "status": "active", "description": "Impersonal, detached, emotionally far." },
+    { "id": "force.commanding", "slug": "commanding", "label": "Commanding", "status": "active", "description": "Powerful, dominant, forceful, large-scale." },
+    { "id": "force.delicate", "slug": "delicate", "label": "Delicate", "status": "active", "description": "Light, fragile, subtle, low-force." },
+    { "id": "system.neutral", "slug": "neutral", "label": "Neutral", "status": "system", "description": "No strong tone dimensions crossed the descriptor threshold." },
+    { "id": "system.balanced", "slug": "balanced", "label": "Balanced", "status": "system", "description": "No single affective direction dominates." },
+    { "id": "system.ambiguous", "slug": "ambiguous", "label": "Ambiguous", "status": "system", "description": "Model scores are too weak or mixed to label confidently." }
+  ],
+  "strengthScale": {
+    "none": 0.0,
+    "weak": 0.25,
+    "medium": 0.55,
+    "strong": 0.85,
+    "extreme": 1.0
+  },
+  "avoidRules": {
+    "uplifting": "melancholic",
+    "melancholic": "joyful",
+    "energetic": "subdued",
+    "subdued": "energetic",
+    "warm": "cold",
+    "cold": "warm",
+    "tense": "peaceful",
+    "relaxed": "urgent",
+    "threatening": "safe",
+    "safe": "threatening",
+    "unstable": "orderly",
+    "stable": "chaotic",
+    "beautiful": "harsh",
+    "harsh": "polished",
+    "nostalgic": "clinical",
+    "unsentimental": "nostalgic",
+    "intimate": "impersonal",
+    "distant": "intimate",
+    "commanding": "delicate",
+    "delicate": "dominant"
+  }
+}

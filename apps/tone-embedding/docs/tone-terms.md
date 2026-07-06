@@ -1,6 +1,14 @@
 # Tone Terms Guide
 
-This guide defines the dev-facing tone terms emitted by `tone_to_words()`. These labels are quick inspection aids for model output, not final user-facing copy or ground-truth ratings.
+This guide defines the tone descriptor vocabulary currently packaged as `tone-taxonomy/v1` in `src/tone_embedding/taxonomies/tone-taxonomy.v1.json`. These descriptors are the long-lived keyword surface for model output and future user input. The `tone_to_words()` labels remain quick inspection aids, not ground-truth ratings.
+
+## Versioning
+
+- Current taxonomy version: `tone-taxonomy/v1`.
+- The taxonomy versions descriptors, dimension mappings, strength labels, and avoid/opposite rules together.
+- Asset and combo outputs should preserve the taxonomy version used to produce or interpret tone values.
+- Future upgrade/downgrade hooks exist as explicit stubs; no taxonomy migration implementation exists yet.
+- Descriptor slugs should be treated as stable within a taxonomy version. Future UI-facing persistence should prefer descriptor IDs over labels.
 
 ## Output Groups
 
@@ -75,7 +83,7 @@ No descriptor exceeded the current threshold. Treat this as low-confidence tone 
 
 ## Structured Descriptor Conversion
 
-Qwen-VL currently emits freeform descriptor text only. A later structured-output model should convert that text into stable records like:
+Qwen-VL currently emits freeform natural-language scene/tone descriptions only. OpenAI video is the primary structured-output path for stable records like:
 
 ```json
 [
@@ -85,7 +93,7 @@ Qwen-VL currently emits freeform descriptor text only. A later structured-output
 ]
 ```
 
-`structured_descriptors_to_tone()` maps those records into scores deterministically. If `strengthValue` is present, it is used as the canonical amplitude. If only `strength` or `strengthLabel` is present, the label is mapped to a default magnitude:
+`structured_descriptors_to_tone()` maps those records into scores deterministically through `tone-taxonomy/v1`. If `strengthValue` is present, it is used as the canonical amplitude. If only `strength` or `strengthLabel` is present, the label is mapped to a default magnitude:
 
 | Strength | Magnitude |
 |---|---:|
@@ -103,5 +111,5 @@ OpenAI descriptor-score output uses the same shape, with `strengthLabel`, `stren
 
 - These terms are for developer verification and pipeline debugging.
 - They are generated from numeric model output and can reflect model/prompt bias.
-- Qwen-VL `caption`, `tags`, and `rationale` should become the better source for rich semantic descriptions.
+- OpenAI video metadata (`sceneDescription`, `semanticSummary`, `mood`, `visualEvidence`) is the primary source for rich semantic descriptions.
 - End-user language should be calibrated separately from this dev mapper.

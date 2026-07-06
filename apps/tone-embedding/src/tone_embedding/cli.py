@@ -9,7 +9,15 @@ from .bundle import create_bundle, extract_bundle, inspect_bundle
 from .combo import build_combo_analysis_rows
 from .export import build_asset_tone_rows, build_audio_model, build_video_model, read_jsonl, write_jsonl
 from .manifest import load_manifest, validate_local_files
+from .neighbors import top_k_neighbors
 from .preprocessing import build_preprocessing_plan, execute_preprocessing_plan
+from .workflows import (
+    analyze_audio_file,
+    analyze_video_file,
+    build_combo_analysis_from_files,
+    read_analysis_rows,
+    write_json,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -26,6 +34,41 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Verify local file sources exist. S3 sources are not checked.",
     )
+
+    analyze_parser = subparsers.add_parser("analyze")
+    analyze_subparsers = analyze_parser.add_subparsers(dest="analyze_command", required=True)
+    analyze_audio_parser = analyze_subparsers.add_parser("audio")
+    analyze_audio_parser.add_argument("input", type=Path)
+    analyze_audio_parser.add_argument("--out", type=Path, required=True)
+    analyze_audio_parser.add_argument("--asset-id", default="audio-1")
+    analyze_audio_parser.add_argument("--title")
+    analyze_audio_parser.add_argument(
+        "--model",
+        choices=["placeholder", "essentia", "openai"],
+        default="openai",
+        help="Audio tone adapter to use.",
+    )
+    analyze_audio_parser.add_argument("--essentia-embedding-model", type=Path)
+    analyze_audio_parser.add_argument("--essentia-valence-arousal-model", type=Path)
+    analyze_audio_parser.add_argument(
+        "--essentia-output-range",
+        choices=["unit", "bipolar", "deam"],
+        default="deam",
+    )
+    analyze_audio_parser.add_argument("--openai-audio-model", default="gpt-audio")
+    analyze_audio_parser.add_argument("--openai-api-key-env", default="OPENAI_API_KEY")
+
+    analyze_video_parser = analyze_subparsers.add_parser("video")
+    analyze_video_parser.add_argument("input", type=Path)
+    analyze_video_parser.add_argument("--out", type=Path, required=True)
+    analyze_video_parser.add_argument("--asset-id", default="video-1")
+    analyze_video_parser.add_argument("--title")
+    analyze_video_parser.add_argument(
+        "--models",
+        default="openai",
+        help="Comma-separated video models. Use 'primary' for OpenAI-only Lambda-friendly analysis.",
+    )
+    add_video_model_options(analyze_video_parser)
 
     extract_parser = subparsers.add_parser("extract")
     extract_parser.add_argument("manifest", type=Path)
@@ -166,6 +209,21 @@ def main(argv: list[str] | None = None) -> int:
     combo_analyze_parser.add_argument("manifest", type=Path)
     combo_analyze_parser.add_argument("--analysis", type=Path, required=True)
     combo_analyze_parser.add_argument("--out", type=Path, required=True)
+    combo_build_parser = combo_subparsers.add_parser("build")
+    combo_build_parser.add_argument("--audio-analysis", type=Path, required=True)
+    combo_build_parser.add_argument("--video-analysis", type=Path, required=True)
+    combo_build_parser.add_argument("--out", type=Path, required=True)
+    combo_build_parser.add_argument("--combo-id", default="combo-1")
+    combo_build_parser.add_argument("--audio-asset-id")
+    combo_build_parser.add_argument("--video-asset-id")
+
+    neighbors_parser = subparsers.add_parser("neighbors")
+    neighbors_subparsers = neighbors_parser.add_subparsers(dest="neighbors_command", required=True)
+    neighbors_query_parser = neighbors_subparsers.add_parser("query")
+    neighbors_query_parser.add_argument("--combo-analysis", type=Path, required=True)
+    neighbors_query_parser.add_argument("--candidates", type=Path, required=True)
+    neighbors_query_parser.add_argument("--out", type=Path)
+    neighbors_query_parser.add_argument("--top-k", type=int, default=10)
 
     args = parser.parse_args(argv)
 
@@ -176,6 +234,55 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"valid manifest: {len(manifest.assets)} assets, {len(manifest.combos)} combos"
         )
+        return 0
+
+    if args.command == "analyze" and args.analyze_command == "audio":
+        try:
+            row = analyze_audio_file(
+                args.input,
+                asset_id=args.asset_id,
+                title=args.title,
+                model_name=args.model,
+                essentia_embedding_model=args.essentia_embedding_model,
+                essentia_valence_arousal_model=args.essentia_valence_arousal_model,
+                essentia_output_range=args.essentia_output_range,
+                openai_audio_model=args.openai_audio_model,
+                openai_api_key_env=args.openai_api_key_env,
+            )
+        except (RuntimeError, ValueError) as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 1
+        write_json(args.out, row)
+        print(f"wrote audio analysis to {args.out}")
+        return 0
+
+    if args.command == "analyze" and args.analyze_command == "video":
+        try:
+            row = analyze_video_file(
+                args.input,
+                asset_id=args.asset_id,
+                title=args.title,
+                model_names=parse_csv(args.models),
+                openclip_model=args.openclip_model,
+                openclip_pretrained=args.openclip_pretrained,
+                openai_model=args.openai_model,
+                openai_api_key_env=args.openai_api_key_env,
+                openai_image_detail=args.openai_image_detail,
+                siglip_model=args.siglip_model,
+                qwen_model=args.qwen_model,
+                qwen_max_new_tokens=args.qwen_max_new_tokens,
+                qwen_torch_dtype=args.qwen_torch_dtype,
+                qwen_device_map=args.qwen_device_map,
+                dinov2_model=args.dinov2_model,
+                embedding_dir=args.embedding_out_dir or args.out.parent / "embeddings",
+                video_frame_rate=args.video_frame_rate,
+                video_max_frames=args.video_max_frames,
+            )
+        except (RuntimeError, ValueError) as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 1
+        write_json(args.out, row)
+        print(f"wrote video analysis to {args.out}")
         return 0
 
     if args.command == "extract":
@@ -207,7 +314,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         try:
             rows = build_asset_tone_rows(manifest, audio_model=audio_model, video_model=video_model)
-        except RuntimeError as error:
+        except (RuntimeError, ValueError) as error:
             print(f"error: {error}", file=sys.stderr)
             return 1
         write_jsonl(args.out, rows)
@@ -226,7 +333,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "bundle" and args.bundle_command == "create":
         try:
             manifest = create_bundle(args.analysis, args.out, asset_id=args.asset_id)
-        except RuntimeError as error:
+        except (RuntimeError, ValueError) as error:
             print(f"error: {error}", file=sys.stderr)
             return 1
         print(json.dumps(manifest, indent=2, sort_keys=True))
@@ -258,6 +365,38 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote {len(rows)} combo analysis rows to {args.out}")
         return 0
 
+    if args.command == "combo" and args.combo_command == "build":
+        try:
+            row = build_combo_analysis_from_files(
+                args.audio_analysis,
+                args.video_analysis,
+                combo_id=args.combo_id,
+                out_audio_asset_id=args.audio_asset_id,
+                out_video_asset_id=args.video_asset_id,
+            )
+        except RuntimeError as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 1
+        write_json(args.out, row)
+        print(f"wrote combo analysis to {args.out}")
+        return 0
+
+    if args.command == "neighbors" and args.neighbors_command == "query":
+        try:
+            query_rows = read_analysis_rows(args.combo_analysis)
+            if len(query_rows) != 1:
+                raise RuntimeError(f"expected exactly one query combo row, found {len(query_rows)}")
+            results = top_k_neighbors(query_rows[0], read_analysis_rows(args.candidates), top_k=args.top_k)
+        except RuntimeError as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 1
+        if args.out:
+            write_json(args.out, results)
+            print(f"wrote {len(results)} neighbor results to {args.out}")
+        else:
+            print(json.dumps(results, indent=2, sort_keys=True))
+        return 0
+
     parser.error("unsupported command")
 
 
@@ -277,6 +416,27 @@ def load_local_env_files() -> None:
     ):
         if env_path.exists():
             load_dotenv(env_path, override=False)
+
+
+def add_video_model_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--openclip-model", default="ViT-B-32")
+    parser.add_argument("--openclip-pretrained", default="laion2b_s34b_b79k")
+    parser.add_argument("--openai-model", default="gpt-5")
+    parser.add_argument("--openai-api-key-env", default="OPENAI_API_KEY")
+    parser.add_argument("--openai-image-detail", choices=["low", "high", "auto"], default="low")
+    parser.add_argument("--dinov2-model", default="facebook/dinov2-small")
+    parser.add_argument("--siglip-model", default="google/siglip-base-patch16-224")
+    parser.add_argument("--qwen-model", default="Qwen/Qwen2.5-VL-7B-Instruct")
+    parser.add_argument("--qwen-max-new-tokens", type=int, default=512)
+    parser.add_argument("--qwen-torch-dtype", default="auto", choices=["auto", "float32", "float16", "bfloat16"])
+    parser.add_argument("--qwen-device-map", default="auto")
+    parser.add_argument("--embedding-out-dir", type=Path)
+    parser.add_argument("--video-frame-rate", type=float, default=1.0)
+    parser.add_argument("--video-max-frames", type=int, default=12)
+
+
+def parse_csv(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 if __name__ == "__main__":

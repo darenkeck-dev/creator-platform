@@ -50,12 +50,11 @@ DINOV2_EMBEDDING_DIR=/tmp/dinov2-embeddings ./apps/tone-embedding/scripts/run-di
 Inside an environment where the `video` optional dependencies are installed:
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=apps/tone-embedding/src \
-python -m tone_embedding extract \
-  apps/tone-embedding/examples/video-manifest.example.json \
-  --out apps/tone-embedding/tests/output/asset-tones-dinov2-video.jsonl \
+uv run --extra video tone-embedding extract \
+  examples/video-manifest.example.json \
+  --out tests/output/asset-tones-dinov2-video.jsonl \
   --video-model dinov2 \
-  --embedding-out-dir apps/tone-embedding/tests/output/embeddings
+  --embedding-out-dir tests/output/embeddings
 ```
 
 Optional controls:

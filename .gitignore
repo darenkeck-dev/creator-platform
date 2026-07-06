@@ -21,6 +21,7 @@ bun.lockb
 __pycache__/
 *.py[cod]
 *.egg-info/
+build/
 .pytest_cache/
 .ruff_cache/
 .venv/

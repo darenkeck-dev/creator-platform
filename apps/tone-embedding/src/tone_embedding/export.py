@@ -19,7 +19,10 @@ from .models import (
     SiglipVideoToneModel,
     ToneModelAdapter,
 )
-from .tone import compute_congruence, tone_to_words
+from .tone import TONE_TAXONOMY_VERSION, tone_to_words
+
+
+ASSET_ANALYSIS_SCHEMA = "asset-analysis/v1"
 
 
 def build_asset_tone_rows(
@@ -38,9 +41,11 @@ def build_asset_tone_rows(
         model_run = ModelRun.from_adapter(model).to_dict()
         parameters = model_parameters(model, extraction)
         row = {
+            "schemaVersion": ASSET_ANALYSIS_SCHEMA,
             "assetId": asset.id,
             "assetType": asset.type,
             "source": source_to_dict(asset.source),
+            "toneTaxonomyVersion": TONE_TAXONOMY_VERSION,
             "modelRuns": [],
             "createdAt": created_at,
         }
@@ -53,6 +58,7 @@ def build_asset_tone_rows(
                 "value": extraction.tone,
                 "words": tone_words,
                 "contributors": [model.name],
+                "taxonomyVersion": TONE_TAXONOMY_VERSION,
             }
             model_run_row = {
                 "kind": "tone",
@@ -115,52 +121,6 @@ def model_parameters(model: ToneModelAdapter, extraction: Any) -> dict[str, Any]
     if embedding_dim is not None:
         parameters = {**parameters, "embeddingDim": int(embedding_dim)}
     return parameters
-
-
-def build_training_rows(
-    manifest: MediaManifest,
-    audio_model: ToneModelAdapter | None = None,
-    video_model: ToneModelAdapter | None = None,
-) -> list[dict[str, Any]]:
-    audio_model = audio_model or PlaceholderAudioToneModel()
-    video_model = video_model or PlaceholderVideoToneModel()
-    assets = {asset.id: asset for asset in manifest.assets}
-    created_at = datetime.now(UTC).isoformat()
-    rows: list[dict[str, Any]] = []
-
-    for combo in manifest.combos:
-        audio_asset = assets[combo.audio_id]
-        video_asset = assets[combo.video_id]
-        audio_extraction = audio_model.extract(audio_asset)
-        video_extraction = video_model.extract(video_asset)
-        audio_tone = audio_extraction.tone
-        video_tone = video_extraction.tone
-
-        rows.append(
-            {
-                "comboId": combo.id,
-                "audioId": combo.audio_id,
-                "videoId": combo.video_id,
-                "audioSource": source_to_dict(audio_asset.source),
-                "videoSource": source_to_dict(video_asset.source),
-                "audioTone": audio_tone,
-                "videoTone": video_tone,
-                "audioToneWords": tone_to_words(audio_tone),
-                "videoToneWords": tone_to_words(video_tone),
-                "audioRawScores": audio_extraction.raw_scores or {},
-                "videoRawScores": video_extraction.raw_scores or {},
-                "congruence": compute_congruence(audio_tone, video_tone),
-                "comboEmbeddingPath": None,
-                "models": {
-                    "audio": ModelRun.from_adapter(audio_model).to_dict(),
-                    "video": ModelRun.from_adapter(video_model).to_dict(),
-                },
-                "humanLabels": [],
-                "createdAt": created_at,
-            }
-        )
-
-    return rows
 
 
 def build_audio_model(

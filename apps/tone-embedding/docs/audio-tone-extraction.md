@@ -55,13 +55,12 @@ ESSENTIA_AUDIO_TEST_IMAGE=my-essentia-test:local ./apps/tone-embedding/scripts/r
 Inside an environment where `essentia-tensorflow` is installed:
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=apps/tone-embedding/src \
-python -m tone_embedding extract \
-  apps/tone-embedding/examples/audio-manifest.example.json \
-  --out apps/tone-embedding/tests/output/asset-tones-essentia.jsonl \
+uv run --extra essentia tone-embedding extract \
+  examples/audio-manifest.example.json \
+  --out tests/output/asset-tones-essentia.jsonl \
   --audio-model essentia \
-  --essentia-embedding-model apps/tone-embedding/models/msd-musicnn-1.pb \
-  --essentia-valence-arousal-model apps/tone-embedding/models/deam-msd-musicnn-2.pb
+  --essentia-embedding-model models/msd-musicnn-1.pb \
+  --essentia-valence-arousal-model models/deam-msd-musicnn-2.pb
 ```
 
 ## Expected Output Shape

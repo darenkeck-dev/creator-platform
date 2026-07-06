@@ -3,74 +3,25 @@ from __future__ import annotations
 import math
 from typing import Any
 
-
-TONE_DIMENSIONS = (
-    "valence",
-    "arousal",
-    "dominance",
-    "warmth",
-    "tension",
-    "intimacy",
-    "instability",
-    "nostalgia",
-    "beauty",
-    "menace",
+from .taxonomy import (
+    TONE_TAXONOMY_VERSION,
+    avoid_rules,
+    descriptor_rules,
+    descriptor_to_score,
+    strength_scores,
+    taxonomy_dimensions,
 )
+
+
+TONE_DIMENSIONS = taxonomy_dimensions()
 
 ToneVector = dict[str, float]
 StructuredToneDescriptor = dict[str, Any]
 
-STRENGTH_SCORES = {
-    "none": 0.0,
-    "weak": 0.25,
-    "medium": 0.55,
-    "strong": 0.85,
-    "extreme": 1.0,
-}
-
-DESCRIPTOR_RULES = (
-    ("valence", 0.25, "uplifting", "melancholic"),
-    ("arousal", 0.25, "energetic", "subdued"),
-    ("warmth", 0.25, "warm", "cold"),
-    ("tension", 0.25, "tense", "relaxed"),
-    ("menace", 0.2, "threatening", "safe"),
-    ("instability", 0.25, "unstable", "stable"),
-    ("beauty", 0.25, "beautiful", "harsh"),
-    ("nostalgia", 0.25, "nostalgic", "unsentimental"),
-    ("intimacy", 0.25, "intimate", "distant"),
-    ("dominance", 0.25, "commanding", "delicate"),
-)
-
-AVOID_RULES = {
-    "uplifting": "melancholic",
-    "melancholic": "joyful",
-    "energetic": "subdued",
-    "subdued": "energetic",
-    "warm": "cold",
-    "cold": "warm",
-    "tense": "peaceful",
-    "relaxed": "urgent",
-    "threatening": "safe",
-    "safe": "threatening",
-    "unstable": "orderly",
-    "stable": "chaotic",
-    "beautiful": "harsh",
-    "harsh": "polished",
-    "nostalgic": "clinical",
-    "unsentimental": "nostalgic",
-    "intimate": "impersonal",
-    "distant": "intimate",
-    "commanding": "delicate",
-    "delicate": "dominant",
-}
-
-DESCRIPTOR_TO_SCORE = {
-    positive_word: (dimension, 1.0)
-    for dimension, _, positive_word, _ in DESCRIPTOR_RULES
-} | {
-    negative_word: (dimension, -1.0)
-    for dimension, _, _, negative_word in DESCRIPTOR_RULES
-}
+STRENGTH_SCORES = strength_scores()
+DESCRIPTOR_RULES = descriptor_rules()
+AVOID_RULES = avoid_rules()
+DESCRIPTOR_TO_SCORE = descriptor_to_score()
 
 
 def tone_to_words(tone: ToneVector) -> dict[str, list[str] | str]:

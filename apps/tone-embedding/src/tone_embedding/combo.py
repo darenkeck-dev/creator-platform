@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from .manifest import MediaManifest
-from .tone import TONE_DIMENSIONS, ToneVector, compute_congruence
+from .tone import TONE_DIMENSIONS, TONE_TAXONOMY_VERSION, ToneVector, compute_congruence
 
 
 COMBO_VECTOR_BLOCKS = {
@@ -38,6 +38,7 @@ def build_combo_analysis_rows(
                 "comboId": combo.id,
                 "audioAssetId": combo.audio_id,
                 "videoAssetId": combo.video_id,
+                "toneTaxonomyVersion": TONE_TAXONOMY_VERSION,
                 "audioTitle": assets_by_id[combo.audio_id].title,
                 "videoTitle": assets_by_id[combo.video_id].title,
                 "features": features,

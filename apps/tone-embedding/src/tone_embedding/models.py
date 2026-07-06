@@ -102,11 +102,11 @@ class OpenAIAudioToneModel:
                 }
             ],
         )
-        content = openai_audio_response_text(response.choices[0].message)
-        if not content:
-            raise RuntimeError("OpenAI returned an empty audio tone descriptor response")
+        audio_analysis = openai_audio_response_text(response.choices[0].message)
+        if not audio_analysis:
+            raise RuntimeError("OpenAI returned an empty audio analysis response")
 
-        payload = parse_json_object_response(content, "OpenAI audio")
+        payload = structure_openai_audio_analysis(client, audio_analysis)
         descriptor_scores = payload.get("descriptorScores", [])
         if not isinstance(descriptor_scores, list):
             raise RuntimeError("OpenAI descriptorScores must be a list")
@@ -115,10 +115,16 @@ class OpenAIAudioToneModel:
         raw_scores = {dimension: tone[dimension] for dimension in TONE_DIMENSIONS}
         metadata = {
             "caption": payload.get("caption"),
+            "audioDescription": payload.get("audioDescription"),
+            "semanticSummary": payload.get("semanticSummary"),
+            "mood": payload.get("mood"),
+            "instrumentation": payload.get("instrumentation", []),
+            "vocals": payload.get("vocals"),
+            "audibleEvidence": payload.get("audibleEvidence", []),
             "tags": payload.get("tags", []),
             "descriptorScores": descriptor_scores,
             "rationale": payload.get("rationale"),
-            "targetStructuredSchema": "tone-descriptor-scores/v1",
+            "targetStructuredSchema": "audio-semantic-tone/v1",
         }
         return ToneExtraction(tone=tone, raw_scores=raw_scores, metadata=metadata)
 
@@ -128,7 +134,8 @@ class OpenAIAudioToneModel:
             "apiKeyEnv": self.api_key_env,
             "modalities": ["text", "audio"],
             "audioOutputFormat": "wav",
-            "schemaVersion": "tone-descriptor-scores/v1",
+            "schemaVersion": "audio-semantic-tone/v1",
+            "structureModelEnv": "OPENAI_AUDIO_STRUCTURE_MODEL",
         }
 
 
@@ -216,10 +223,16 @@ class OpenAIVideoToneModel:
         raw_scores = {dimension: tone[dimension] for dimension in TONE_DIMENSIONS}
         metadata = {
             "caption": payload.get("caption"),
+            "sceneDescription": payload.get("sceneDescription"),
+            "semanticSummary": payload.get("semanticSummary"),
+            "mood": payload.get("mood"),
+            "setting": payload.get("setting"),
+            "subjects": payload.get("subjects", []),
+            "visualEvidence": payload.get("visualEvidence", []),
             "tags": payload.get("tags", []),
             "descriptorScores": descriptor_scores,
             "rationale": payload.get("rationale"),
-            "targetStructuredSchema": "tone-descriptor-scores/v1",
+            "targetStructuredSchema": "video-semantic-tone/v1",
         }
         return ToneExtraction(tone=tone, raw_scores=raw_scores, metadata=metadata)
 
@@ -230,7 +243,7 @@ class OpenAIVideoToneModel:
             "frameRate": self.frame_rate,
             "maxFrames": self.max_frames,
             "imageDetail": self.image_detail,
-            "schemaVersion": "tone-descriptor-scores/v1",
+            "schemaVersion": "video-semantic-tone/v1",
         }
 
 
@@ -606,7 +619,8 @@ class DinoV2VideoEmbeddingModel:
                 from transformers import AutoImageProcessor, AutoModel
             except ImportError as error:
                 raise RuntimeError(
-                    "DINOv2 video extraction requires torch and transformers"
+                    "DINOv2 video extraction requires working torch and transformers imports: "
+                    f"{error}"
                 ) from error
 
             self._torch = torch
@@ -864,25 +878,10 @@ def tanh_score(value: float, temperature: float) -> float:
 
 def qwen_scene_tone_prompt() -> str:
     return (
-        "Describe the visual tone for audio/video pairing. Use compact natural language, not JSON. "
-        "Prefer descriptor phrases that can later be converted into structured tone data. "
-        "Use strength words such as weak, medium, strong, or extreme when useful. "
-        "Use descriptor dimensions when they fit: valence, arousal, warmth, tension, menace, "
-        "instability, beauty, nostalgia, intimacy, dominance. "
-        "Use descriptor words when they fit: uplifting, melancholic, energetic, subdued, warm, cold, "
-        "tense, relaxed, threatening, safe, unstable, stable, beautiful, harsh, nostalgic, "
-        "unsentimental, intimate, distant, commanding, delicate. "
-        "Keep the answer short: 3 to 8 bullet-like lines plus one short rationale.\n\n"
-        "Examples:\n"
-        "- strong warmth:cold\n"
-        "- medium instability:unstable\n"
-        "- weak intimacy:distant\n"
-        "Rationale: The scene feels cool, unsettled, and emotionally removed.\n\n"
-        "- medium valence:uplifting\n"
-        "- strong beauty:beautiful\n"
-        "- weak tension:relaxed\n"
-        "Rationale: Bright composition and graceful motion suggest a pleasant, low-pressure mood.\n\n"
-        "Now describe only the sampled frames."
+        "Describe the sampled video frames for audio/video pairing in compact natural language. "
+        "Do not produce JSON, scores, dimensions, or strength labels. "
+        "Focus on the visible scene, atmosphere, emotional tone, visual style, and why it feels that way. "
+        "Keep the answer to 2 or 3 short sentences."
     )
 
 
@@ -891,45 +890,90 @@ def openai_tone_descriptor_prompt() -> str:
     strengths = ", ".join(STRENGTH_SCORES)
     dimensions = ", ".join(TONE_DIMENSIONS)
     return (
-        "Analyze these sampled video frames for visual tone matching. "
-        "Score only visible evidence; do not infer audio. "
-        "Return descriptorScores using the controlled descriptor vocabulary. "
+        "Analyze these sampled video frames for audio/video pairing. Score only visible evidence; do not infer audio. "
+        "Return both semantic scene meaning and controlled descriptorScores. "
+        "For semantic scene meaning, describe what is visible, the setting, subjects, visual style, atmosphere, mood, and why the scene feels that way. "
+        "For tone, return descriptorScores using the controlled descriptor vocabulary. "
         f"Allowed descriptors: {descriptors}. "
         f"Allowed dimensions: {dimensions}. "
         f"Allowed strengthLabel values: {strengths}. "
         "strengthValue is a 0.0 to 1.0 amplitude where 0 means absent and 1 means extreme. "
-        "Use 3 to 7 descriptors. Prefer descriptors a user could select in a rating UI."
+        "Use 3 to 7 descriptors. Prefer descriptors a user could select in a rating UI. "
+        "Make sceneDescription and semanticSummary useful for a human trying to understand the clip's meaning, not just its tone scores."
     )
 
 
 def openai_audio_tone_descriptor_prompt() -> str:
-    descriptors = ", ".join(sorted(DESCRIPTOR_TO_SCORE))
-    strengths = ", ".join(STRENGTH_SCORES)
-    dimensions = ", ".join(TONE_DIMENSIONS)
     return (
-        "Analyze this audio for music/video pairing tone. "
-        "Return exactly one compact JSON object. Do not use markdown. "
-        "Score only audible evidence such as tempo, rhythm, dynamics, timbre, harmony, vocals, and production texture. "
-        "Use this schema: {\"caption\":string,\"tags\":[string],\"descriptorScores\":[{\"descriptor\":string,\"dimension\":string,\"strengthLabel\":string,\"strengthValue\":number,\"confidence\":number,\"evidence\":string}],\"rationale\":string}. "
-        "Return descriptorScores using the controlled descriptor vocabulary. "
-        f"Allowed descriptors: {descriptors}. "
-        f"Allowed dimensions: {dimensions}. "
-        f"Allowed strengthLabel values: {strengths}. "
-        "strengthValue is a 0.0 to 1.0 amplitude where 0 means absent and 1 means extreme. "
-        "Use 3 to 7 descriptors. Prefer descriptors a user could select in a rating UI."
+        "Analyze this audio for music/video pairing. Do not return JSON. "
+        "Describe only audible evidence: tempo feel, rhythm, dynamics, timbre, harmony, vocals, instrumentation, arrangement, production texture, genre/style cues, atmosphere, and mood. "
+        "Explain why it feels that way. Keep the response concise but specific, around 6 to 10 short bullet-like lines. "
+        "Do not invent exact BPM, key, lyrics, or instruments unless they are clearly audible."
     )
 
 
-def openai_tone_descriptor_schema() -> dict[str, Any]:
+def structure_openai_audio_analysis(client: Any, content: str) -> dict[str, Any]:
+    structure_model = os.environ.get("OPENAI_AUDIO_STRUCTURE_MODEL", "gpt-5")
+    descriptors = ", ".join(sorted(DESCRIPTOR_TO_SCORE))
+    strengths = ", ".join(STRENGTH_SCORES)
+    dimensions = ", ".join(TONE_DIMENSIONS)
+    response = client.chat.completions.create(
+        model=structure_model,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            "Convert this audio analysis into strict JSON matching the schema. "
+                            "Use the source analysis for semantic fields. Infer descriptorScores from the described audible evidence only. "
+                            "Do not add facts that are not present. Remove any prompt artifacts, bracketed instructions, malformed quote fragments, or meta text that is not audio analysis. "
+                            "Tags, instrumentation, and audibleEvidence must be separate short plain phrases with no embedded quote characters or comma-packed lists. "
+                            "Calibrate strengthValue carefully: 0 absent, 0.25 weak, 0.55 medium, 0.85 strong, 1 extreme. "
+                            f"Allowed descriptors: {descriptors}. Allowed dimensions: {dimensions}. Allowed strengthLabel values: {strengths}.\n\n"
+                            + content
+                        ),
+                    }
+                ],
+            }
+        ],
+        response_format={
+            "type": "json_schema",
+            "json_schema": openai_audio_semantic_tone_schema(),
+        },
+    )
+    structured = response.choices[0].message.content
+    if not structured:
+        raise RuntimeError("OpenAI audio structuring returned an empty response")
+    return json.loads(structured)
+
+
+def openai_audio_semantic_tone_schema() -> dict[str, Any]:
     descriptors = sorted(DESCRIPTOR_TO_SCORE)
     return {
-        "name": "tone_descriptor_scores",
+        "name": "audio_semantic_tone",
         "strict": True,
         "schema": {
             "type": "object",
             "additionalProperties": False,
             "properties": {
                 "caption": {"type": "string"},
+                "audioDescription": {"type": "string"},
+                "semanticSummary": {"type": "string"},
+                "mood": {"type": "string"},
+                "instrumentation": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 8,
+                },
+                "vocals": {"type": "string"},
+                "audibleEvidence": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 1,
+                    "maxItems": 8,
+                },
                 "tags": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -962,7 +1006,91 @@ def openai_tone_descriptor_schema() -> dict[str, Any]:
                 },
                 "rationale": {"type": "string"},
             },
-            "required": ["caption", "tags", "descriptorScores", "rationale"],
+            "required": [
+                "caption",
+                "audioDescription",
+                "semanticSummary",
+                "mood",
+                "instrumentation",
+                "vocals",
+                "audibleEvidence",
+                "tags",
+                "descriptorScores",
+                "rationale",
+            ],
+        },
+    }
+
+
+def openai_tone_descriptor_schema() -> dict[str, Any]:
+    descriptors = sorted(DESCRIPTOR_TO_SCORE)
+    return {
+        "name": "video_semantic_tone",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "caption": {"type": "string"},
+                "sceneDescription": {"type": "string"},
+                "semanticSummary": {"type": "string"},
+                "mood": {"type": "string"},
+                "setting": {"type": "string"},
+                "subjects": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 8,
+                },
+                "visualEvidence": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 1,
+                    "maxItems": 8,
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 8,
+                },
+                "descriptorScores": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 7,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "descriptor": {"type": "string", "enum": descriptors},
+                            "dimension": {"type": "string", "enum": list(TONE_DIMENSIONS)},
+                            "strengthLabel": {"type": "string", "enum": list(STRENGTH_SCORES)},
+                            "strengthValue": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                            "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                            "evidence": {"type": "string"},
+                        },
+                        "required": [
+                            "descriptor",
+                            "dimension",
+                            "strengthLabel",
+                            "strengthValue",
+                            "confidence",
+                            "evidence",
+                        ],
+                    },
+                },
+                "rationale": {"type": "string"},
+            },
+            "required": [
+                "caption",
+                "sceneDescription",
+                "semanticSummary",
+                "mood",
+                "setting",
+                "subjects",
+                "visualEvidence",
+                "tags",
+                "descriptorScores",
+                "rationale",
+            ],
         },
     }
 
@@ -1003,13 +1131,17 @@ def parse_json_object_response(response: str, label: str) -> dict[str, Any]:
 
     try:
         parsed = json.loads(text)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as original_error:
         start = text.find("{")
         end = text.rfind("}")
         if start < 0 or end <= start:
             preview = text.replace("\n", " ")[:500]
             raise RuntimeError(f"{label} response did not contain JSON: {preview}")
-        parsed = json.loads(text[start : end + 1])
+        try:
+            parsed = json.loads(text[start : end + 1])
+        except json.JSONDecodeError as error:
+            preview = text.replace("\n", " ")[:800]
+            raise RuntimeError(f"{label} response contained invalid JSON: {preview}") from original_error or error
 
     if not isinstance(parsed, dict):
         raise RuntimeError(f"{label} response JSON must be an object")

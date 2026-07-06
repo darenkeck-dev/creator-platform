@@ -171,3 +171,26 @@
 - Updated OpenAI audio response parsing to read JSON from `message.audio.transcript` when `message.content` is empty.
 - Added initial V1 combo analysis over existing asset analysis rows, computing audio/video `deltaTone`, `absDeltaTone`, `interactionTone`, descriptive congruence/contrast/intensity, strongest matches/contrasts, and a delta-heavy nearest-neighbor vector without producing combo quality or meaning judgements.
 - Added `apps/tone-embedding/docs/combo-scoring-system.md` documenting the V1 combo-analysis shape, scoring definitions, nearest-neighbor vector layout, and future V2 user-input/training path.
+- Removed stale direct combo/training-row language from the tone plan and deleted the unused `build_training_rows()` helper so the app language consistently uses asset analysis first and separate `combo-analysis/v1` rows later.
+- Added `asset-analysis/v1` row versioning, bundle `analysisSchemas`, and `apps/tone-embedding/docs/media-manager-invocation.md` to define the V1 external invocation contract for Media Manager-managed jobs.
+- Updated the combined video analysis script to use native Qwen-VL MPS by default and leave the Docker CPU Qwen path as a standalone smoke test only.
+- Simplified the primary V1 video analysis run to OpenAI semantic+tone metadata plus DINOv2 embeddings; OpenCLIP, SigLIP, and Qwen-VL remain standalone experimental adapters.
+- Expanded OpenAI audio analysis to emit `audio-semantic-tone/v1` metadata with semantic audio description fields plus descriptor scores for tone.
+- Updated OpenAI audio analysis to use `gpt-audio` for natural-language audible metadata and always use `OPENAI_AUDIO_STRUCTURE_MODEL` (`gpt-5` by default) for strict JSON and calibrated descriptor values.
+
+## [2026-07-01] docs | primary tone pipeline README
+
+- Added `apps/tone-embedding/scripts/run-audio-analysis-test.sh` as the generic primary audio analysis runner, matching the existing primary video runner naming and producing per-asset bundles.
+- Rewrote `apps/tone-embedding/README.md` to lead with primary audio/video pipeline usage, V1 output artifacts, manifest shape, direct CLI examples, environment variables, combo analysis, and experimental/model-specific runs later.
+- Verified `bash -n` for primary audio/video runners, unit tests (`43` passed, `1` optional skip), and Python compile checks for `apps/tone-embedding/src`.
+
+## [2026-07-01] cli | Python-native tone workflows
+
+- Added `tone_embedding.workflows` helpers for single-file audio/video analysis, combined multi-model video analysis rows, direct combo analysis from audio/video analysis files, and JSON/JSONL analysis IO.
+- Added `tone_embedding.neighbors` with local cosine-similarity top-k lookup over existing `nearestNeighborVector` values for development verification.
+- Extended the CLI with `analyze audio`, `analyze video`, `combo build`, and `neighbors query` while preserving existing manifest extraction, bundle, and combo analyze commands.
+- Added `apps/tone-embedding/VECTOR_DB_PREP_PLAN.md` to document the future backend-agnostic vector DB boundary and non-goals.
+- Updated `apps/tone-embedding/README.md` with prerequisites and uv-first CLI examples, then made the README app-relative so it can move with `apps/tone-embedding` as a standalone repo. Current production-style local setup is `uv sync --no-editable`, then `uv run tone-embedding ...`.
+- Added packaged `tone-taxonomy/v1` data for descriptor keywords, dimension mappings, strength labels, and avoid rules; `tone.py` now derives descriptor behavior from that taxonomy and asset/combo rows record `toneTaxonomyVersion`.
+- Updated CLI readiness for conversion-job use: `uv sync --no-editable` now documents and validates the `tone-embedding` console command without `PYTHONPATH`, schema contract fixtures were added for `asset-analysis/v1` and `tone-taxonomy/v1`, and the README/Media Manager invocation docs include exact production commands while leaving container implementation for review.
+- Switched `--models primary` to OpenAI-only and updated README/Media Manager/video pipeline docs plus primary audio/video scripts for Lambda-first analysis. DINOv2 remains available as an explicit opt-in embedding adapter outside the primary path.

@@ -31,7 +31,8 @@ Suggested stack:
 - `numpy`, `pandas`, `pyarrow`
 - `duckdb` or `sqlite` for local metadata
 - `faiss` or `hnswlib` for nearest-neighbor experiments
-- `streamlit` for a quick labeling/review UI
+
+Human review/voting is deferred for V1 and should be developed as a separate app/workflow. This app's V1 scope is model extraction, versioned metadata, stable CLI invocation, bundle artifacts, and descriptive combo geometry.
 
 ## Tone Model
 
@@ -129,32 +130,34 @@ Store at minimum:
 - Tone mapper: convert model-specific outputs into normalized tone dimensions.
 - Combo generator: pair audio/video assets and compute audio tone, video tone, congruence, and interaction features.
 - Embedding store: write JSONL/Parquet metadata plus `.npy` or `.safetensors` vectors.
-- Training data exporter: emit reproducible rows for V2 training.
-- Labeling/review UI: collect human tone tags/sliders and notes.
+- Metadata exporter: emit reproducible, versioned asset analysis and combo analysis rows.
+- External invocation contract: keep inputs/outputs stable for Media Manager orchestration.
 - Model registry: record model metadata, license, checkpoint, and parameters.
 - Batch CLI: run repeatable extraction jobs.
 
-## Initial Data Shape
+## Current Data Shape
 
-Use append-only JSONL or Parquet for training/export records:
+Use append-only JSONL or Parquet for asset analysis records. Asset extraction is the upload-time boundary; combo analysis references existing asset analysis rows instead of re-running model extraction directly inside combo rows.
+
+Asset analysis rows look like:
 
 ```json
 {
-  "comboId": "combo-123",
-  "audioId": "audio-1",
-  "videoId": "video-1",
-  "audioTone": {},
-  "videoTone": {},
-  "congruence": 0.72,
-  "comboEmbeddingPath": "embeddings/combo-123.npy",
-  "models": {
-    "audio": "essentia/deam-valence-arousal",
-    "video": "open_clip/ViT-L-14"
+  "schemaVersion": "asset-analysis/v1",
+  "assetId": "asset-123",
+  "assetType": "video",
+  "source": {},
+  "tone": {
+    "value": {},
+    "contributors": []
   },
-  "humanLabels": [],
+  "embeddings": {},
+  "modelRuns": [],
   "createdAt": "..."
 }
 ```
+
+Combo analysis is a later descriptive layer that consumes asset analysis rows and writes `combo-analysis/v1` rows containing `deltaTone`, `absDeltaTone`, `interactionTone`, congruence, contrast, intensity, and a nearest-neighbor vector. Learned combo meaning and quality judgement are deferred until user evaluation data exists.
 
 ## First Implementation Slice
 
@@ -164,10 +167,10 @@ Use append-only JSONL or Parquet for training/export records:
 4. Add audio tone extraction with Essentia as an optional adapter, with placeholder fallback when model files are not configured.
 5. Add video tone extraction and embedding support.
 6. Compute congruence over shared tone dimensions.
-7. Export JSONL/Parquet training rows.
-8. Add a small review UI for correcting tone labels.
+7. Export JSONL/Parquet asset analysis rows and descriptive combo analysis rows.
+8. Define stable CLI inputs/outputs for external orchestration by Media Manager.
 
-This produces useful V1 training data without needing to solve learned combo affect first.
+This produces useful V1 relationship geometry without needing to solve learned combo affect first.
 
 ### Step 5 Detail: Video Tone Extraction and Embeddings
 
@@ -187,21 +190,22 @@ Current implementation status:
 - Verified placeholder single-asset bundle create/inspect/extract preserves `modelRuns[].parameters` and contains exactly one asset row.
 - Added OpenAI audio descriptor generation using the same descriptor-score schema as OpenAI video so audio/video tone vectors can support future combo delta tracking.
 - Added V1 combo analysis that consumes asset analysis rows and computes relationship geometry only: `deltaTone`, `absDeltaTone`, `interactionTone`, descriptive congruence/contrast/intensity, strongest matches/contrasts, and a weighted nearest-neighbor vector. This intentionally avoids quality judgement or learned combo meaning until user evaluation data exists.
+- Added `asset-analysis/v1` row versioning and documented the Media Manager invocation contract for V1.
 
 Remaining work before Step 5 is considered complete:
 
-1. Validate the combined video bundle output end-to-end.
+1. Validate the primary OpenAI-only video bundle output end-to-end.
     - Run `./apps/tone-embedding/scripts/run-video-analysis-test.sh`.
     - Inspect the generated `.tonebundle.tar.gz`.
-    - Confirm `asset-analysis.jsonl` contains OpenCLIP, SigLIP, Qwen-VL, and DINOv2 metadata for every video asset.
-    - Confirm `.npy` files are present under `embeddings/<assetId>/dinov2.npy` inside the bundle.
+    - Confirm `asset-analysis.jsonl` contains OpenAI semantic/tone metadata for every video asset.
+    - Keep DINOv2 embeddings as an explicit optional pass for later container/Fargate/Batch review.
 2. Validate SigLIP and Qwen-VL output quality on representative local videos.
    - Treat OpenCLIP as a baseline/backstop, not the primary quality bet.
    - Prefer SigLIP for stable prompt-pair scores and Qwen-VL for scene semantics/rationale.
    - Record prompt and prompt-pair versions so score changes are auditable.
-3. Update plan/docs to consistently use the asset-analysis/bundle model.
-   - Older planning language still references direct combo/training rows in places.
-   - Asset upload should produce asset analysis bundles; combo/congruence is a later layer.
+3. Keep plan/docs consistently aligned to the asset-analysis/bundle model.
+   - Asset upload should produce asset analysis bundles.
+   - Combo analysis should reference asset analysis rows and remain separate from upload-time extraction.
 4. Add richer bundle inspection/summarization.
    - `bundle inspect` currently returns bundle manifest metadata.
    - Add a summary view that reports per-asset tone contributors, embedding kinds, embedding dimensions, and missing expected model runs.
@@ -211,12 +215,17 @@ Remaining work before Step 5 is considered complete:
 6. Validate V1 combo analysis on representative OpenAI audio/video outputs.
    - Confirm delta-heavy nearest-neighbor traversal groups pairings by relationship shape rather than asset/component similarity alone.
    - Keep `combo-analysis/v1` descriptive; reserve meaning and value judgement for later user-trained layers.
+7. Validate external invocation readiness.
+   - Confirm Media Manager can provide manifests, inject environment variables/secrets, run extraction commands, collect bundles, and store schema versions without tone app changes.
+   - Keep human review, voting, and learned combo meaning out of this V1 app.
 
 Step 5 acceptance criteria:
 
 - Running the combined video analysis script produces one `.tonebundle.tar.gz` artifact per video asset.
-- Each bundle contains `manifest.json`, single-row `asset-analysis.jsonl`, and that asset's referenced embedding files.
-- JSONL embedding paths are bundle-relative and contain no absolute local/container paths or S3 keys.
-- Each video asset has OpenCLIP, SigLIP, and Qwen-VL tone model runs plus a DINOv2 embedding model run.
-- Model runs record enough parameters to reproduce the extraction. Current support includes OpenCLIP model/pretrained checkpoint/frame sampling/prompt-pair version, SigLIP checkpoint/frame sampling/prompt-pair version, Qwen-VL checkpoint/frame sampling/generation settings/prompt version, and DINOv2 checkpoint/frame sampling/embedding dimension.
+- Each bundle contains `manifest.json` and a single-row `asset-analysis.jsonl`; embedding files are included only when an embedding model is explicitly run.
+- JSONL embedding paths, when present, are bundle-relative and contain no absolute local/container paths or S3 keys.
+- Each primary video asset has an OpenAI tone model run with `video-semantic-tone/v1` metadata.
+- DINOv2 remains available as an explicit opt-in embedding adapter for later containerized execution.
+- Model runs record enough parameters to reproduce the extraction, including OpenAI model, frame sampling, image detail, API-key env name, schema version, and optional local model settings when those adapters are explicitly run.
 - Unit tests cover bundle creation/inspection/extraction and the analysis output shape.
+- Asset analysis rows include `schemaVersion="asset-analysis/v1"`, combo rows include `schemaVersion="combo-analysis/v1"`, and bundles include `schema="tone-analysis-bundle/v1"` plus contained `analysisSchemas`.
