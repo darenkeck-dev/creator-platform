@@ -1,0 +1,43 @@
+{
+  "assets": [
+    {
+      "id": "audio-demo-00",
+      "type": "audio",
+      "title": "Audio Demo 00",
+      "source": {
+        "kind": "file",
+        "path": "./media/audio-demo-00.mp3"
+      }
+    },
+    {
+      "id": "audio-demo-01",
+      "type": "audio",
+      "title": "Audio Demo 01",
+      "source": {
+        "kind": "file",
+        "path": "./media/audio-demo-01.mp3"
+      }
+    },
+    {
+      "id": "video-demo",
+      "type": "video",
+      "title": "Video Demo",
+      "source": {
+        "kind": "file",
+        "path": "./media/video-demo.m4v"
+      }
+    }
+  ],
+  "combos": [
+    {
+      "id": "combo-demo-00",
+      "audioId": "audio-demo-00",
+      "videoId": "video-demo"
+    },
+    {
+      "id": "combo-demo-01",
+      "audioId": "audio-demo-01",
+      "videoId": "video-demo"
+    }
+  ]
+}

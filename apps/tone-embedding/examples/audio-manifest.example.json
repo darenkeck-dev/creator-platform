@@ -1,0 +1,22 @@
+{
+  "assets": [
+    {
+      "id": "audio-demo-00",
+      "type": "audio",
+      "title": "Audio Demo 00",
+      "source": {
+        "kind": "file",
+        "path": "./media/audio-demo-00.mp3"
+      }
+    },
+    {
+      "id": "audio-demo-01",
+      "type": "audio",
+      "title": "Audio Demo 01",
+      "source": {
+        "kind": "file",
+        "path": "./media/audio-demo-01.mp3"
+      }
+    }
+  ]
+}

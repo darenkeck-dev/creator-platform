@@ -17,3 +17,15 @@ infra/cdk/lambda-dist/
 !.env.example
 
 bun.lockb
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+.pytest_cache/
+.ruff_cache/
+.venv/
+
+apps/tone-embedding/examples/media/
+apps/tone-embedding/models/
+apps/tone-embedding/tests/output/
