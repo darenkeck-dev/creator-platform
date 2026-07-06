@@ -194,3 +194,9 @@
 - Added packaged `tone-taxonomy/v1` data for descriptor keywords, dimension mappings, strength labels, and avoid rules; `tone.py` now derives descriptor behavior from that taxonomy and asset/combo rows record `toneTaxonomyVersion`.
 - Updated CLI readiness for conversion-job use: `uv sync --no-editable` now documents and validates the `tone-embedding` console command without `PYTHONPATH`, schema contract fixtures were added for `asset-analysis/v1` and `tone-taxonomy/v1`, and the README/Media Manager invocation docs include exact production commands while leaving container implementation for review.
 - Switched `--models primary` to OpenAI-only and updated README/Media Manager/video pipeline docs plus primary audio/video scripts for Lambda-first analysis. DINOv2 remains available as an explicit opt-in embedding adapter outside the primary path.
+
+## [2026-07-06] validation | real OpenAI tone smoke
+
+- Generated ignored local audio/video smoke fixtures under `apps/tone-embedding/examples/media/` and ran real OpenAI audio and primary video analysis.
+- Created and inspected per-asset `.tonebundle.tar.gz` files for both smoke outputs.
+- Fixed the OpenAI extra to include `numpy` for OpenCV frame sampling and updated bundle creation to accept the single JSON object shape emitted by direct `analyze audio/video` commands.

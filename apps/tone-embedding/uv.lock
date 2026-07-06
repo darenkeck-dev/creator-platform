@@ -1641,6 +1641,8 @@ essentia = [
     { name = "essentia-tensorflow" },
 ]
 openai = [
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "openai" },
     { name = "opencv-python-headless" },
     { name = "pillow" },
@@ -1679,6 +1681,7 @@ requires-dist = [
     { name = "accelerate", marker = "extra == 'qwen-mps'" },
     { name = "accelerate", marker = "extra == 'video'" },
     { name = "essentia-tensorflow", marker = "extra == 'essentia'" },
+    { name = "numpy", marker = "extra == 'openai'" },
     { name = "numpy", marker = "extra == 'video'" },
     { name = "open-clip-torch", marker = "extra == 'video'" },
     { name = "openai", marker = "extra == 'openai'" },

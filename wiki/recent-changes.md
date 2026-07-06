@@ -33,6 +33,7 @@
 - Added versioned `tone-taxonomy/v1` descriptor vocabulary/mapping data and wired asset/combo outputs to record `toneTaxonomyVersion`.
 - Prepared the tone app for CLI invocation from conversion jobs: documented `uv sync --no-editable`, validated `uv run tone-embedding ...`, added schema contract fixtures for `asset-analysis/v1` and `tone-taxonomy/v1`, and documented production invocation commands.
 - Switched the primary tone pipeline to OpenAI-only for Lambda-first evaluation; DINOv2 remains available only as an explicit optional embedding path for later container/Fargate/Batch review.
+- Ran real OpenAI audio/video smoke tests with generated local fixtures, created/inspected per-asset tone bundles, added `numpy` to the `openai` extra for OpenCV frame sampling, and fixed bundle creation from single-object analysis JSON outputs.
 
 ## Playback evolution summary
 

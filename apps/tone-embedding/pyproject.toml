@@ -7,7 +7,7 @@ dependencies = []
 
 [project.optional-dependencies]
 essentia = ["essentia-tensorflow"]
-openai = ["openai", "opencv-python-headless", "pillow", "python-dotenv"]
+openai = ["numpy", "openai", "opencv-python-headless", "pillow", "python-dotenv"]
 qwen-mps = ["accelerate", "opencv-python-headless", "pillow", "protobuf", "qwen-vl-utils", "sentencepiece", "torch", "torchvision", "transformers"]
 video = ["accelerate", "numpy", "open_clip_torch", "openai", "opencv-python-headless", "pillow", "protobuf", "python-dotenv", "qwen-vl-utils", "sentencepiece", "torch", "torchvision", "transformers"]
 

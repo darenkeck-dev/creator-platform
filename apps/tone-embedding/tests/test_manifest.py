@@ -833,6 +833,31 @@ class ManifestTests(unittest.TestCase):
             self.assertTrue((extract_dir / "asset-analysis.jsonl").is_file())
             self.assertEqual((extract_dir / "embeddings" / "video-1" / "dinov2.npy").read_bytes(), b"embedding")
 
+    def test_bundle_create_accepts_single_analysis_json_object(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            analysis = root / "asset-analysis.json"
+            analysis.write_text(
+                json.dumps(
+                    {
+                        "schemaVersion": "asset-analysis/v1",
+                        "assetId": "audio-1",
+                        "assetType": "audio",
+                        "toneTaxonomyVersion": "tone-taxonomy/v1",
+                        "modelRuns": [],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            bundle = root / "audio-1.tonebundle.tar.gz"
+
+            manifest = create_bundle(analysis, bundle, asset_id="audio-1")
+
+            self.assertEqual(manifest["assetIds"], ["audio-1"])
+            self.assertEqual(manifest["analysisSchemas"], ["asset-analysis/v1"])
+
     def test_bundle_create_filters_to_single_asset(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

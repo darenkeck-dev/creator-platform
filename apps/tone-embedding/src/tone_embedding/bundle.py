@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tarfile
 from datetime import UTC, datetime
+from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
 
@@ -79,6 +80,29 @@ def extract_bundle(bundle_path: Path, out_dir: Path) -> None:
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    text = path.read_text(encoding="utf-8").strip()
+    if not text:
+        return []
+    if text.startswith("{"):
+        try:
+            payload = json.loads(text)
+        except JSONDecodeError:
+            return read_jsonl_lines(path)
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"analysis JSON must be an object, array, or JSONL: {path}")
+        return [payload]
+    if text.startswith("["):
+        try:
+            payload = json.loads(text)
+        except JSONDecodeError:
+            return read_jsonl_lines(path)
+        if not isinstance(payload, list):
+            raise RuntimeError(f"analysis JSON must be an object, array, or JSONL: {path}")
+        return payload
+    return read_jsonl_lines(path)
+
+
+def read_jsonl_lines(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as file:
         for line in file:
