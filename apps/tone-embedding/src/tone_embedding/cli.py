@@ -20,49 +20,110 @@ from .workflows import (
 )
 
 
+class HelpFormatter(argparse.RawDescriptionHelpFormatter):
+    def _get_help_string(self, action: argparse.Action) -> str | None:
+        help_text = action.help
+        if help_text is None:
+            return None
+        if "%(default)" in help_text:
+            return help_text
+        if (
+            action.option_strings
+            and not action.required
+            and action.default is not None
+            and action.default is not argparse.SUPPRESS
+        ):
+            return f"{help_text} (default: %(default)s)"
+        return help_text
+
+
 def main(argv: list[str] | None = None) -> int:
     load_local_env_files()
-    parser = argparse.ArgumentParser(prog="tone-embedding")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    parser = argparse.ArgumentParser(
+        prog="tone-embedding",
+        description="Generate versioned tone and semantic metadata for audio/video assets.",
+        epilog="""examples:
+  tone-embedding analyze audio input.mp3 --asset-id audio-1 --out audio.analysis.json
+  tone-embedding analyze video input.mp4 --asset-id video-1 --models primary --out video.analysis.json
+  tone-embedding bundle create --analysis video.analysis.json --asset-id video-1 --out video-1.tonebundle.tar.gz
+  tone-embedding extract manifest.json --audio-model openai --video-model openai --out asset-analysis.jsonl
 
-    manifest_parser = subparsers.add_parser("manifest")
-    manifest_subparsers = manifest_parser.add_subparsers(dest="manifest_command", required=True)
-    validate_parser = manifest_subparsers.add_parser("validate")
-    validate_parser.add_argument("manifest", type=Path)
+Run `tone-embedding COMMAND --help` for command-specific flags.
+""",
+        formatter_class=HelpFormatter,
+    )
+    subparsers = parser.add_subparsers(
+        dest="command",
+        required=True,
+        metavar="COMMAND",
+        title="commands",
+    )
+
+    manifest_parser = subparsers.add_parser(
+        "manifest",
+        help="Validate manifest files.",
+        description="Validate tone manifest files and optionally check local file sources.",
+        formatter_class=HelpFormatter,
+    )
+    manifest_subparsers = manifest_parser.add_subparsers(dest="manifest_command", required=True, metavar="COMMAND", title="manifest commands")
+    validate_parser = manifest_subparsers.add_parser(
+        "validate",
+        help="Validate a manifest JSON file.",
+        description="Validate a manifest JSON file.",
+        formatter_class=HelpFormatter,
+    )
+    validate_parser.add_argument("manifest", type=Path, metavar="MANIFEST", help="Manifest JSON file to validate.")
     validate_parser.add_argument(
         "--check-files",
         action="store_true",
         help="Verify local file sources exist. S3 sources are not checked.",
     )
 
-    analyze_parser = subparsers.add_parser("analyze")
-    analyze_subparsers = analyze_parser.add_subparsers(dest="analyze_command", required=True)
-    analyze_audio_parser = analyze_subparsers.add_parser("audio")
-    analyze_audio_parser.add_argument("input", type=Path)
-    analyze_audio_parser.add_argument("--out", type=Path, required=True)
-    analyze_audio_parser.add_argument("--asset-id", default="audio-1")
-    analyze_audio_parser.add_argument("--title")
+    analyze_parser = subparsers.add_parser(
+        "analyze",
+        help="Analyze one local audio or video file.",
+        description="Analyze one staged local media file and write a single asset-analysis/v1 JSON object.",
+        epilog="Run `tone-embedding analyze audio --help` or `tone-embedding analyze video --help` for model and output flags.",
+        formatter_class=HelpFormatter,
+    )
+    analyze_subparsers = analyze_parser.add_subparsers(dest="analyze_command", required=True, metavar="MEDIA_TYPE", title="media types")
+    analyze_audio_parser = analyze_subparsers.add_parser(
+        "audio",
+        help="Analyze one audio file.",
+        description="Analyze one audio file and write a single asset-analysis/v1 JSON object.",
+        formatter_class=HelpFormatter,
+    )
+    analyze_audio_parser.add_argument("input", type=Path, metavar="AUDIO_FILE", help="Local audio file to analyze.")
+    analyze_audio_parser.add_argument("--out", type=Path, required=True, metavar="JSON", help="Output asset-analysis JSON file.")
+    analyze_audio_parser.add_argument("--asset-id", default="audio-1", metavar="ID", help="Asset id to write into the analysis row.")
+    analyze_audio_parser.add_argument("--title", metavar="TITLE", help="Optional asset title.")
     analyze_audio_parser.add_argument(
         "--model",
         choices=["placeholder", "essentia", "openai"],
         default="openai",
         help="Audio tone adapter to use.",
     )
-    analyze_audio_parser.add_argument("--essentia-embedding-model", type=Path)
-    analyze_audio_parser.add_argument("--essentia-valence-arousal-model", type=Path)
+    analyze_audio_parser.add_argument("--essentia-embedding-model", type=Path, metavar="PATH", help="Essentia embedding model path used with --model essentia.")
+    analyze_audio_parser.add_argument("--essentia-valence-arousal-model", type=Path, metavar="PATH", help="Essentia valence/arousal model path used with --model essentia.")
     analyze_audio_parser.add_argument(
         "--essentia-output-range",
         choices=["unit", "bipolar", "deam"],
         default="deam",
+        help="Range emitted by the Essentia valence/arousal head before normalization.",
     )
-    analyze_audio_parser.add_argument("--openai-audio-model", default="gpt-audio")
-    analyze_audio_parser.add_argument("--openai-api-key-env", default="OPENAI_API_KEY")
+    analyze_audio_parser.add_argument("--openai-audio-model", default="gpt-audio", metavar="MODEL", help="OpenAI audio-capable model used with --model openai.")
+    analyze_audio_parser.add_argument("--openai-api-key-env", default="OPENAI_API_KEY", metavar="ENV", help="Environment variable containing the OpenAI API key.")
 
-    analyze_video_parser = analyze_subparsers.add_parser("video")
-    analyze_video_parser.add_argument("input", type=Path)
-    analyze_video_parser.add_argument("--out", type=Path, required=True)
-    analyze_video_parser.add_argument("--asset-id", default="video-1")
-    analyze_video_parser.add_argument("--title")
+    analyze_video_parser = analyze_subparsers.add_parser(
+        "video",
+        help="Analyze one video file.",
+        description="Analyze one video file and write a single asset-analysis/v1 JSON object.",
+        formatter_class=HelpFormatter,
+    )
+    analyze_video_parser.add_argument("input", type=Path, metavar="VIDEO_FILE", help="Local video file to analyze.")
+    analyze_video_parser.add_argument("--out", type=Path, required=True, metavar="JSON", help="Output asset-analysis JSON file.")
+    analyze_video_parser.add_argument("--asset-id", default="video-1", metavar="ID", help="Asset id to write into the analysis row.")
+    analyze_video_parser.add_argument("--title", metavar="TITLE", help="Optional asset title.")
     analyze_video_parser.add_argument(
         "--models",
         default="openai",
@@ -70,9 +131,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     add_video_model_options(analyze_video_parser)
 
-    extract_parser = subparsers.add_parser("extract")
-    extract_parser.add_argument("manifest", type=Path)
-    extract_parser.add_argument("--out", type=Path, required=True)
+    extract_parser = subparsers.add_parser(
+        "extract",
+        help="Analyze assets from a manifest.",
+        description="Analyze manifest assets and write asset-analysis/v1 rows as JSONL.",
+        formatter_class=HelpFormatter,
+    )
+    extract_parser.add_argument("manifest", type=Path, metavar="MANIFEST", help="Manifest JSON file.")
+    extract_parser.add_argument("--out", type=Path, required=True, metavar="JSONL", help="Output asset-analysis JSONL file.")
     extract_parser.add_argument(
         "--audio-model",
         choices=["placeholder", "essentia", "openai"],
@@ -182,48 +248,71 @@ def main(argv: list[str] | None = None) -> int:
         help="Maximum sampled frames per video for video tone extraction.",
     )
 
-    preprocess_parser = subparsers.add_parser("preprocess")
-    preprocess_parser.add_argument("manifest", type=Path)
-    preprocess_parser.add_argument("--out-dir", type=Path, required=True)
+    preprocess_parser = subparsers.add_parser(
+        "preprocess",
+        help="Plan or run source staging/preprocessing.",
+        description="Build a preprocessing plan for manifest assets and optionally execute it.",
+        formatter_class=HelpFormatter,
+    )
+    preprocess_parser.add_argument("manifest", type=Path, metavar="MANIFEST", help="Manifest JSON file.")
+    preprocess_parser.add_argument("--out-dir", type=Path, required=True, metavar="DIR", help="Output directory for staged/preprocessed files.")
     preprocess_parser.add_argument(
         "--execute",
         action="store_true",
         help="Run preprocessing commands. By default commands are printed only.",
     )
 
-    bundle_parser = subparsers.add_parser("bundle")
-    bundle_subparsers = bundle_parser.add_subparsers(dest="bundle_command", required=True)
-    bundle_create_parser = bundle_subparsers.add_parser("create")
-    bundle_create_parser.add_argument("--analysis", type=Path, required=True)
-    bundle_create_parser.add_argument("--out", type=Path, required=True)
-    bundle_create_parser.add_argument("--asset-id")
-    bundle_inspect_parser = bundle_subparsers.add_parser("inspect")
-    bundle_inspect_parser.add_argument("bundle", type=Path)
-    bundle_extract_parser = bundle_subparsers.add_parser("extract")
-    bundle_extract_parser.add_argument("bundle", type=Path)
-    bundle_extract_parser.add_argument("--out-dir", type=Path, required=True)
+    bundle_parser = subparsers.add_parser(
+        "bundle",
+        help="Create, inspect, or extract tone bundles.",
+        description="Manage tone-analysis-bundle/v1 .tonebundle.tar.gz artifacts.",
+        epilog="Run `tone-embedding bundle create --help`, `inspect --help`, or `extract --help` for command-specific flags.",
+        formatter_class=HelpFormatter,
+    )
+    bundle_subparsers = bundle_parser.add_subparsers(dest="bundle_command", required=True, metavar="COMMAND", title="bundle commands")
+    bundle_create_parser = bundle_subparsers.add_parser("create", help="Create a tone bundle.", description="Create one tone-analysis-bundle/v1 artifact.", formatter_class=HelpFormatter)
+    bundle_create_parser.add_argument("--analysis", type=Path, required=True, metavar="JSON_OR_JSONL", help="Input asset-analysis JSON object, JSON array, or JSONL file.")
+    bundle_create_parser.add_argument("--out", type=Path, required=True, metavar="BUNDLE", help="Output .tonebundle.tar.gz path.")
+    bundle_create_parser.add_argument("--asset-id", metavar="ID", help="Optional asset id filter when the analysis file has multiple rows.")
+    bundle_inspect_parser = bundle_subparsers.add_parser("inspect", help="Print a bundle manifest.", description="Print a tone bundle manifest JSON.", formatter_class=HelpFormatter)
+    bundle_inspect_parser.add_argument("bundle", type=Path, metavar="BUNDLE", help="Bundle file to inspect.")
+    bundle_extract_parser = bundle_subparsers.add_parser("extract", help="Extract bundle contents.", description="Extract a tone bundle to a directory.", formatter_class=HelpFormatter)
+    bundle_extract_parser.add_argument("bundle", type=Path, metavar="BUNDLE", help="Bundle file to extract.")
+    bundle_extract_parser.add_argument("--out-dir", type=Path, required=True, metavar="DIR", help="Directory to extract into.")
 
-    combo_parser = subparsers.add_parser("combo")
-    combo_subparsers = combo_parser.add_subparsers(dest="combo_command", required=True)
-    combo_analyze_parser = combo_subparsers.add_parser("analyze")
-    combo_analyze_parser.add_argument("manifest", type=Path)
-    combo_analyze_parser.add_argument("--analysis", type=Path, required=True)
-    combo_analyze_parser.add_argument("--out", type=Path, required=True)
-    combo_build_parser = combo_subparsers.add_parser("build")
-    combo_build_parser.add_argument("--audio-analysis", type=Path, required=True)
-    combo_build_parser.add_argument("--video-analysis", type=Path, required=True)
-    combo_build_parser.add_argument("--out", type=Path, required=True)
-    combo_build_parser.add_argument("--combo-id", default="combo-1")
-    combo_build_parser.add_argument("--audio-asset-id")
-    combo_build_parser.add_argument("--video-asset-id")
+    combo_parser = subparsers.add_parser(
+        "combo",
+        help="Build combo-analysis/v1 rows.",
+        description="Build descriptive combo-analysis/v1 rows from existing asset analysis outputs.",
+        epilog="Run `tone-embedding combo analyze --help` or `tone-embedding combo build --help` for command-specific flags.",
+        formatter_class=HelpFormatter,
+    )
+    combo_subparsers = combo_parser.add_subparsers(dest="combo_command", required=True, metavar="COMMAND", title="combo commands")
+    combo_analyze_parser = combo_subparsers.add_parser("analyze", help="Analyze manifest combo definitions.", description="Build combo-analysis/v1 rows for combos defined in a manifest.", formatter_class=HelpFormatter)
+    combo_analyze_parser.add_argument("manifest", type=Path, metavar="MANIFEST", help="Manifest JSON file with combo definitions.")
+    combo_analyze_parser.add_argument("--analysis", type=Path, required=True, metavar="JSONL", help="Asset-analysis JSONL file.")
+    combo_analyze_parser.add_argument("--out", type=Path, required=True, metavar="JSONL", help="Output combo-analysis JSONL file.")
+    combo_build_parser = combo_subparsers.add_parser("build", help="Build one combo row from two analysis files.", description="Build one combo-analysis/v1 row from one audio and one video analysis file.", formatter_class=HelpFormatter)
+    combo_build_parser.add_argument("--audio-analysis", type=Path, required=True, metavar="JSON", help="Audio asset-analysis JSON/JSONL file.")
+    combo_build_parser.add_argument("--video-analysis", type=Path, required=True, metavar="JSON", help="Video asset-analysis JSON/JSONL file.")
+    combo_build_parser.add_argument("--out", type=Path, required=True, metavar="JSON", help="Output combo-analysis JSON file.")
+    combo_build_parser.add_argument("--combo-id", default="combo-1", metavar="ID", help="Combo id for the output row.")
+    combo_build_parser.add_argument("--audio-asset-id", metavar="ID", help="Audio asset id to select when input has multiple rows.")
+    combo_build_parser.add_argument("--video-asset-id", metavar="ID", help="Video asset id to select when input has multiple rows.")
 
-    neighbors_parser = subparsers.add_parser("neighbors")
-    neighbors_subparsers = neighbors_parser.add_subparsers(dest="neighbors_command", required=True)
-    neighbors_query_parser = neighbors_subparsers.add_parser("query")
-    neighbors_query_parser.add_argument("--combo-analysis", type=Path, required=True)
-    neighbors_query_parser.add_argument("--candidates", type=Path, required=True)
-    neighbors_query_parser.add_argument("--out", type=Path)
-    neighbors_query_parser.add_argument("--top-k", type=int, default=10)
+    neighbors_parser = subparsers.add_parser(
+        "neighbors",
+        help="Run local nearest-neighbor checks.",
+        description="Run local development nearest-neighbor queries over combo-analysis vectors.",
+        epilog="Run `tone-embedding neighbors query --help` for query flags.",
+        formatter_class=HelpFormatter,
+    )
+    neighbors_subparsers = neighbors_parser.add_subparsers(dest="neighbors_command", required=True, metavar="COMMAND", title="neighbors commands")
+    neighbors_query_parser = neighbors_subparsers.add_parser("query", help="Query nearest combo-analysis vectors.", description="Query nearest combo-analysis vectors from local JSON/JSONL files.", formatter_class=HelpFormatter)
+    neighbors_query_parser.add_argument("--combo-analysis", type=Path, required=True, metavar="JSON", help="Query combo-analysis JSON/JSONL file.")
+    neighbors_query_parser.add_argument("--candidates", type=Path, required=True, metavar="JSONL", help="Candidate combo-analysis JSON/JSONL file.")
+    neighbors_query_parser.add_argument("--out", type=Path, metavar="JSON", help="Optional output JSON file for query results.")
+    neighbors_query_parser.add_argument("--top-k", type=int, default=10, metavar="N", help="Number of nearest neighbors to return.")
 
     args = parser.parse_args(argv)
 
@@ -419,20 +508,20 @@ def load_local_env_files() -> None:
 
 
 def add_video_model_options(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--openclip-model", default="ViT-B-32")
-    parser.add_argument("--openclip-pretrained", default="laion2b_s34b_b79k")
-    parser.add_argument("--openai-model", default="gpt-5")
-    parser.add_argument("--openai-api-key-env", default="OPENAI_API_KEY")
-    parser.add_argument("--openai-image-detail", choices=["low", "high", "auto"], default="low")
-    parser.add_argument("--dinov2-model", default="facebook/dinov2-small")
-    parser.add_argument("--siglip-model", default="google/siglip-base-patch16-224")
-    parser.add_argument("--qwen-model", default="Qwen/Qwen2.5-VL-7B-Instruct")
-    parser.add_argument("--qwen-max-new-tokens", type=int, default=512)
-    parser.add_argument("--qwen-torch-dtype", default="auto", choices=["auto", "float32", "float16", "bfloat16"])
-    parser.add_argument("--qwen-device-map", default="auto")
-    parser.add_argument("--embedding-out-dir", type=Path)
-    parser.add_argument("--video-frame-rate", type=float, default=1.0)
-    parser.add_argument("--video-max-frames", type=int, default=12)
+    parser.add_argument("--openclip-model", default="ViT-B-32", metavar="MODEL", help="OpenCLIP model name used with --models openclip.")
+    parser.add_argument("--openclip-pretrained", default="laion2b_s34b_b79k", metavar="CHECKPOINT", help="OpenCLIP pretrained checkpoint used with --models openclip.")
+    parser.add_argument("--openai-model", default="gpt-5", metavar="MODEL", help="OpenAI vision model used with --models openai or primary.")
+    parser.add_argument("--openai-api-key-env", default="OPENAI_API_KEY", metavar="ENV", help="Environment variable containing the OpenAI API key.")
+    parser.add_argument("--openai-image-detail", choices=["low", "high", "auto"], default="low", help="OpenAI image detail setting for sampled frames.")
+    parser.add_argument("--dinov2-model", default="facebook/dinov2-small", metavar="MODEL", help="DINOv2 checkpoint used with --models dinov2.")
+    parser.add_argument("--siglip-model", default="google/siglip-base-patch16-224", metavar="MODEL", help="SigLIP checkpoint used with --models siglip.")
+    parser.add_argument("--qwen-model", default="Qwen/Qwen2.5-VL-7B-Instruct", metavar="MODEL", help="Qwen-VL checkpoint used with --models qwen-vl.")
+    parser.add_argument("--qwen-max-new-tokens", type=int, default=512, metavar="N", help="Maximum generated tokens for --models qwen-vl.")
+    parser.add_argument("--qwen-torch-dtype", default="auto", choices=["auto", "float32", "float16", "bfloat16"], help="Torch dtype for --models qwen-vl.")
+    parser.add_argument("--qwen-device-map", default="auto", metavar="DEVICE", help="Transformers device_map for --models qwen-vl. Use 'mps' for native macOS Apple Silicon GPU execution.")
+    parser.add_argument("--embedding-out-dir", type=Path, metavar="DIR", help="Directory for embedding files emitted by embedding-based adapters.")
+    parser.add_argument("--video-frame-rate", type=float, default=1.0, metavar="FPS", help="Frames per second to sample for video analysis.")
+    parser.add_argument("--video-max-frames", type=int, default=12, metavar="N", help="Maximum sampled frames per video.")
 
 
 def parse_csv(value: str) -> list[str]:

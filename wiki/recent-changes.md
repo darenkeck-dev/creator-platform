@@ -29,11 +29,12 @@
 - Updated the tone-embedding Essentia audio smoke test to cover `audio-demo-00.mp3` and `audio-demo-01.mp3`, with default host-visible JSONL under ignored `apps/tone-embedding/tests/output/`.
 - Added the generic `apps/tone-embedding/scripts/run-audio-analysis-test.sh` primary audio runner and reoriented the tone README around primary audio/video pipelines before model-specific experimental runs.
 - Added Python-native tone CLI workflows: `analyze audio`, `analyze video`, `combo build`, and local `neighbors query`, plus a vector DB preparation plan for future Media Manager indexing.
-- Updated the tone README with uv-first prerequisites and app-relative CLI examples so it can move with `apps/tone-embedding` as a standalone repo; current production-style local setup is `uv sync --no-editable`, then `uv run tone-embedding ...`.
+- Updated the tone README with uv-first prerequisites and app-relative CLI examples so it can move with `apps/tone-embedding` as a standalone repo; CLI examples now consistently use `uv sync --no-editable` and `uv run --no-editable ...`.
 - Added versioned `tone-taxonomy/v1` descriptor vocabulary/mapping data and wired asset/combo outputs to record `toneTaxonomyVersion`.
 - Prepared the tone app for CLI invocation from conversion jobs: documented `uv sync --no-editable`, validated `uv run tone-embedding ...`, added schema contract fixtures for `asset-analysis/v1` and `tone-taxonomy/v1`, and documented production invocation commands.
 - Switched the primary tone pipeline to OpenAI-only for Lambda-first evaluation; DINOv2 remains available only as an explicit optional embedding path for later container/Fargate/Batch review.
 - Ran real OpenAI audio/video smoke tests with generated local fixtures, created/inspected per-asset tone bundles, added `numpy` to the `openai` extra for OpenCV frame sampling, and fixed bundle creation from single-object analysis JSON outputs.
+- Standardized tone app docs on `uv run --no-editable ...` because editable console-script behavior is unreliable after switching install modes, and improved CLI help text with clearer command descriptions, metavars, examples, and option help.
 
 ## Playback evolution summary
 

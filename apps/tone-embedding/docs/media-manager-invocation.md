@@ -78,7 +78,7 @@ Media Manager should stage originals to local files, then invoke the CLI with ex
 Audio:
 
 ```bash
-uv run --extra openai tone-embedding analyze audio \
+uv run --no-editable --extra openai tone-embedding analyze audio \
   /work/input/original-audio.mp3 \
   --asset-id asset-audio-1 \
   --out /work/output/asset-analysis.json
@@ -87,7 +87,7 @@ uv run --extra openai tone-embedding analyze audio \
 Video primary path:
 
 ```bash
-uv run --extra openai tone-embedding analyze video \
+uv run --no-editable --extra openai tone-embedding analyze video \
   /work/input/original-video.mp4 \
   --asset-id asset-video-1 \
   --models primary \
@@ -101,7 +101,7 @@ uv run --extra openai tone-embedding analyze video \
 Media Manager invokes the tone app with explicit model choices and output paths:
 
 ```bash
-uv run --extra openai tone-embedding extract /work/manifest.json \
+uv run --no-editable --extra openai tone-embedding extract /work/manifest.json \
   --out /work/output/asset-analysis.jsonl \
   --audio-model openai \
   --video-model openai \
@@ -111,7 +111,7 @@ uv run --extra openai tone-embedding extract /work/manifest.json \
 Local/open model variants use the same command shape with different adapters:
 
 ```bash
-uv run --extra video tone-embedding extract /work/manifest.json \
+uv run --no-editable --extra video tone-embedding extract /work/manifest.json \
   --out /work/output/asset-analysis.jsonl \
   --audio-model essentia \
   --essentia-embedding-model /models/msd-musicnn-1.pb \
@@ -122,7 +122,7 @@ uv run --extra video tone-embedding extract /work/manifest.json \
 Optional embedding-producing runs should set an embedding output directory and use the heavier `video` extra:
 
 ```bash
-uv run --extra video tone-embedding extract /work/manifest.json \
+uv run --no-editable --extra video tone-embedding extract /work/manifest.json \
   --out /work/output/asset-analysis.jsonl \
   --video-model dinov2 \
   --embedding-out-dir /work/output/embeddings
@@ -185,7 +185,7 @@ Combined model evidence should be merged by `assetId` before bundle creation whe
 After asset analysis, Media Manager or the job wrapper can create one bundle per asset:
 
 ```bash
-uv run tone-embedding bundle create \
+uv run --no-editable tone-embedding bundle create \
   --analysis /work/output/asset-analysis.jsonl \
   --asset-id asset-video-1 \
   --out /work/output/asset-video-1.tonebundle.tar.gz
@@ -210,7 +210,7 @@ Embedding paths inside bundles must be bundle-relative when present. They must n
 Combo analysis consumes the manifest and existing asset-analysis JSONL. It does not rerun model extraction.
 
 ```bash
-uv run tone-embedding combo analyze /work/manifest.json \
+uv run --no-editable tone-embedding combo analyze /work/manifest.json \
   --analysis /work/output/asset-analysis.jsonl \
   --out /work/output/combo-analysis.jsonl
 ```

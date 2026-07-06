@@ -92,6 +92,6 @@ asset-analysis.jsonl
 The media workflow can upload the asset's bundle file and store its S3 key on that asset's metadata. The tone app can later inspect or extract it:
 
 ```bash
-uv run tone-embedding bundle inspect tests/output/bundles/video-demo-00.tonebundle.tar.gz
-uv run tone-embedding bundle extract tests/output/bundles/video-demo-00.tonebundle.tar.gz --out-dir /tmp/tone-bundle
+uv run --no-editable tone-embedding bundle inspect tests/output/bundles/video-demo-00.tonebundle.tar.gz
+uv run --no-editable tone-embedding bundle extract tests/output/bundles/video-demo-00.tonebundle.tar.gz --out-dir /tmp/tone-bundle
 ```

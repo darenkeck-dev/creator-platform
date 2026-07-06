@@ -55,7 +55,7 @@ ESSENTIA_AUDIO_TEST_IMAGE=my-essentia-test:local ./apps/tone-embedding/scripts/r
 Inside an environment where `essentia-tensorflow` is installed:
 
 ```bash
-uv run --extra essentia tone-embedding extract \
+uv run --no-editable --extra essentia tone-embedding extract \
   examples/audio-manifest.example.json \
   --out tests/output/asset-tones-essentia.jsonl \
   --audio-model essentia \

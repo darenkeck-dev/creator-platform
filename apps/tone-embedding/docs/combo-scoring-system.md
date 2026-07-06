@@ -29,13 +29,13 @@ V1 combo analysis consumes:
 The command is:
 
 ```bash
-uv run tone-embedding combo analyze examples/manifest.example.json --analysis outputs/asset-tones.jsonl --out outputs/combo-analysis.jsonl
+uv run --no-editable tone-embedding combo analyze examples/manifest.example.json --analysis outputs/asset-tones.jsonl --out outputs/combo-analysis.jsonl
 ```
 
 Generate asset analysis first:
 
 ```bash
-uv run tone-embedding extract examples/manifest.example.json --out outputs/asset-tones.jsonl
+uv run --no-editable tone-embedding extract examples/manifest.example.json --out outputs/asset-tones.jsonl
 ```
 
 ## Tone Dimensions

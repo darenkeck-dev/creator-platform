@@ -20,11 +20,13 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv --version
 ```
 
-The app requires Python `3.11+`. Sync the local environment with the project installed non-editably so the `tone-embedding` console command works without `PYTHONPATH`:
+The app requires Python `3.11+`. Sync the local environment with the project installed non-editably so the `tone-embedding` console command works consistently:
 
 ```bash
-uv sync --no-editable
+uv sync --no-editable --extra openai
 ```
+
+Use `uv run --no-editable ...` for CLI commands. This keeps local smoke runs aligned with production/job execution and avoids editable-install path issues after switching install modes.
 
 For OpenAI-backed primary analysis, create `.env.local`:
 
@@ -49,9 +51,9 @@ Optional system tools:
 Useful first checks:
 
 ```bash
-uv run tone-embedding --help
-uv run --extra openai tone-embedding analyze audio --help
-uv run --extra openai tone-embedding analyze video --help
+uv run --no-editable tone-embedding --help
+uv run --no-editable --extra openai tone-embedding analyze audio --help
+uv run --no-editable --extra openai tone-embedding analyze video --help
 ```
 
 ## Primary Audio Pipeline
@@ -59,7 +61,7 @@ uv run --extra openai tone-embedding analyze video --help
 Run the Python CLI directly from this directory:
 
 ```bash
-uv run --extra openai tone-embedding analyze audio \
+uv run --no-editable --extra openai tone-embedding analyze audio \
   examples/media/audio-demo-00.mp3 \
   --asset-id audio-demo-00 \
   --out tests/output/audio-demo-00.analysis.json
@@ -96,7 +98,7 @@ Optional custom output path:
 Run the Python CLI directly from this directory:
 
 ```bash
-uv run --extra openai tone-embedding analyze video \
+uv run --no-editable --extra openai tone-embedding analyze video \
   examples/media/video-demo-00.m4v \
   --asset-id video-demo-00 \
   --models primary \
@@ -158,7 +160,7 @@ uv sync --no-editable --extra openai
 Analyze one audio asset:
 
 ```bash
-uv run --extra openai tone-embedding analyze audio \
+uv run --no-editable --extra openai tone-embedding analyze audio \
   /work/input/original-audio.mp3 \
   --asset-id <assetId> \
   --out /work/output/asset-analysis.json
@@ -167,7 +169,7 @@ uv run --extra openai tone-embedding analyze audio \
 Analyze one video asset with the primary V1 video path:
 
 ```bash
-uv run --extra openai tone-embedding analyze video \
+uv run --no-editable --extra openai tone-embedding analyze video \
   /work/input/original-video.mp4 \
   --asset-id <assetId> \
   --models primary \
@@ -177,7 +179,7 @@ uv run --extra openai tone-embedding analyze video \
 Create the per-asset bundle:
 
 ```bash
-uv run tone-embedding bundle create \
+uv run --no-editable tone-embedding bundle create \
   --analysis /work/output/asset-analysis.json \
   --asset-id <assetId> \
   --out /work/output/<assetId>.tonebundle.tar.gz
@@ -196,16 +198,16 @@ The OpenAI-only primary path is intended to be Lambda-friendly. DINOv2 remains a
 Common CLI usage from this directory:
 
 ```bash
-uv run tone-embedding manifest validate examples/manifest.example.json
-uv run tone-embedding manifest validate examples/manifest.example.json --check-files
-uv run --extra openai tone-embedding analyze audio examples/media/audio-demo-00.mp3 --asset-id audio-demo-00 --out tests/output/audio-demo-00.analysis.json
-uv run --extra openai tone-embedding analyze video examples/media/video-demo-00.m4v --asset-id video-demo-00 --models primary --out tests/output/video-demo-00.analysis.json
-uv run tone-embedding combo build --audio-analysis tests/output/audio-demo-00.analysis.json --video-analysis tests/output/video-demo-00.analysis.json --combo-id combo-demo-00 --out tests/output/combo-demo-00.analysis.json
-uv run tone-embedding neighbors query --combo-analysis tests/output/combo-demo-00.analysis.json --candidates tests/output/combo-analysis.jsonl --top-k 20
-uv run --extra openai tone-embedding extract examples/audio-manifest.example.json --out outputs/audio.jsonl --audio-model openai
-uv run --extra openai tone-embedding extract examples/video-manifest.example.json --out outputs/video.jsonl --video-model openai --video-frame-rate 1.0
-uv run --extra video tone-embedding extract examples/video-manifest.example.json --out outputs/video-embeddings.jsonl --video-model dinov2 --embedding-out-dir outputs/embeddings
-uv run tone-embedding bundle create --analysis outputs/video.jsonl --asset-id video-1 --out outputs/video-1.tonebundle.tar.gz
+uv run --no-editable tone-embedding manifest validate examples/manifest.example.json
+uv run --no-editable tone-embedding manifest validate examples/manifest.example.json --check-files
+uv run --no-editable --extra openai tone-embedding analyze audio examples/media/audio-demo-00.mp3 --asset-id audio-demo-00 --out tests/output/audio-demo-00.analysis.json
+uv run --no-editable --extra openai tone-embedding analyze video examples/media/video-demo-00.m4v --asset-id video-demo-00 --models primary --out tests/output/video-demo-00.analysis.json
+uv run --no-editable tone-embedding combo build --audio-analysis tests/output/audio-demo-00.analysis.json --video-analysis tests/output/video-demo-00.analysis.json --combo-id combo-demo-00 --out tests/output/combo-demo-00.analysis.json
+uv run --no-editable tone-embedding neighbors query --combo-analysis tests/output/combo-demo-00.analysis.json --candidates tests/output/combo-analysis.jsonl --top-k 20
+uv run --no-editable --extra openai tone-embedding extract examples/audio-manifest.example.json --out outputs/audio.jsonl --audio-model openai
+uv run --no-editable --extra openai tone-embedding extract examples/video-manifest.example.json --out outputs/video.jsonl --video-model openai --video-frame-rate 1.0
+uv run --no-editable --extra video tone-embedding extract examples/video-manifest.example.json --out outputs/video-embeddings.jsonl --video-model dinov2 --embedding-out-dir outputs/embeddings
+uv run --no-editable tone-embedding bundle create --analysis outputs/video.jsonl --asset-id video-1 --out outputs/video-1.tonebundle.tar.gz
 ```
 
 `analyze audio` and `analyze video` write a single JSON asset-analysis object for direct file workflows. `extract` remains the manifest/JSONL batch path.
@@ -244,9 +246,9 @@ Dependencies are listed in `pyproject.toml` optional extras:
 Use `uv` from this directory:
 
 ```bash
-uv run --extra openai tone-embedding --help
-uv run --extra video tone-embedding --help
-uv run --extra qwen-mps tone-embedding --help
+uv run --no-editable --extra openai tone-embedding --help
+uv run --no-editable --extra video tone-embedding --help
+uv run --no-editable --extra qwen-mps tone-embedding --help
 ```
 
 ## Combo Analysis
@@ -254,7 +256,7 @@ uv run --extra qwen-mps tone-embedding --help
 Combo analysis is not part of upload-time asset extraction. It references existing audio and video asset analysis rows and computes descriptive relationship geometry only: `deltaTone`, `absDeltaTone`, `interactionTone`, congruence, contrast, intensity, strongest matches/contrasts, and a nearest-neighbor vector.
 
 ```bash
-uv run tone-embedding combo analyze examples/manifest.example.json --analysis outputs/asset-analysis.jsonl --out outputs/combo-analysis.jsonl
+uv run --no-editable tone-embedding combo analyze examples/manifest.example.json --analysis outputs/asset-analysis.jsonl --out outputs/combo-analysis.jsonl
 ```
 
 No V1 combo output is a quality score or learned meaning. See `docs/combo-scoring-system.md`.
