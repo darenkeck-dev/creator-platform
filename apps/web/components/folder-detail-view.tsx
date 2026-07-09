@@ -1,12 +1,11 @@
 "use client";
 
 import type { AssetDetailResponse } from "@media-manager/contracts";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { DeleteAssetsDialog } from "@/components/delete-assets-dialog";
 import { LibraryAssetBrowser } from "@/components/library-asset-browser";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,7 +23,6 @@ export function FolderDetailView({ folder, children }: Props) {
   const [description, setDescription] = useState(folder.description);
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const dirty = useMemo(
@@ -65,41 +63,6 @@ export function FolderDetailView({ folder, children }: Props) {
       setMessage(nextMessage);
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function deleteFolder() {
-    if (children.length > 0) {
-      setMessage("Move or delete child items before deleting this folder.");
-      return;
-    }
-
-    const confirmed = window.confirm("Delete this folder?");
-    if (!confirmed || deleting) {
-      return;
-    }
-
-    setDeleting(true);
-    setMessage(null);
-
-    try {
-      const response = await fetch(`/api/assets/${encodeURIComponent(folder.id)}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to delete folder.");
-      }
-
-      const destination = folder.containerId
-        ? `/library?containerId=${encodeURIComponent(folder.containerId)}`
-        : "/library";
-      router.push(destination);
-      router.refresh();
-    } catch (error) {
-      const nextMessage = error instanceof Error ? error.message : "Failed to delete folder.";
-      setMessage(nextMessage);
-      setDeleting(false);
     }
   }
 
@@ -161,14 +124,17 @@ export function FolderDetailView({ folder, children }: Props) {
                   <Button onClick={() => setEditMode(true)} type="button" variant="outline">
                     Edit Folder
                   </Button>
-                  <Button
-                    disabled={deleting}
-                    onClick={() => void deleteFolder()}
-                    type="button"
-                    variant="destructive"
-                  >
-                    {deleting ? "Deleting..." : "Delete Folder"}
-                  </Button>
+                  <DeleteAssetsDialog
+                    assetIds={[folder.id]}
+                    label="Delete Folder"
+                    onJobCreated={() => {
+                      const destination = folder.containerId
+                        ? `/library?containerId=${encodeURIComponent(folder.containerId)}`
+                        : "/library";
+                      router.push(destination);
+                      router.refresh();
+                    }}
+                  />
                 </div>
               </div>
             </div>

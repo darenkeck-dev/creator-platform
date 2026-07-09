@@ -10,12 +10,15 @@ import {
   type AssetVisibility,
   type UpdateAssetInput,
 } from "@media-manager/contracts";
+import { FolderInput, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AssetPlayer } from "@/components/asset-player";
+import { MoveAssetsDialog } from "@/components/move-assets-dialog";
+import { ReprocessAssetsDialog } from "@/components/reprocess-assets-dialog";
 import {
   Dialog,
   DialogContent,
@@ -39,13 +42,6 @@ type ToneScores = NonNullable<NonNullable<Asset["toneAnalysis"]>["scores"]>;
 
 type Props = {
   initialAsset: Asset;
-  children?: Asset[];
-  sourceAssets?: Asset[];
-};
-
-type FolderOption = {
-  id: string;
-  title: string;
 };
 
 function tagsEqual(a: AssetTag[], b: AssetTag[]) {
@@ -152,7 +148,7 @@ function ToneScoreList({ scores }: { scores?: ToneScores }) {
   );
 }
 
-export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = [] }: Props) {
+export function AssetDetailEditor({ initialAsset }: Props) {
   const router = useRouter();
   const [asset, setAsset] = useState<Asset>(initialAsset);
   const [editMode, setEditMode] = useState(false);
@@ -168,8 +164,7 @@ export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = 
   const [newTagFacet, setNewTagFacet] = useState<string>("__freeform__");
   const [newTagValue, setNewTagValue] = useState("");
   const [newTagWeight, setNewTagWeight] = useState<string>("__none__");
-  const [containerIdDraft, setContainerIdDraft] = useState(initialAsset.containerId ?? "");
-  const [folders, setFolders] = useState<FolderOption[]>([]);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
 
   const dirty = useMemo(() => {
     return (
@@ -194,44 +189,7 @@ export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = 
   const assetStatus = asset.status;
   const conversionStatus = asset.conversion?.status ?? "not_started";
   const toneAnalysisStatus = asset.toneAnalysis?.status ?? "not_started";
-  const containerFolder = folders.find((folder) => folder.id === asset.containerId) ?? null;
   const auditLog = [...(asset.auditLog ?? [])].sort((a, b) => b.at.localeCompare(a.at));
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadFolders = async () => {
-      try {
-        const response = await fetch("/api/assets?type=folder&sort=newest", {
-          method: "GET",
-          cache: "no-store",
-        });
-
-        if (!response.ok) {
-          return;
-        }
-
-        const json = (await response.json()) as { assets?: Array<{ id: string; title: string }> };
-        if (cancelled || !Array.isArray(json.assets)) {
-          return;
-        }
-
-        setFolders(
-          json.assets
-            .filter((entry) => typeof entry.id === "string" && typeof entry.title === "string")
-            .map((entry) => ({ id: entry.id, title: entry.title }))
-        );
-      } catch {
-        // best effort only
-      }
-    };
-
-    void loadFolders();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   function addTagFromDraft() {
     const value = newTagValue.trim();
@@ -297,7 +255,6 @@ export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = 
       }
 
       setAsset(data.asset);
-      setContainerIdDraft(data.asset.containerId ?? "");
       setTitle(data.asset.title);
       setDescription(data.asset.description);
       setVisibility(data.asset.visibility);
@@ -367,36 +324,29 @@ export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = 
     }
   }
 
-  async function moveAsset(nextContainerIdOverride?: string) {
-    const nextContainerId = (nextContainerIdOverride ?? containerIdDraft).trim();
+  async function moveAsset(nextContainerId: string | null) {
+    const response = await fetch(`/api/assets/${encodeURIComponent(asset.id)}/move`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        containerId: nextContainerId,
+      }),
+    });
 
-    try {
-      const response = await fetch(`/api/assets/${encodeURIComponent(asset.id)}/move`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          containerId: nextContainerId.length > 0 ? nextContainerId : null,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to move asset");
-      }
-
-      const data = (await response.json()) as { asset?: Asset };
-      if (!data.asset) {
-        throw new Error("Invalid move response");
-      }
-
-      setAsset(data.asset);
-      setContainerIdDraft(data.asset.containerId ?? "");
-      setStatusMessage("Asset location updated.");
-      router.refresh();
-    } catch {
-      setStatusMessage("Could not move asset. Check the container ID and try again.");
+    if (!response.ok) {
+      throw new Error("Failed to move asset");
     }
+
+    const data = (await response.json()) as { asset?: Asset };
+    if (!data.asset) {
+      throw new Error("Invalid move response");
+    }
+
+    setAsset(data.asset);
+    setStatusMessage("Asset location updated.");
+    router.refresh();
   }
 
   useEffect(() => {
@@ -442,7 +392,6 @@ export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = 
 
         const latest = parsed.data.asset;
         setAsset(latest);
-        setContainerIdDraft(latest.containerId ?? "");
         setTitle(latest.title);
         setDescription(latest.description);
         setVisibility(latest.visibility);
@@ -526,6 +475,31 @@ export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = 
             <Button onClick={() => setDeleteDialogOpen(true)} type="button" variant="destructive">
               Delete
             </Button>
+            <ReprocessAssetsDialog
+              assetIds={[asset.id]}
+              onJobCreated={() => {
+                setStatusMessage("Tone reprocessing job started.");
+                router.refresh();
+              }}
+              type="reprocess_tone"
+            />
+            <ReprocessAssetsDialog
+              assetIds={[asset.id]}
+              onJobCreated={() => {
+                setStatusMessage("Conversion reprocessing job started.");
+                router.refresh();
+              }}
+              type="reprocess_conversion"
+            />
+            <Button
+              aria-label="Move asset"
+              onClick={() => setMoveDialogOpen(true)}
+              title="Move asset"
+              type="button"
+              variant="outline"
+            >
+              <FolderInput aria-hidden="true" className="h-4 w-4" />
+            </Button>
             <Button onClick={() => setEditMode(true)} type="button" variant="outline">
               Edit
             </Button>
@@ -545,6 +519,13 @@ export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = 
       {statusMessage ? <p className="text-sm text-muted-foreground">{statusMessage}</p> : null}
 
       <div className="rounded-xl border bg-card p-6 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold">Status</h2>
+          <Button onClick={() => router.refresh()} size="sm" type="button" variant="outline">
+            <RefreshCw aria-hidden="true" className="mr-2 h-4 w-4" />
+            Refresh Status
+          </Button>
+        </div>
         <dl className="grid gap-4 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-muted-foreground">Asset ID</dt>
@@ -560,16 +541,7 @@ export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = 
           </div>
           <div>
             <dt className="text-muted-foreground">Container</dt>
-            <dd className="font-medium">
-              {asset.containerId ? (
-                <span>
-                  {containerFolder?.title ?? "Unknown folder"}{" "}
-                  <span className="text-xs text-muted-foreground/70">{asset.containerId}</span>
-                </span>
-              ) : (
-                "root"
-              )}
-            </dd>
+            <dd className="font-medium">{asset.containerId ?? "root"}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Root</dt>
@@ -674,50 +646,6 @@ export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = 
       </div>
 
       <div className="rounded-xl border bg-card p-6 shadow-sm">
-        <h2 className="text-base font-semibold">Nested Location</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Move this asset under a folder. Folder IDs are shown as secondary text.
-        </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
-          <Select
-            onValueChange={(value) => setContainerIdDraft(value === "__root__" ? "" : value)}
-            value={containerIdDraft || "__root__"}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select folder" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__root__">Root</SelectItem>
-              {folders
-                .filter((folder) => folder.id !== asset.id)
-                .map((folder) => (
-                  <SelectItem key={folder.id} value={folder.id}>
-                    <span>{folder.title}</span>
-                    <span className="ml-2 text-xs text-muted-foreground/70">{folder.id}</span>
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-          <Button onClick={() => void moveAsset()} type="button" variant="outline">
-            Update Location
-          </Button>
-        </div>
-        <div className="mt-3">
-          <Button
-            onClick={() => {
-              setContainerIdDraft("");
-              void moveAsset("");
-            }}
-            size="sm"
-            type="button"
-            variant="secondary"
-          >
-            Move to Root
-          </Button>
-        </div>
-      </div>
-
-      <div className="rounded-xl border bg-card p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-base font-semibold">Tone Analysis</h2>
           <Badge variant="secondary">{toneAnalysisStatus.replaceAll("_", " ")}</Badge>
@@ -759,50 +687,6 @@ export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = 
             Tone summary and scores will appear here when analysis completes.
           </p>
         )}
-      </div>
-
-      <div className="rounded-xl border bg-card p-6 shadow-sm">
-        <h2 className="text-base font-semibold">Lineage Context</h2>
-        <div className="mt-4 grid gap-6 sm:grid-cols-2">
-          <div>
-            <p className="text-sm font-medium">Source Assets</p>
-            <div className="mt-2 space-y-2 text-sm">
-              {sourceAssets.length === 0 ? (
-                <p className="text-muted-foreground">No linked source assets.</p>
-              ) : (
-                sourceAssets.map((source) => (
-                  <button
-                    className="block text-left underline"
-                    key={`source-${source.id}`}
-                    onClick={() => router.push(`/asset/${source.id}`)}
-                    type="button"
-                  >
-                    {source.title} ({source.id})
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-          <div>
-            <p className="text-sm font-medium">Child Assets</p>
-            <div className="mt-2 space-y-2 text-sm">
-              {children.length === 0 ? (
-                <p className="text-muted-foreground">No child assets.</p>
-              ) : (
-                children.map((child) => (
-                  <button
-                    className="block text-left underline"
-                    key={`child-${child.id}`}
-                    onClick={() => router.push(`/asset/${child.id}`)}
-                    type="button"
-                  >
-                    {child.title} ({child.id})
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
       </div>
 
       <div className="rounded-xl border bg-card p-6 shadow-sm">
@@ -1175,6 +1059,16 @@ export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MoveAssetsDialog
+        assetCount={1}
+        currentContainerId={asset.containerId}
+        excludedFolderIds={asset.type === "folder" ? [asset.id] : []}
+        onConfirm={moveAsset}
+        onOpenChange={setMoveDialogOpen}
+        open={moveDialogOpen}
+        title="Move Asset"
+      />
     </section>
   );
 }

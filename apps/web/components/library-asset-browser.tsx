@@ -1,14 +1,15 @@
 "use client";
 
 import type { AssetListResponse } from "@media-manager/contracts";
-import { FileAudio, FileImage, Film, Folder } from "lucide-react";
+import { FileAudio, FileImage, Film, Folder, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AddAssetMenu } from "@/components/add-asset-menu";
+import { DeleteAssetsDialog } from "@/components/delete-assets-dialog";
+import { ReprocessAssetsDialog } from "@/components/reprocess-assets-dialog";
 
 type Asset = AssetListResponse["assets"][number];
 type ViewMode = "grid" | "list";
@@ -24,6 +25,10 @@ function assetDetailHref(asset: Asset): string {
 
 function folderHref(asset: Asset): string {
   return `/library?containerId=${encodeURIComponent(asset.id)}`;
+}
+
+function assetHref(asset: Asset): string {
+  return asset.type === "folder" ? folderHref(asset) : assetDetailHref(asset);
 }
 
 function statusText(value: string | undefined): string {
@@ -59,11 +64,10 @@ export function LibraryAssetBrowser({ assets, containerId }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const initialView = searchParams.get("view") === "list" ? "list" : "grid";
+  const initialView = searchParams.get("view") === "grid" ? "grid" : "list";
   const [view, setView] = useState<ViewMode>(initialView);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
-  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const selectedAssets = useMemo(
     () => assets.filter((asset) => selectedIds.has(asset.id)),
@@ -74,8 +78,8 @@ export function LibraryAssetBrowser({ assets, containerId }: Props) {
   function setViewMode(nextView: ViewMode) {
     setView(nextView);
     const params = new URLSearchParams(searchParams.toString());
-    if (nextView === "list") {
-      params.set("view", "list");
+    if (nextView === "grid") {
+      params.set("view", "grid");
     } else {
       params.delete("view");
     }
@@ -105,47 +109,6 @@ export function LibraryAssetBrowser({ assets, containerId }: Props) {
     });
   }
 
-  async function bulkDeleteSelected() {
-    if (selectedAssets.length === 0 || bulkDeleting) {
-      return;
-    }
-
-    const names = selectedAssets.slice(0, 3).map((asset) => asset.title);
-    const extra = selectedAssets.length > names.length ? ` and ${selectedAssets.length - names.length} more` : "";
-    const confirmed = window.confirm(`Delete ${selectedAssets.length} selected item(s): ${names.join(", ")}${extra}?`);
-    if (!confirmed) {
-      return;
-    }
-
-    setBulkMessage(null);
-    setBulkDeleting(true);
-    try {
-      const failed: string[] = [];
-      for (const asset of selectedAssets) {
-        try {
-          const response = await fetch(`/api/assets/${encodeURIComponent(asset.id)}`, {
-            method: "DELETE",
-          });
-          if (!response.ok) {
-            failed.push(asset.title);
-          }
-        } catch {
-          failed.push(asset.title);
-        }
-      }
-
-      if (failed.length > 0) {
-        setBulkMessage(`Deleted ${selectedAssets.length - failed.length}; failed: ${failed.join(", ")}.`);
-      } else {
-        setBulkMessage(`Deleted ${selectedAssets.length} item(s).`);
-      }
-      setSelectedIds(new Set());
-      router.refresh();
-    } finally {
-      setBulkDeleting(false);
-    }
-  }
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3 shadow-sm">
@@ -154,14 +117,34 @@ export function LibraryAssetBrowser({ assets, containerId }: Props) {
             {allSelected ? "Clear selection" : "Select all"}
           </Button>
           {selectedIds.size > 0 ? (
-            <Button
-              disabled={bulkDeleting}
-              onClick={() => void bulkDeleteSelected()}
-              type="button"
-              variant="destructive"
-            >
-              {bulkDeleting ? "Deleting..." : "Delete"}
-            </Button>
+            <>
+              <DeleteAssetsDialog
+                assetIds={selectedAssets.map((asset) => asset.id)}
+                onJobCreated={() => {
+                  setBulkMessage("Delete job started.");
+                  setSelectedIds(new Set());
+                  router.refresh();
+                }}
+              />
+              <ReprocessAssetsDialog
+                assetIds={selectedAssets.map((asset) => asset.id)}
+                onJobCreated={() => {
+                  setBulkMessage("Tone reprocessing job started.");
+                  setSelectedIds(new Set());
+                  router.refresh();
+                }}
+                type="reprocess_tone"
+              />
+              <ReprocessAssetsDialog
+                assetIds={selectedAssets.map((asset) => asset.id)}
+                onJobCreated={() => {
+                  setBulkMessage("Conversion reprocessing job started.");
+                  setSelectedIds(new Set());
+                  router.refresh();
+                }}
+                type="reprocess_conversion"
+              />
+            </>
           ) : null}
           {selectedIds.size > 0 ? (
             <span className="text-xs text-muted-foreground">{selectedIds.size} selected</span>
@@ -169,6 +152,10 @@ export function LibraryAssetBrowser({ assets, containerId }: Props) {
         </div>
         <div className="flex items-center gap-2">
           <AddAssetMenu containerId={containerId} />
+          <Button onClick={() => router.refresh()} type="button" variant="outline" title="Refresh status">
+            <RefreshCw aria-hidden="true" className="h-4 w-4" />
+            <span className="sr-only">Refresh status</span>
+          </Button>
           <Button
             onClick={() => setViewMode("grid")}
             type="button"
@@ -189,7 +176,7 @@ export function LibraryAssetBrowser({ assets, containerId }: Props) {
       {bulkMessage ? <p className="text-sm text-muted-foreground">{bulkMessage}</p> : null}
 
       {assets.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No assets match the selected filters.</p>
+        <p className="text-sm text-muted-foreground">No items here yet.</p>
       ) : null}
 
       {view === "list" ? (
@@ -215,19 +202,31 @@ export function LibraryAssetBrowser({ assets, containerId }: Props) {
                 type="checkbox"
               />
               <div className="min-w-0">
-                <Link className="font-medium hover:underline" href={assetDetailHref(asset)}>
+                <Link className="font-medium hover:underline" href={assetHref(asset)}>
                   {asset.title}
                 </Link>
-                <p className="truncate text-xs text-muted-foreground">{asset.id}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {asset.type === "folder" ? asset.description || asset.id : asset.id}
+                </p>
               </div>
               <AssetTypeIcon asset={asset} />
-              <span className="text-sm capitalize">{asset.status}</span>
-              <span className="text-sm capitalize text-muted-foreground max-lg:hidden">
-                {statusText(asset.conversion?.status)}
-              </span>
-              <span className="text-sm capitalize text-muted-foreground max-lg:hidden">
-                {statusText(asset.toneAnalysis?.status)}
-              </span>
+              {asset.type === "folder" ? (
+                <>
+                  <span aria-hidden="true" />
+                  <span aria-hidden="true" className="max-lg:hidden" />
+                  <span aria-hidden="true" className="max-lg:hidden" />
+                </>
+              ) : (
+                <>
+                  <span className="text-sm capitalize">{asset.status}</span>
+                  <span className="text-sm capitalize text-muted-foreground max-lg:hidden">
+                    {statusText(asset.conversion?.status)}
+                  </span>
+                  <span className="text-sm capitalize text-muted-foreground max-lg:hidden">
+                    {statusText(asset.toneAnalysis?.status)}
+                  </span>
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -246,25 +245,35 @@ export function LibraryAssetBrowser({ assets, containerId }: Props) {
                   onChange={() => toggleSelected(asset.id)}
                   type="checkbox"
                 />
-                <Link className="min-w-0 flex-1" href={assetDetailHref(asset)}>
+                <Link className="min-w-0 flex-1" href={assetHref(asset)}>
                   <div className="flex items-center gap-2">
                     <AssetTypeIcon asset={asset} />
-                    <p className="text-xs text-muted-foreground">Origin: {asset.origin ?? "uploaded"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {asset.type === "folder" ? "Folder" : `Origin: ${asset.origin ?? "uploaded"}`}
+                    </p>
                   </div>
                   <h2 className="mt-3 text-base font-medium">{asset.title}</h2>
                   <p className="mt-3 truncate text-xs text-muted-foreground">ID: {asset.id}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Status: {asset.status}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Conversion: {statusText(asset.conversion?.status)}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Tone: {statusText(asset.toneAnalysis?.status)}
-                  </p>
+                  {asset.type === "folder" ? (
+                    asset.description ? (
+                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{asset.description}</p>
+                    ) : null
+                  ) : (
+                    <>
+                      <p className="mt-1 text-xs text-muted-foreground">Status: {asset.status}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Conversion: {statusText(asset.conversion?.status)}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Tone: {statusText(asset.toneAnalysis?.status)}
+                      </p>
+                    </>
+                  )}
                 </Link>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                 <span>Container: {asset.containerId ?? "root"}</span>
-                <span>Sources: {asset.sourceAssetIds?.length ?? 0}</span>
+                {asset.type === "folder" ? null : <span>Sources: {asset.sourceAssetIds?.length ?? 0}</span>}
               </div>
             </article>
           ))}
