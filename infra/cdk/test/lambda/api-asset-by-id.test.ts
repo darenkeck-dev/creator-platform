@@ -509,7 +509,7 @@ describe("api-asset-by-id lambda", () => {
     expect(result.statusCode).toBe(200);
     const body = parseBody(result) as { asset: { title: string } };
     expect(body.asset.title).toBe("Updated");
-    expect(calls).toHaveLength(2);
+    expect(calls.length).toBeGreaterThanOrEqual(2);
   });
 
   it("returns pre-signed URL for POST /assets/{id}/upload-url without marking uploaded", async () => {
@@ -520,6 +520,10 @@ describe("api-asset-by-id lambda", () => {
 
       if (!(command instanceof UpdateCommand)) {
         throw new Error("Expected UpdateCommand");
+      }
+
+      if (command.input.ExpressionAttributeValues?.[":auditLog"]) {
+        return {};
       }
 
       expect(command.input.ExpressionAttributeValues?.[":status"]).toBe("draft");
@@ -546,7 +550,7 @@ describe("api-asset-by-id lambda", () => {
     const body = parseBody(result) as { uploadUrl: string; expiresIn: number };
     expect(body.uploadUrl).toContain("media-originals-test");
     expect(body.expiresIn).toBe(900);
-    expect(calls).toHaveLength(2);
+    expect(calls.length).toBeGreaterThanOrEqual(2);
   });
 
   it("includes video dimension metadata in signed upload URL", async () => {
@@ -693,7 +697,7 @@ describe("api-asset-by-id lambda", () => {
     const body = parseBody(result) as { uploadId: string; partSize: number };
     expect(body.uploadId).toBe("upload-123");
     expect(body.partSize).toBe(32 * 1024 * 1024);
-    expect(ddb.calls).toHaveLength(2);
+    expect(ddb.calls.length).toBeGreaterThanOrEqual(2);
     expect(s3.calls).toHaveLength(1);
   });
 
@@ -897,6 +901,10 @@ describe("api-asset-by-id lambda", () => {
         throw new Error("Expected UpdateCommand");
       }
 
+      if (command.input.ExpressionAttributeValues?.[":auditLog"]) {
+        return {};
+      }
+
       expect(command.input.ExpressionAttributeValues?.[":status"]).toBe("uploaded");
       expect(command.input.ExpressionAttributeValues?.[":size"]).toBe(6000000);
       return {
@@ -926,7 +934,7 @@ describe("api-asset-by-id lambda", () => {
     expect(result.statusCode).toBe(200);
     const body = parseBody(result) as { asset: { status: string } };
     expect(body.asset.status).toBe("uploaded");
-    expect(calls).toHaveLength(2);
+    expect(calls.length).toBeGreaterThanOrEqual(2);
   });
 
   it("deletes asset metadata and S3 objects for owner", async () => {

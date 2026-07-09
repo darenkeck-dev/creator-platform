@@ -47,6 +47,7 @@ import {
   readAssetRecordWithUpgrade,
   safeReadAssetRecordWithUpgrade,
 } from "../shared/asset-record-versioning";
+import { appendAssetAuditLogEntry } from "../shared/asset-audit-log";
 
 type HttpEvent = {
   requestContext?: {
@@ -694,6 +695,17 @@ async function createUploadUrl(
     return response(404, { message: "Asset not found" });
   }
 
+  await appendAssetAuditLogEntry({
+    db,
+    tableName,
+    assetId: id,
+    category: "upload",
+    source: "api-asset-by-id",
+    code: "upload.url_created",
+    message: "Upload: upload URL created",
+    details: { contentType },
+  });
+
   const asset = await readAssetOrThrow(tableName, updated.Attributes);
   const payload = AssetUploadUrlResponseSchema.parse({
     uploadUrl,
@@ -837,6 +849,17 @@ async function initMultipartUpload(
   if (!updated.Attributes) {
     return response(404, { message: "Asset not found" });
   }
+
+  await appendAssetAuditLogEntry({
+    db,
+    tableName,
+    assetId: id,
+    category: "upload",
+    source: "api-asset-by-id",
+    code: "upload.multipart_initialized",
+    message: "Upload: multipart upload initialized",
+    details: { contentType },
+  });
 
   const asset = await readAssetOrThrow(tableName, updated.Attributes);
   const payload = MultipartInitResponseSchema.parse({
@@ -1116,6 +1139,20 @@ async function confirmUpload(
   if (!updated.Attributes) {
     return response(404, { message: "Asset not found" });
   }
+
+  await appendAssetAuditLogEntry({
+    db,
+    tableName,
+    assetId: id,
+    category: "upload",
+    source: "api-asset-by-id",
+    code: "upload.original_uploaded",
+    message: "Upload: original file uploaded",
+    details: {
+      contentType,
+      size,
+    },
+  });
 
   const asset = await readAssetOrThrow(tableName, updated.Attributes);
   const payload = AssetDetailResponseSchema.parse({ asset });

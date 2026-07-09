@@ -9,6 +9,7 @@ import {
 import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { z } from "zod";
 import { upgradeAssetItemSchemaVersion } from "../shared/asset-record-versioning";
+import { appendAssetAuditLogEntry } from "../shared/asset-audit-log";
 
 type SqsEvent = {
   Records?: Array<{
@@ -213,6 +214,14 @@ function resolveProcessingProfile(asset: AssetRecord): ProcessingProfile {
   });
 
   return PROFILE_BY_ID[parsedProfileId.data];
+}
+
+function auditCategoryForProfile(
+  profileId: ProcessingProfileId
+): "audio_conversion" | "media_conversion" {
+  return profileId === AUDIO_TRANSCODE_HLS_V1 || profileId === AUDIO_PASSTHROUGH_V1
+    ? "audio_conversion"
+    : "media_conversion";
 }
 
 function mediaConvertJobSettings(
@@ -840,6 +849,16 @@ async function handleObjectCreated(event: EventBridgeS3ObjectCreatedEvent): Prom
       status: "passthrough_ready",
       profile: profile.profileId,
     });
+    await appendAssetAuditLogEntry({
+      db,
+      tableName,
+      assetId,
+      category: auditCategoryForProfile(profile.profileId),
+      source: "upload-trigger",
+      code: "conversion.passthrough_ready",
+      message: `${profile.profileId === AUDIO_PASSTHROUGH_V1 ? "Audio conversion" : "Media conversion"}: passthrough ready`,
+      details: { profile: profile.profileId },
+    });
     return;
   }
 
@@ -851,6 +870,16 @@ async function handleObjectCreated(event: EventBridgeS3ObjectCreatedEvent): Prom
     logInfo("Asset status updated to processing queued", {
       assetId,
       profileId: profile.profileId,
+    });
+    await appendAssetAuditLogEntry({
+      db,
+      tableName,
+      assetId,
+      category: auditCategoryForProfile(profile.profileId),
+      source: "upload-trigger",
+      code: "conversion.queued",
+      message: `${profile.profileId === AUDIO_TRANSCODE_HLS_V1 ? "Audio conversion" : "Media conversion"}: processing queued`,
+      details: { profile: profile.profileId },
     });
   } catch (error) {
     if (error instanceof Error && error.name === "ConditionalCheckFailedException") {
@@ -877,6 +906,16 @@ async function handleObjectCreated(event: EventBridgeS3ObjectCreatedEvent): Prom
       profile: profile.profileId,
       jobId,
     });
+    await appendAssetAuditLogEntry({
+      db,
+      tableName,
+      assetId,
+      category: auditCategoryForProfile(profile.profileId),
+      source: "upload-trigger",
+      code: "conversion.job_submitted",
+      message: `${profile.profileId === AUDIO_TRANSCODE_HLS_V1 ? "Audio conversion" : "Media conversion"}: MediaConvert job submitted`,
+      details: { profile: profile.profileId, jobId },
+    });
     logInfo("Asset status updated to processing with MediaConvert job", {
       assetId,
       jobId,
@@ -888,6 +927,17 @@ async function handleObjectCreated(event: EventBridgeS3ObjectCreatedEvent): Prom
       status: "error",
       profile: profile.profileId,
       errorMessage: message,
+    });
+    await appendAssetAuditLogEntry({
+      db,
+      tableName,
+      assetId,
+      category: auditCategoryForProfile(profile.profileId),
+      level: "error",
+      source: "upload-trigger",
+      code: "conversion.submit_failed",
+      message: `${profile.profileId === AUDIO_TRANSCODE_HLS_V1 ? "Audio conversion" : "Media conversion"}: submission failed`,
+      details: { profile: profile.profileId },
     });
     logWarn("MediaConvert submission failed; asset marked error", {
       assetId,

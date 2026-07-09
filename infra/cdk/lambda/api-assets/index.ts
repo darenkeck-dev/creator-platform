@@ -192,6 +192,21 @@ function buildAssetRecord(
           profile: processingProfile,
           updatedAt: now,
         },
+    auditLog: [
+      {
+        id: randomUUID(),
+        at: now,
+        category: "upload",
+        level: "info",
+        message: isFolder ? "Asset metadata: folder created" : "Upload: asset created",
+        source: "api-assets",
+        code: isFolder ? "asset.folder_created" : "upload.asset_created",
+        details: {
+          assetType: input.type,
+          processingProfile,
+        },
+      },
+    ],
   };
 }
 

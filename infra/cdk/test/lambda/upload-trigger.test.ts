@@ -178,7 +178,9 @@ describe("upload-trigger lambda", () => {
     expect(result.ok).toBe(true);
     expect(result.processed).toBe(1);
     expect(ddb.calls.some((command) => command instanceof GetCommand)).toBe(true);
-    const updateCalls = ddb.calls.filter((command) => command instanceof UpdateCommand);
+    const updateCalls = ddb.calls
+      .filter((command) => command instanceof UpdateCommand)
+      .filter((command) => command.input.ExpressionAttributeValues?.[":conversion"]);
     expect(updateCalls.length).toBeGreaterThanOrEqual(2);
     for (const updateCall of updateCalls) {
       expect(hasUndefined(updateCall.input.ExpressionAttributeValues)).toBe(false);
@@ -326,7 +328,9 @@ describe("upload-trigger lambda", () => {
 
     expect(result.ok).toBe(true);
     expect(result.processed).toBe(1);
-    const updateCalls = ddb.calls.filter((command) => command instanceof UpdateCommand);
+    const updateCalls = ddb.calls
+      .filter((command) => command instanceof UpdateCommand)
+      .filter((command) => command.input.ExpressionAttributeValues?.[":conversion"]);
     expect(updateCalls).toHaveLength(1);
     expect(updateCalls[0]?.input.ExpressionAttributeValues?.[":conversion"]).toMatchObject({
       status: "passthrough_ready",
@@ -387,7 +391,9 @@ describe("upload-trigger lambda", () => {
     expect(result.ok).toBe(true);
     expect(result.processed).toBe(1);
 
-    const updateCalls = ddb.calls.filter((command) => command instanceof UpdateCommand);
+    const updateCalls = ddb.calls
+      .filter((command) => command instanceof UpdateCommand)
+      .filter((command) => command.input.ExpressionAttributeValues?.[":conversion"]);
     expect(updateCalls.length).toBeGreaterThanOrEqual(2);
     expect(updateCalls[0]?.input.ExpressionAttributeValues?.[":conversion"]).toMatchObject({
       status: "queued",

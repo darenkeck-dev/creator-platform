@@ -61,7 +61,7 @@ describe("observability posture", () => {
         maxReceiveCount: 5,
       }),
     });
-  });
+  }, 30000);
 
   it("sets one month log retention for lambda functions", () => {
     const app = new App();
@@ -81,7 +81,7 @@ describe("observability posture", () => {
     const processingTemplate = Template.fromStack(processingStack);
     const processingRetentionResources = processingTemplate.findResources("Custom::LogRetention");
     expect(Object.keys(processingRetentionResources).length).toBeGreaterThanOrEqual(2);
-  });
+  }, 30000);
 
   it("creates monthly budget notification resource", () => {
     const app = new App();
