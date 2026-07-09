@@ -34,7 +34,7 @@ Release status: pre-release. The next release milestone is not public launch; it
 - Build all packages/apps: `bun run build`
 - Build Lambda bundles: `bun run --cwd infra/cdk build:lambda`
 - Deploy API stack: `bun run deploy:api`
-- Deploy processing stack: `FFMPEG_LAYER_ARN="arn:aws:lambda:us-west-2:125455294948:layer:media-manager-ffmpeg:1" bun run deploy:processing`
+- Deploy processing stack: `FFMPEG_LAYER_ARN="<your ffmpeg layer arn>" bun run deploy:processing`
 - Deploy darenkeck static site: `bun run deploy:darenkeck:prod`
 
 ## Roadmap To User Input Collection

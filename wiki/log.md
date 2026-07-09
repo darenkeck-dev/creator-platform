@@ -217,7 +217,7 @@
 ## [2026-07-07] deploy | tone analysis processing stack
 
 - Deployed `MediaManagerProcessingStack` with the initial tone-analysis container image Lambda, SQS queue/DLQ, EventBridge fan-out target, and IAM permissions.
-- Verified live Lambda configuration uses `/media-manager/prod/openai-api-key`, `media-originals-prod`, and `media-derived-prod`.
+- Verified live Lambda configuration uses `/media-manager/<stage>/openai-api-key`, `media-originals-<stage>`, and `media-derived-<stage>`.
 - Verified `media-manager-originals-object-created` now targets both `media-manager-upload-events` and `media-manager-tone-analysis`.
 - Clarified docs that EventBridge is the shared upload-event router and SQS provides separate durable work queues for conversion and tone analysis.
 
@@ -243,7 +243,7 @@
 
 ## [2026-07-07] deploy | node tone worker with ffmpeg layer
 
-- Built an account-local ffmpeg-only Lambda layer from the static Linux x86_64 ffmpeg release, published as `arn:aws:lambda:us-west-2:125455294948:layer:media-manager-ffmpeg:1`.
+- Built an account-local ffmpeg-only Lambda layer from the static Linux x86_64 ffmpeg release, published as `<your ffmpeg layer arn>`.
 - Deployed `MediaManagerProcessingStack` with `FFMPEG_LAYER_ARN` set to that layer ARN.
 - Verified live tone worker `MediaManagerProcessingSta-ToneAnalysisWorkerFuncti-Voz3eWjvMUQ6` is `PackageType=Zip`, `Runtime=nodejs22.x`, `Handler=index.handler`, `FFMPEG_PATH=/opt/bin/ffmpeg`, and has the ffmpeg layer attached.
 
@@ -273,7 +273,7 @@
 ## [2026-07-07] deploy | audit log backend updates
 
 - Deployed `MediaManagerApiStack` with audit-log-capable `api-assets` and `api-asset-by-id` lambdas.
-- Deployed `MediaManagerProcessingStack` with audit-log-capable `upload-trigger`, `mediaconvert-status`, and `tone-analysis` lambdas, preserving ffmpeg layer `arn:aws:lambda:us-west-2:125455294948:layer:media-manager-ffmpeg:1`.
+- Deployed `MediaManagerProcessingStack` with audit-log-capable `upload-trigger`, `mediaconvert-status`, and `tone-analysis` lambdas, preserving ffmpeg layer `<your ffmpeg layer arn>`.
 - Post-deploy checks passed: public API health returned `200`, upload/tone queues were empty, tone DLQ was empty, and updated lambdas reported fresh `LastModified` timestamps.
 - `apps/web` audit-log UI was built locally but not published from this repo because no web deploy script, CDK web stack, `.vercel` link, or local Vercel CLI was available.
 
@@ -307,7 +307,7 @@
 ## [2026-07-08] deploy | tone taxonomy v2 backend
 
 - Deployed `MediaManagerApiStack` and `MediaManagerProcessingStack` with `tone-taxonomy/v2` support.
-- Preserved ffmpeg layer `arn:aws:lambda:us-west-2:125455294948:layer:media-manager-ffmpeg:1` on the tone-analysis Lambda.
+- Preserved ffmpeg layer `<your ffmpeg layer arn>` on the tone-analysis Lambda.
 - Post-deploy checks passed: public API health returned `200`, tone queue was empty, tone DLQ was empty, and the tone worker reported a fresh `LastModified` timestamp.
 
 ## [2026-07-08] docs | release roadmap in README
@@ -381,7 +381,7 @@
 
 - Deployed `MediaManagerProcessingStack` with audio normalization in the tone-analysis worker.
 - Fixed processing stack ffmpeg-layer wiring so the account-local `media-manager-ffmpeg:1` layer is attached by default unless `FFMPEG_LAYER_ARN` overrides it.
-- Verified live tone worker has `FFMPEG_PATH=/opt/bin/ffmpeg` and layer `arn:aws:lambda:us-west-2:125455294948:layer:media-manager-ffmpeg:1` attached.
+- Verified live tone worker has `FFMPEG_PATH=/opt/bin/ffmpeg` and layer `<your ffmpeg layer arn>` attached.
 - Requeued previously failing asset `ff2fde86-978e-4a7f-8c49-5a8025930ad6` (`audio/x-m4a`); it completed with `toneAnalysis.status=ready` and `tone-taxonomy/v2`.
 
 ## [2026-07-09] web | hide media asset lineage panel

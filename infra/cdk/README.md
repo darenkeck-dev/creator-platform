@@ -183,7 +183,7 @@ Notes:
 - Conversion and tone analysis use separate queues so tone retries/backlogs do not affect MediaConvert submission or playback readiness.
 - Tone analysis reads the OpenAI key from SSM Parameter Store `SecureString` using `/media-manager/<stage>/openai-api-key` by default.
 - Video tone analysis expects an `ffmpeg` binary at `FFMPEG_PATH` (default `/opt/bin/ffmpeg`). Set `FFMPEG_LAYER_ARN` during deploy to attach a Lambda layer that provides it.
-- Current prod ffmpeg layer: `arn:aws:lambda:us-west-2:125455294948:layer:media-manager-ffmpeg:1`.
+- Current prod ffmpeg layer: `<your ffmpeg layer arn>`.
 
 ### `MediaManagerObservabilityStack` (`lib/observability-stack.ts`)
 

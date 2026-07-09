@@ -59,7 +59,7 @@ Migration note:
 - Override at synth/deploy time with `OPENAI_API_KEY_PARAMETER_NAME` if needed.
 - Video tone analysis expects `ffmpeg` at `FFMPEG_PATH` (default `/opt/bin/ffmpeg`). Processing deploy attaches the account-local `media-manager-ffmpeg:1` Lambda layer by default; set `FFMPEG_LAYER_ARN` only to override it.
 - Audio tone analysis also uses `FFMPEG_PATH` to normalize originals into OpenAI-compatible MP3 before analysis.
-- Current prod ffmpeg layer: `arn:aws:lambda:us-west-2:125455294948:layer:media-manager-ffmpeg:1`.
+- Current prod ffmpeg layer: `<your ffmpeg layer arn>`.
 - Tone analysis JSON is written to the derived bucket under `derived/<assetId>/tone/asset-analysis.json`; bundle artifact generation is deferred until `tone-core` owns bundle creation.
 - New tone analyses emit `tone-taxonomy/v2`; contracts accept both `tone-taxonomy/v1` and `tone-taxonomy/v2` so historical artifacts can still be read.
 - If older ready tone analyses are missing display fields on the asset record, run `bun run --cwd infra/cdk backfill:tone-analysis-display` first, then `bun run --cwd infra/cdk backfill:tone-analysis-display -- --apply` after reviewing the dry run.

@@ -73,7 +73,7 @@
 - Asset detail pages poll while conversion or tone analysis is queued/processing so async sub-state changes become visible without manual refresh.
 - `apps/tone-embedding` remains unchanged; `packages/tone-core` is the production-oriented path for moving tone extraction into a native Node Lambda.
 - Replaced the integrated Python/container tone worker code path with a Node Lambda that imports `@media-manager/tone-core`; video analysis now uses `FFMPEG_PATH` and can attach an ffmpeg Lambda layer via `FFMPEG_LAYER_ARN`.
-- Prod tone-analysis Lambda is now a zip-based `nodejs22.x` function with `arn:aws:lambda:us-west-2:125455294948:layer:media-manager-ffmpeg:1` attached.
+- Prod tone-analysis Lambda is now a zip-based `nodejs22.x` function with `<your ffmpeg layer arn>` attached.
 - New tone analyses emit `toneTaxonomyVersion="tone-taxonomy/v2"`; existing v1 artifacts remain historical and should be reanalyzed/backfilled only if comparable v2 scores are needed.
 
 Related: [Current State](current-state.md), [Open Issues](open-issues.md).
