@@ -48,6 +48,19 @@ export const AssetTagFacetSchema = z.enum(ASSET_TAG_FACETS);
 export const AssetTagWeightSchema = z.enum(ASSET_TAG_WEIGHTS);
 export const AssetVisibilitySchema = z.enum(ASSET_VISIBILITIES);
 export const ProcessingProfileSchema = z.enum(PROCESSING_PROFILES);
+export const ProcessingProfileMetadataSchema = z.object({
+  id: ProcessingProfileSchema,
+  label: z.string().min(1),
+  supportedTypes: z.array(AssetTypeSchema),
+  mode: z.enum(["mediaconvert", "passthrough"]),
+});
+export const PROCESSING_PROFILE_METADATA = [
+  { id: "video-standard-v1", label: "Video standard", supportedTypes: ["video"], mode: "mediaconvert" },
+  { id: "audio-passthrough-v1", label: "Audio passthrough", supportedTypes: ["audio"], mode: "passthrough" },
+  { id: "audio-transcode-hls-v1", label: "Audio HLS", supportedTypes: ["audio"], mode: "mediaconvert" },
+  { id: "image-passthrough-v1", label: "Image passthrough", supportedTypes: ["image"], mode: "passthrough" },
+  { id: "folder-meta-v1", label: "Folder metadata", supportedTypes: ["folder"], mode: "passthrough" },
+] as const;
 export const ComboVoteValueSchema = z.enum(COMBO_VOTE_VALUES);
 export const AssetToneAnalysisStatusSchema = z.enum(ASSET_TONE_ANALYSIS_STATUSES);
 export const AssetToneAnalysisProfileSchema = z.enum(ASSET_TONE_ANALYSIS_PROFILES);
@@ -348,6 +361,106 @@ export const AssetDeleteResponseSchema = z.object({
   deleted: z.literal(true),
 });
 
+export const JobTypeSchema = z.enum(["delete_assets", "reprocess_tone", "reprocess_conversion"]);
+export const JobStatusSchema = z.enum([
+  "queued",
+  "running",
+  "completed",
+  "completed_with_errors",
+  "failed",
+  "cancelled",
+]);
+
+export const JobTargetSchema = z.object({
+  assetIds: z.array(z.string().min(1)).min(1).max(100),
+  includeDescendants: z.boolean().default(true),
+});
+
+export const JobOptionsSchema = z.object({
+  processingProfile: ProcessingProfileSchema.optional(),
+});
+
+export const JobAssetSummarySchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  type: AssetTypeSchema,
+  containerId: z.string().min(1).optional(),
+  path: z.string().min(1),
+  actionStatus: z.enum(["processable", "container", "skipped"]).default("processable"),
+  skipReason: z.string().min(1).optional(),
+});
+
+export const JobPreviewSummarySchema = z.object({
+  totalItems: z.number().int().nonnegative(),
+  folders: z.number().int().nonnegative(),
+  audio: z.number().int().nonnegative(),
+  video: z.number().int().nonnegative(),
+  images: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative().default(0),
+  processableItems: z.number().int().nonnegative().optional(),
+  skippedItems: z.number().int().nonnegative().optional(),
+});
+
+export const JobPreviewSchema = z.object({
+  type: JobTypeSchema,
+  target: JobTargetSchema,
+  options: JobOptionsSchema.default({}),
+  summary: JobPreviewSummarySchema,
+  roots: z.array(JobAssetSummarySchema),
+  items: z.array(JobAssetSummarySchema),
+  confirmationToken: z.string().min(1),
+  truncated: z.boolean().default(false),
+});
+
+export const JobPreviewInputSchema = z.object({
+  type: JobTypeSchema,
+  target: JobTargetSchema,
+  options: JobOptionsSchema.default({}),
+});
+
+export const CreateJobInputSchema = JobPreviewInputSchema.extend({
+  confirmationToken: z.string().min(1),
+});
+
+export const JobFailureSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1).optional(),
+  message: z.string().min(1),
+});
+
+export const JobRecordSchema = z.object({
+  id: z.string().min(1),
+  schemaVersion: z.number().int().min(1),
+  ownerEmail: z.string().email(),
+  type: JobTypeSchema,
+  status: JobStatusSchema,
+  target: JobTargetSchema,
+  options: JobOptionsSchema.default({}),
+  preview: JobPreviewSchema.optional(),
+  totalItems: z.number().int().nonnegative(),
+  completedItems: z.number().int().nonnegative(),
+  failedItems: z.number().int().nonnegative(),
+  skippedItems: z.number().int().nonnegative(),
+  currentItemId: z.string().min(1).optional(),
+  currentItemTitle: z.string().min(1).optional(),
+  message: z.string().min(1),
+  failures: z.array(JobFailureSchema).max(50).default([]),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  startedAt: z.string().datetime().optional(),
+  finishedAt: z.string().datetime().optional(),
+});
+
+export const JobPreviewResponseSchema = z.object({
+  preview: JobPreviewSchema,
+});
+
+export const JobDetailResponseSchema = z.object({
+  job: JobRecordSchema,
+});
+
+export const CreateJobResponseSchema = JobDetailResponseSchema;
+
 export const AssetChildrenResponseSchema = z.object({
   parentId: z.string().min(1),
   assets: z.array(AssetRecordSchema),
@@ -471,6 +584,21 @@ export type MultipartCompleteInput = z.infer<typeof MultipartCompleteInputSchema
 export type MultipartAbortInput = z.infer<typeof MultipartAbortInputSchema>;
 export type MultipartAbortResponse = z.infer<typeof MultipartAbortResponseSchema>;
 export type AssetDeleteResponse = z.infer<typeof AssetDeleteResponseSchema>;
+export type ProcessingProfile = z.infer<typeof ProcessingProfileSchema>;
+export type ProcessingProfileMetadata = z.infer<typeof ProcessingProfileMetadataSchema>;
+export type JobType = z.infer<typeof JobTypeSchema>;
+export type JobStatus = z.infer<typeof JobStatusSchema>;
+export type JobTarget = z.infer<typeof JobTargetSchema>;
+export type JobOptions = z.infer<typeof JobOptionsSchema>;
+export type JobAssetSummary = z.infer<typeof JobAssetSummarySchema>;
+export type JobPreviewSummary = z.infer<typeof JobPreviewSummarySchema>;
+export type JobPreview = z.infer<typeof JobPreviewSchema>;
+export type JobPreviewInput = z.infer<typeof JobPreviewInputSchema>;
+export type CreateJobInput = z.infer<typeof CreateJobInputSchema>;
+export type JobRecord = z.infer<typeof JobRecordSchema>;
+export type JobPreviewResponse = z.infer<typeof JobPreviewResponseSchema>;
+export type JobDetailResponse = z.infer<typeof JobDetailResponseSchema>;
+export type CreateJobResponse = z.infer<typeof CreateJobResponseSchema>;
 export type AssetChildrenResponse = z.infer<typeof AssetChildrenResponseSchema>;
 export type AssetLineageResponse = z.infer<typeof AssetLineageResponseSchema>;
 export type MoveAssetInput = z.infer<typeof MoveAssetInputSchema>;

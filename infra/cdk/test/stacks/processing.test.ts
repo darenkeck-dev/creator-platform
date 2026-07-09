@@ -70,4 +70,31 @@ describe("processing stack tone analysis", () => {
     expect(actions).toContain("ssm:GetParameter");
     expect(actions).toContain("s3:PutObject");
   });
+
+  it("adds a bulk actions worker fed by the API-owned queue", () => {
+    const app = new App();
+    const stack = new ProcessingStack(app, "ProcessingStackBulkActionsTest", {
+      stage: "test",
+      env,
+    });
+
+    const template = Template.fromStack(stack);
+
+    template.hasResourceProperties("AWS::Lambda::Function", {
+      Handler: "index.handler",
+      Runtime: "nodejs22.x",
+      Timeout: 900,
+      Environment: Match.objectLike({
+        Variables: Match.objectLike({
+          ASSETS_CONTAINER_INDEX: Match.anyValue(),
+          TONE_ANALYSIS_QUEUE_URL: Match.anyValue(),
+          UPLOAD_EVENTS_QUEUE_URL: Match.anyValue(),
+        }),
+      }),
+    });
+
+    template.hasResourceProperties("AWS::Lambda::EventSourceMapping", {
+      BatchSize: 1,
+    });
+  });
 });

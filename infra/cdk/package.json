@@ -11,6 +11,7 @@
     "@aws-sdk/client-dynamodb": "^3.888.0",
     "@aws-sdk/client-mediaconvert": "^3.888.0",
     "@aws-sdk/client-s3": "^3.888.0",
+    "@aws-sdk/client-sqs": "^3.888.0",
     "@aws-sdk/client-ssm": "^3.888.0",
     "@aws-sdk/lib-dynamodb": "^3.888.0",
     "@aws-sdk/s3-request-presigner": "^3.888.0",
@@ -28,7 +29,7 @@
   },
   "scripts": {
     "build": "bunx tsc -p tsconfig.json",
-    "build:lambda": "bunx esbuild lambda/pre-token-allowlist/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/pre-token-allowlist/index.js && bunx esbuild lambda/api-assets/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/api-assets/index.js && bunx esbuild lambda/api-asset-by-id/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/api-asset-by-id/index.js && bunx esbuild lambda/api-combos/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/api-combos/index.js && bunx esbuild lambda/mediaconvert-status/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/mediaconvert-status/index.js && bunx esbuild lambda/upload-trigger/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/upload-trigger/index.js && bunx esbuild lambda/tone-analysis/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/tone-analysis/index.js",
+    "build:lambda": "bunx esbuild lambda/pre-token-allowlist/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/pre-token-allowlist/index.js && bunx esbuild lambda/api-assets/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/api-assets/index.js && bunx esbuild lambda/api-asset-by-id/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/api-asset-by-id/index.js && bunx esbuild lambda/api-combos/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/api-combos/index.js && bunx esbuild lambda/api-jobs/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/api-jobs/index.js && bunx esbuild lambda/mediaconvert-status/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/mediaconvert-status/index.js && bunx esbuild lambda/upload-trigger/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/upload-trigger/index.js && bunx esbuild lambda/tone-analysis/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/tone-analysis/index.js && bunx esbuild lambda/jobs-worker/index.ts --bundle --platform=node --target=node22 --outfile=.dist/lambda/jobs-worker/index.js",
     "lint": "bunx prettier --check \"{bin,lib,src,lambda}/**/*.ts\"",
     "typecheck": "bunx tsc -p tsconfig.json && bunx tsc -p lambda/tsconfig.json --noEmit",
     "test": "bun test test/**/*.test.ts",
