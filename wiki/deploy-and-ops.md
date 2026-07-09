@@ -11,6 +11,8 @@
 
 - `infra/cdk/lambda/api-*` -> deploy API stack.
 - `infra/cdk/lambda/upload-trigger`, `mediaconvert-status`, or `tone-analysis` -> deploy processing stack.
+- `infra/cdk/lambda/api-jobs` or job API routes/queue config -> deploy API stack, then processing stack for worker changes.
+- `infra/cdk/lambda/jobs-worker` -> deploy processing stack after the API stack has exported the bulk-actions queue.
 - `infra/cdk/lib/darenkeck-site-stack.ts` -> deploy darenkeck site infra stack.
 - `apps/darenkeck/*` runtime/static content -> deploy darenkeck static site.
 
@@ -55,7 +57,8 @@ Migration note:
 - Processing stack expects an OpenAI API key in SSM Parameter Store `SecureString`.
 - Default parameter name: `/media-manager/<stage>/openai-api-key`.
 - Override at synth/deploy time with `OPENAI_API_KEY_PARAMETER_NAME` if needed.
-- Video tone analysis expects `ffmpeg` at `FFMPEG_PATH` (default `/opt/bin/ffmpeg`). Set `FFMPEG_LAYER_ARN` during processing deploy to attach an ffmpeg Lambda layer.
+- Video tone analysis expects `ffmpeg` at `FFMPEG_PATH` (default `/opt/bin/ffmpeg`). Processing deploy attaches the account-local `media-manager-ffmpeg:1` Lambda layer by default; set `FFMPEG_LAYER_ARN` only to override it.
+- Audio tone analysis also uses `FFMPEG_PATH` to normalize originals into OpenAI-compatible MP3 before analysis.
 - Current prod ffmpeg layer: `arn:aws:lambda:us-west-2:125455294948:layer:media-manager-ffmpeg:1`.
 - Tone analysis JSON is written to the derived bucket under `derived/<assetId>/tone/asset-analysis.json`; bundle artifact generation is deferred until `tone-core` owns bundle creation.
 - New tone analyses emit `tone-taxonomy/v2`; contracts accept both `tone-taxonomy/v1` and `tone-taxonomy/v2` so historical artifacts can still be read.
@@ -68,5 +71,13 @@ Migration note:
 - Processing deploy no longer builds a tone-analysis container image; the tone worker is a Node Lambda bundled from `@media-manager/tone-core`.
 - Current prod tone worker is a zip Lambda on `nodejs22.x` with the account-local ffmpeg layer attached.
 - Ready tone analyses generated before display-field deployment may need the tone display backfill before the UI can render their Analysis section.
+
+## Generic asset jobs
+
+- API stack owns the `media-manager-bulk-actions` queue and job API routes: `POST /jobs/preview`, `POST /jobs`, `GET /jobs/{id}`.
+- Processing stack imports the queue ARN and runs `jobs-worker` from SQS messages.
+- Current job type: `delete_assets`.
+- Recursive delete expands selected folders through the asset container GSI, deletes deepest descendants first, removes original/derived S3 objects for media assets, and removes asset DynamoDB records.
+- The web app uses `/api/jobs/*` proxy routes and polls active jobs for bottom-bar progress.
 
 Related: [Current State](current-state.md), [Architecture Map](architecture-map.md), [Open Issues](open-issues.md).

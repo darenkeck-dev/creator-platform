@@ -346,3 +346,58 @@
 - Updated breadcrumbs to resolve asset/folder IDs through the local asset API and display titles instead of raw IDs for asset pages and library folder context.
 - Wrapped app-shell breadcrumbs in `Suspense` because the breadcrumb component now reads search params.
 - Verified with `bun run --cwd apps/web build` and `bun run --cwd apps/web typecheck`.
+
+## [2026-07-08] web | library list default and folder rows
+
+- Changed the Media Manager library browser to default to list mode, with grid mode available through `view=grid`.
+- Updated folder rows/cards to link into folder contents and omit asset-only status, conversion, tone, and source-count fields.
+
+## [2026-07-08] feature | generic jobs and recursive delete
+
+- Added shared contracts for generic asset jobs, previews, progress, and job status records.
+- Added backend job APIs for preview/create/status and an API-owned `media-manager-bulk-actions` SQS queue.
+- Added a processing `jobs-worker` that handles `delete_assets` jobs by recursively expanding selected folders through the container GSI and deleting deepest descendants first.
+- Added web job proxy routes, reusable recursive delete confirmation dialog, and a bottom progress bar that polls active jobs.
+
+## [2026-07-09] fix | job creation DynamoDB marshalling
+
+- Fixed `api-jobs` and `jobs-worker` DynamoDB document clients to remove undefined values before marshalling nested job preview/progress data.
+- Deployed `MediaManagerApiStack` and `MediaManagerProcessingStack` with the fix.
+- Verified with a live folder-only recursive delete smoke: preview found two temporary folders, create returned `202`, worker completed the job, temporary records were removed, and bulk-actions queues/DLQ were empty.
+
+## [2026-07-09] feature | queued tone and conversion reprocessing jobs
+
+- Extended generic asset jobs with `reprocess_tone` and `reprocess_conversion` job types.
+- Reprocessing jobs expand selected folders, mark unsupported items as skipped in preview, and queue existing tone/upload processing workers rather than doing media work inline.
+- Added conversion profile selection for conversion reprocessing and manual status refresh controls in library and asset detail status areas.
+
+## [2026-07-09] fix | normalize audio before OpenAI tone analysis
+
+- Added `tone-core` audio normalization that transcodes source audio to a deterministic MP3 file with ffmpeg before OpenAI `input_audio` submission.
+- Wired the tone-analysis Lambda to pass `FFMPEG_PATH` for audio normalization, matching the existing video frame extraction path.
+- Added focused `tone-core` test coverage for the normalization command/output path.
+
+## [2026-07-09] deploy | audio normalization processing smoke
+
+- Deployed `MediaManagerProcessingStack` with audio normalization in the tone-analysis worker.
+- Fixed processing stack ffmpeg-layer wiring so the account-local `media-manager-ffmpeg:1` layer is attached by default unless `FFMPEG_LAYER_ARN` overrides it.
+- Verified live tone worker has `FFMPEG_PATH=/opt/bin/ffmpeg` and layer `arn:aws:lambda:us-west-2:125455294948:layer:media-manager-ffmpeg:1` attached.
+- Requeued previously failing asset `ff2fde86-978e-4a7f-8c49-5a8025930ad6` (`audio/x-m4a`); it completed with `toneAnalysis.status=ready` and `tone-taxonomy/v2`.
+
+## [2026-07-09] web | hide media asset lineage panel
+
+- Removed the generic Lineage Context card from media asset detail pages because normal uploaded assets usually have no source/child relationships and the UI was folder-schema noise.
+- Stopped fetching asset lineage and children for non-folder asset detail pages; folder detail pages still fetch and render child assets.
+- Verified with `bun run --cwd apps/web typecheck` and `bun run --cwd apps/web build`.
+
+## [2026-07-09] web | asset move folder tree dialog
+
+- Removed the media asset page `Nested Location` card.
+- Added a move icon button next to `Edit` on asset detail pages; it opens a reusable move dialog with root selection and expandable folder tree navigation.
+- The dialog supports selecting root or a folder and confirms through the existing `/assets/{id}/move` route; the component is structured around asset count and confirm callback so it can be reused for bulk moves.
+- Verified with `bun run --cwd apps/web typecheck` and `bun run --cwd apps/web build`.
+
+## [2026-07-09] web | move dialog layout polish
+
+- Tightened move dialog padding, centered folder row controls vertically, and added nested guide indentation for expanded folder levels.
+- Verified with `bun run --cwd apps/web typecheck` and `bun run --cwd apps/web build`.

@@ -48,6 +48,14 @@
 - Added a tone keyword mapping research brief for refining `tone-taxonomy/v2` with affective norm literature and weighted descriptor mappings.
 - Implemented `tone-taxonomy/v2` in `packages/tone-core`: expanded descriptor vocabulary, weighted multi-dimension mapping, summed/clamped scoring, v2 artifact emission, and v1/v2 parser compatibility.
 - Added the first Media Manager library cleanup slice: reusable grid/list asset browser, multi-select, select-all, and bulk delete for library and folder child views.
+- Library and folder child views now default to list mode; folders navigate as containers and omit asset-only status, conversion, and tone fields.
+- Added a generic asset job framework with preview/create/status APIs, SQS worker execution, recursive `delete_assets`, web proxy routes, a shared recursive delete confirmation dialog, and a bottom job progress bar.
+- Extended generic asset jobs with queued `reprocess_tone` and `reprocess_conversion` actions, conversion profile selection, and manual status refresh controls in library/detail status areas.
+- Updated the TypeScript tone pipeline to normalize audio originals to MP3 with ffmpeg before OpenAI audio analysis, reducing failures from decodable but strict-parser-invalid source files.
+- Deployed processing with audio normalization and restored the default ffmpeg layer attachment; a previously failing `audio/x-m4a` asset reprocessed successfully to `toneAnalysis.status=ready`.
+- Removed the generic Lineage Context panel from media asset detail pages; folder child browsing remains in the folder detail view.
+- Replaced the media asset page Nested Location card with a header move icon that opens a reusable folder-tree move dialog.
+- Polished the move dialog spacing and nested folder indentation so expanded folders read as a tree.
 
 ## Playback evolution summary
 
