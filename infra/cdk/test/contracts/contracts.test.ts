@@ -8,6 +8,8 @@ import {
   CreateComboInputSchema,
   ComboVoteInputSchema,
   MultipartCompleteInputSchema,
+  JobPreviewInputSchema,
+  JobRecordSchema,
 } from "@media-manager/contracts";
 
 describe("contracts", () => {
@@ -140,5 +142,40 @@ describe("contracts", () => {
 
     expect(comboParsed.success).toBe(true);
     expect(voteParsed.success).toBe(true);
+  });
+
+  it("supports generic asset job preview and progress records", () => {
+    const previewInput = JobPreviewInputSchema.safeParse({
+      type: "reprocess_conversion",
+      target: {
+        assetIds: ["folder-1"],
+        includeDescendants: true,
+      },
+      options: {
+        processingProfile: "video-standard-v1",
+      },
+    });
+    const job = JobRecordSchema.safeParse({
+      id: "job-1",
+      schemaVersion: 1,
+      ownerEmail: "owner@example.com",
+      type: "reprocess_tone",
+      status: "running",
+      target: {
+        assetIds: ["folder-1"],
+        includeDescendants: true,
+      },
+      options: {},
+      totalItems: 3,
+      completedItems: 1,
+      failedItems: 0,
+      skippedItems: 0,
+      message: "Deleting item",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:01.000Z",
+    });
+
+    expect(previewInput.success).toBe(true);
+    expect(job.success).toBe(true);
   });
 });

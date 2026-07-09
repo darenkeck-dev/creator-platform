@@ -1,0 +1,16 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "devflow": {
+      "type": "local",
+      "command": [
+        "uv",
+        "run",
+        "--directory",
+        "/Users/daren/darenkeck-dev/devflow-mcp",
+        "devflow-mcp"
+      ],
+      "enabled": true
+    }
+  }
+}

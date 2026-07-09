@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { DynamoDBDocumentClient, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 
 import { handler } from "../../lambda/mediaconvert-status";
 
@@ -10,11 +10,11 @@ const originalDerivedBucketName = process.env.ASSETS_DERIVED_BUCKET_NAME;
 const originalCloudFrontDomain = process.env.CLOUDFRONT_DOMAIN;
 const originalSend = DynamoDBDocumentClient.prototype.send;
 
-function stubSend(impl: (command: UpdateCommand) => Promise<Record<string, unknown>>) {
-  const calls: UpdateCommand[] = [];
+function stubSend(impl: (command: GetCommand | UpdateCommand) => Promise<Record<string, unknown>>) {
+  const calls: Array<GetCommand | UpdateCommand> = [];
 
   DynamoDBDocumentClient.prototype.send = async function (command: unknown) {
-    if (!(command instanceof UpdateCommand)) {
+    if (!(command instanceof GetCommand) && !(command instanceof UpdateCommand)) {
       throw new Error("Unexpected command");
     }
 
@@ -83,7 +83,7 @@ describe("mediaconvert-status lambda", () => {
 
     expect(result.ok).toBe(true);
     expect(result.status).toBe("processing");
-    expect(calls).toHaveLength(1);
+    expect(calls.filter((command) => command instanceof UpdateCommand)).toHaveLength(2);
     expect(calls[0]?.input.ExpressionAttributeValues?.[":status"]).toBe("processing");
     expect(calls[0]?.input.ExpressionAttributeValues?.[":conversion"]).toMatchObject({
       status: "processing",
@@ -120,7 +120,7 @@ describe("mediaconvert-status lambda", () => {
 
     expect(result.ok).toBe(true);
     expect(result.status).toBe("ready");
-    expect(calls).toHaveLength(1);
+    expect(calls.filter((command) => command instanceof UpdateCommand)).toHaveLength(2);
     expect(calls[0]?.input.ExpressionAttributeValues?.[":status"]).toBe("ready");
 
     const stream = calls[0]?.input.ExpressionAttributeValues?.[":stream"] as {
@@ -275,7 +275,7 @@ describe("mediaconvert-status lambda", () => {
 
     expect(result.ok).toBe(true);
     expect(result.status).toBe("ready");
-    expect(calls).toHaveLength(1);
+    expect(calls.filter((command) => command instanceof UpdateCommand)).toHaveLength(2);
 
     const stream = calls[0]?.input.ExpressionAttributeValues?.[":stream"] as {
       hlsMasterUrl?: string;

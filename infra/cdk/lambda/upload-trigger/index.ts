@@ -9,6 +9,7 @@ import {
 import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { z } from "zod";
 import { upgradeAssetItemSchemaVersion } from "../shared/asset-record-versioning";
+import { appendAssetAuditLogEntry } from "../shared/asset-audit-log";
 
 type SqsEvent = {
   Records?: Array<{
@@ -36,6 +37,15 @@ const EventBridgeS3ObjectCreatedEventSchema = z.object({
     .optional(),
 });
 type EventBridgeS3ObjectCreatedEvent = z.infer<typeof EventBridgeS3ObjectCreatedEventSchema>;
+
+const ReprocessConversionMessageSchema = z.object({
+  kind: z.literal("reprocess_conversion"),
+  assetId: z.string().min(1),
+  processingProfile: z
+    .enum(["video-standard-v1", "audio-passthrough-v1", "audio-transcode-hls-v1", "image-passthrough-v1"])
+    .optional(),
+});
+type ReprocessConversionMessage = z.infer<typeof ReprocessConversionMessageSchema>;
 
 type AssetRecord = {
   id: string;
@@ -156,7 +166,7 @@ function extractAssetIdFromKey(key: string): string | null {
   return matched?.[1] ?? null;
 }
 
-function parseEventBridgeMessage(body: string | undefined): EventBridgeS3ObjectCreatedEvent | null {
+function parseUploadMessage(body: string | undefined): EventBridgeS3ObjectCreatedEvent | ReprocessConversionMessage | null {
   if (!body) {
     logWarn("Skipping SQS record without body");
     return null;
@@ -164,6 +174,10 @@ function parseEventBridgeMessage(body: string | undefined): EventBridgeS3ObjectC
 
   try {
     const parsed = JSON.parse(body) as unknown;
+    const reprocess = ReprocessConversionMessageSchema.safeParse(parsed);
+    if (reprocess.success) {
+      return reprocess.data;
+    }
     const validated = EventBridgeS3ObjectCreatedEventSchema.safeParse(parsed);
     if (!validated.success) {
       logWarn("Skipping SQS record with invalid EventBridge payload");
@@ -189,8 +203,8 @@ function fallbackProfileForAssetType(assetType: AssetRecord["type"]): Processing
   return IMAGE_PASSTHROUGH_V1;
 }
 
-function resolveProcessingProfile(asset: AssetRecord): ProcessingProfile {
-  const profileId = asset.processingProfile ?? fallbackProfileForAssetType(asset.type);
+function resolveProcessingProfile(asset: AssetRecord, requestedProfile?: ProcessingProfileId): ProcessingProfile {
+  const profileId = requestedProfile ?? asset.processingProfile ?? fallbackProfileForAssetType(asset.type);
   const parsedProfileId = z
     .enum([VIDEO_STANDARD_V1, AUDIO_PASSTHROUGH_V1, AUDIO_TRANSCODE_HLS_V1, IMAGE_PASSTHROUGH_V1])
     .safeParse(profileId);
@@ -213,6 +227,14 @@ function resolveProcessingProfile(asset: AssetRecord): ProcessingProfile {
   });
 
   return PROFILE_BY_ID[parsedProfileId.data];
+}
+
+function auditCategoryForProfile(
+  profileId: ProcessingProfileId
+): "audio_conversion" | "media_conversion" {
+  return profileId === AUDIO_TRANSCODE_HLS_V1 || profileId === AUDIO_PASSTHROUGH_V1
+    ? "audio_conversion"
+    : "media_conversion";
 }
 
 function mediaConvertJobSettings(
@@ -662,6 +684,7 @@ async function updateAssetStatus(
   size: number,
   status: "processing" | "ready" | "error",
   conversion: ConversionUpdate
+  , allowTerminalUpdate = false
 ): Promise<void> {
   const now = new Date().toISOString();
   await db.send(
@@ -671,8 +694,9 @@ async function updateAssetStatus(
         pk: `ASSET#${assetId}`,
         sk: "META",
       },
-      ConditionExpression:
-        "attribute_exists(pk) AND attribute_exists(sk) AND #status <> :ready AND #status <> :error",
+      ConditionExpression: allowTerminalUpdate
+        ? "attribute_exists(pk) AND attribute_exists(sk)"
+        : "attribute_exists(pk) AND attribute_exists(sk) AND #status <> :ready AND #status <> :error",
       UpdateExpression:
         "SET #status = :status, #updatedAt = :updatedAt, #original.#bucket = :bucket, #original.#key = :key, #original.#size = :size, #conversion = :conversion",
       ExpressionAttributeNames: {
@@ -828,7 +852,42 @@ async function handleObjectCreated(event: EventBridgeS3ObjectCreatedEvent): Prom
     return;
   }
 
-  const profile = resolveProcessingProfile(asset);
+  await processConversionAsset({ tableName, asset, assetId, bucketName, key, size, allowTerminalUpdate: false });
+}
+
+async function handleReprocessConversion(message: ReprocessConversionMessage): Promise<void> {
+  const tableName = requiredEnv("ASSETS_TABLE_NAME");
+  const originalsBucket = requiredEnv("ASSETS_ORIGINALS_BUCKET_NAME");
+  const asset = await getAsset(tableName, message.assetId);
+  if (!asset) {
+    logWarn("Asset not found for conversion reprocess; skipping", { assetId: message.assetId });
+    return;
+  }
+  const bucketName = asset.original.bucket === "pending" ? originalsBucket : asset.original.bucket;
+  await processConversionAsset({
+    tableName,
+    asset,
+    assetId: asset.id,
+    bucketName,
+    key: asset.original.key,
+    size: asset.original.size,
+    requestedProfile: message.processingProfile,
+    allowTerminalUpdate: true,
+  });
+}
+
+async function processConversionAsset(input: {
+  tableName: string;
+  asset: AssetRecord;
+  assetId: string;
+  bucketName: string;
+  key: string;
+  size: number;
+  requestedProfile?: ProcessingProfileId;
+  allowTerminalUpdate: boolean;
+}): Promise<void> {
+  const { tableName, asset, assetId, bucketName, key, size, requestedProfile, allowTerminalUpdate } = input;
+  const profile = resolveProcessingProfile(asset, requestedProfile);
 
   if (profile.mode === "passthrough") {
     logInfo("Using passthrough processing profile", {
@@ -839,6 +898,16 @@ async function handleObjectCreated(event: EventBridgeS3ObjectCreatedEvent): Prom
     await updateAssetStatus(tableName, assetId, bucketName, key, size, "ready", {
       status: "passthrough_ready",
       profile: profile.profileId,
+    }, allowTerminalUpdate);
+    await appendAssetAuditLogEntry({
+      db,
+      tableName,
+      assetId,
+      category: auditCategoryForProfile(profile.profileId),
+      source: "upload-trigger",
+      code: "conversion.passthrough_ready",
+      message: `${profile.profileId === AUDIO_PASSTHROUGH_V1 ? "Audio conversion" : "Media conversion"}: passthrough ready`,
+      details: { profile: profile.profileId },
     });
     return;
   }
@@ -847,10 +916,20 @@ async function handleObjectCreated(event: EventBridgeS3ObjectCreatedEvent): Prom
     await updateAssetStatus(tableName, assetId, bucketName, key, size, "processing", {
       status: "queued",
       profile: profile.profileId,
-    });
+    }, allowTerminalUpdate);
     logInfo("Asset status updated to processing queued", {
       assetId,
       profileId: profile.profileId,
+    });
+    await appendAssetAuditLogEntry({
+      db,
+      tableName,
+      assetId,
+      category: auditCategoryForProfile(profile.profileId),
+      source: "upload-trigger",
+      code: "conversion.queued",
+      message: `${profile.profileId === AUDIO_TRANSCODE_HLS_V1 ? "Audio conversion" : "Media conversion"}: processing queued`,
+      details: { profile: profile.profileId },
     });
   } catch (error) {
     if (error instanceof Error && error.name === "ConditionalCheckFailedException") {
@@ -876,6 +955,16 @@ async function handleObjectCreated(event: EventBridgeS3ObjectCreatedEvent): Prom
       status: "processing",
       profile: profile.profileId,
       jobId,
+    }, allowTerminalUpdate);
+    await appendAssetAuditLogEntry({
+      db,
+      tableName,
+      assetId,
+      category: auditCategoryForProfile(profile.profileId),
+      source: "upload-trigger",
+      code: "conversion.job_submitted",
+      message: `${profile.profileId === AUDIO_TRANSCODE_HLS_V1 ? "Audio conversion" : "Media conversion"}: MediaConvert job submitted`,
+      details: { profile: profile.profileId, jobId },
     });
     logInfo("Asset status updated to processing with MediaConvert job", {
       assetId,
@@ -888,6 +977,17 @@ async function handleObjectCreated(event: EventBridgeS3ObjectCreatedEvent): Prom
       status: "error",
       profile: profile.profileId,
       errorMessage: message,
+    }, true);
+    await appendAssetAuditLogEntry({
+      db,
+      tableName,
+      assetId,
+      category: auditCategoryForProfile(profile.profileId),
+      level: "error",
+      source: "upload-trigger",
+      code: "conversion.submit_failed",
+      message: `${profile.profileId === AUDIO_TRANSCODE_HLS_V1 ? "Audio conversion" : "Media conversion"}: submission failed`,
+      details: { profile: profile.profileId },
     });
     logWarn("MediaConvert submission failed; asset marked error", {
       assetId,
@@ -906,12 +1006,16 @@ export async function handler(event: SqsEvent): Promise<{ ok: boolean; processed
   });
 
   for (const record of event.Records ?? []) {
-    const parsed = parseEventBridgeMessage(record.body);
+    const parsed = parseUploadMessage(record.body);
     if (!parsed) {
       continue;
     }
 
-    await handleObjectCreated(parsed);
+    if ("kind" in parsed) {
+      await handleReprocessConversion(parsed);
+    } else {
+      await handleObjectCreated(parsed);
+    }
     processed += 1;
   }
 

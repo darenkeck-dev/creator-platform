@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tone-embedding.local/schemas/asset-analysis.v1.schema.json",
+  "title": "Asset Analysis V1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schemaVersion",
+    "assetId",
+    "assetType",
+    "source",
+    "toneTaxonomyVersion",
+    "modelRuns",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "asset-analysis/v1" },
+    "assetId": { "type": "string", "minLength": 1 },
+    "assetType": { "enum": ["audio", "video"] },
+    "source": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["file", "s3"] }
+      }
+    },
+    "toneTaxonomyVersion": { "const": "tone-taxonomy/v1" },
+    "tone": {
+      "type": "object",
+      "required": ["value", "words", "contributors", "taxonomyVersion"],
+      "properties": {
+        "taxonomyVersion": { "const": "tone-taxonomy/v1" },
+        "value": { "type": "object" },
+        "words": { "type": "object" },
+        "contributors": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "embeddings": { "type": "object" },
+    "modelRuns": { "type": "array" },
+    "createdAt": { "type": "string" }
+  }
+}

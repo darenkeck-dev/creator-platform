@@ -2,11 +2,14 @@
 
 ## Current high-priority follow-ups
 
-- Folder delete currently deletes folder record only; should recursively delete contained assets + storage objects.
+- Validate recursive delete in prod-like data after deployment; the new job worker should delete folder descendants and storage objects deepest-first.
 - Upload/delete UI context should consistently respect active folder path.
+- Queued tone/conversion reprocessing jobs currently report queueing completion, not downstream tone/MediaConvert completion; link downstream worker progress to jobs if richer completion tracking is needed.
 - Random combo quality tuning may still need guardrails beyond audio-repeat filtering.
 - Darenkeck mobile focus-loss handling needs hardening (background/foreground transitions should not leave combo state machine desynced).
 - Darenkeck mobile native play/pause interactions need explicit state-machine handling so UI and media element state stay aligned.
+- Tone extraction output needs simplification: reassess whether `.tonebundle.tar.gz` is needed now that display-ready tone summary/scores are stored directly on the asset record.
+- Decide whether existing `tone-taxonomy/v1` asset analyses should be reanalyzed or left historical now that new analyses emit `tone-taxonomy/v2`.
 
 ## Playback and UX watchlist
 

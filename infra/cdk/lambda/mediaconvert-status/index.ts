@@ -1,6 +1,7 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { z } from "zod";
+import { appendAssetAuditLogEntry } from "../shared/asset-audit-log";
 
 const MediaConvertEventSchema = z.object({
   source: z.string().optional(),
@@ -58,6 +59,14 @@ const db = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
     removeUndefinedValues: true,
   },
 });
+
+function auditCategoryForProfile(profile: string): "audio_conversion" | "media_conversion" {
+  return profile.startsWith("audio-") ? "audio_conversion" : "media_conversion";
+}
+
+function auditLabelForProfile(profile: string): "Audio conversion" | "Media conversion" {
+  return profile.startsWith("audio-") ? "Audio conversion" : "Media conversion";
+}
 
 function requiredEnv(name: "ASSETS_TABLE_NAME" | "ASSETS_DERIVED_BUCKET_NAME"): string {
   const value = process.env[name];
@@ -378,6 +387,17 @@ export async function handler(event: MediaConvertEvent): Promise<{ ok: boolean; 
       })
     );
 
+    await appendAssetAuditLogEntry({
+      db,
+      tableName,
+      assetId,
+      category: auditCategoryForProfile(profile),
+      source: "mediaconvert-status",
+      code: "conversion.ready",
+      message: `${auditLabelForProfile(profile)}: ready`,
+      details: { profile, ...(safeEvent.detail?.jobId ? { jobId: safeEvent.detail.jobId } : {}) },
+    });
+
     return { ok: true, status };
   }
 
@@ -417,6 +437,21 @@ export async function handler(event: MediaConvertEvent): Promise<{ ok: boolean; 
       },
     })
   );
+
+  await appendAssetAuditLogEntry({
+    db,
+    tableName,
+    assetId,
+    category: auditCategoryForProfile(profile),
+    level: status === "error" ? "error" : "info",
+    source: "mediaconvert-status",
+    code: status === "error" ? "conversion.failed" : "conversion.status_updated",
+    message:
+      status === "error"
+        ? `${auditLabelForProfile(profile)}: failed`
+        : `${auditLabelForProfile(profile)}: ${status}`,
+    details: { profile, ...(safeEvent.detail?.jobId ? { jobId: safeEvent.detail.jobId } : {}) },
+  });
 
   return { ok: true, status };
 }

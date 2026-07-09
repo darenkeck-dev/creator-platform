@@ -13,6 +13,11 @@ import {
   ComboListResponseSchema,
   ComboVoteInputSchema,
   ComboVoteByAssetsInputSchema,
+  CreateJobInputSchema,
+  CreateJobResponseSchema,
+  JobDetailResponseSchema,
+  JobPreviewInputSchema,
+  JobPreviewResponseSchema,
   AssetPlaybackUrlResponseSchema,
   MultipartAbortInputSchema,
   MultipartAbortResponseSchema,
@@ -48,6 +53,11 @@ import {
   type ComboListResponse,
   type ComboVoteInput,
   type ComboVoteByAssetsInput,
+  type CreateJobInput,
+  type CreateJobResponse,
+  type JobDetailResponse,
+  type JobPreviewInput,
+  type JobPreviewResponse,
   type UpdateAssetInput,
 } from "@media-manager/contracts";
 import { cookies } from "next/headers";
@@ -326,6 +336,75 @@ export async function deleteAssetInApi(id: string): Promise<AssetDeleteResponse>
     throw new Error("Delete asset response failed validation");
   }
 
+  return parsed.data;
+}
+
+export async function previewJobInApi(input: JobPreviewInput): Promise<JobPreviewResponse> {
+  const parsedInput = JobPreviewInputSchema.parse(input);
+  const response = await fetch(`${getApiBaseUrl()}/jobs/preview`, {
+    method: "POST",
+    headers: {
+      authorization: await getAuthHeader(),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(parsedInput),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to preview job: ${response.status}`);
+  }
+
+  const json = (await response.json()) as unknown;
+  const parsed = JobPreviewResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new Error("Job preview response failed validation");
+  }
+  return parsed.data;
+}
+
+export async function createJobInApi(input: CreateJobInput): Promise<CreateJobResponse> {
+  const parsedInput = CreateJobInputSchema.parse(input);
+  const response = await fetch(`${getApiBaseUrl()}/jobs`, {
+    method: "POST",
+    headers: {
+      authorization: await getAuthHeader(),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(parsedInput),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to create job: ${response.status}`);
+  }
+
+  const json = (await response.json()) as unknown;
+  const parsed = CreateJobResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new Error("Create job response failed validation");
+  }
+  return parsed.data;
+}
+
+export async function fetchJobFromApi(id: string): Promise<JobDetailResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/jobs/${encodeURIComponent(id)}`, {
+    method: "GET",
+    headers: {
+      authorization: await getAuthHeader(),
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch job ${id}: ${response.status}`);
+  }
+
+  const json = (await response.json()) as unknown;
+  const parsed = JobDetailResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new Error("Job detail response failed validation");
+  }
   return parsed.data;
 }
 

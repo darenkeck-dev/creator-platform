@@ -15,8 +15,11 @@ Quick LLM context hub for the current project state.
 
 Raw planning/checklist docs were moved to `raw_sources/` and are treated as source material.
 
+- `TONE_EMBEDDING_APP_PLAN.md`
 - `raw_sources/PLAN.md`
 - `raw_sources/TODO.md`
 - `raw_sources/apps/darenkeck/PLAN.md`
 - `raw_sources/apps/darenkeck/DEPLOY.md`
 - `raw_sources/infra/cdk/AUDIO_TRANSCODE_ROLLOUT_CHECKLIST.md`
+- `raw_sources/tone_based_audio_video_explorer.md`
+- `raw_sources/tone_based_audio_video_explorer_v1_v3.md`

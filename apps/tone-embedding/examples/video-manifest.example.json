@@ -1,0 +1,22 @@
+{
+  "assets": [
+    {
+      "id": "video-demo-00",
+      "type": "video",
+      "title": "Video Demo 00",
+      "source": {
+        "kind": "file",
+        "path": "./media/video-demo-00.m4v"
+      }
+    },
+    {
+      "id": "video-demo-01",
+      "type": "video",
+      "title": "Video Demo 01",
+      "source": {
+        "kind": "file",
+        "path": "./media/video-demo-01.m4v"
+      }
+    }
+  ]
+}

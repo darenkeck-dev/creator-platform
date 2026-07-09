@@ -3,6 +3,7 @@ import * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as logs from "aws-cdk-lib/aws-logs";
+import * as sqs from "aws-cdk-lib/aws-sqs";
 import type { Construct } from "constructs";
 
 import { stageExportName, withStageSuffix } from "./stage";
@@ -71,6 +72,34 @@ export class ApiStack extends Stack {
       },
     });
 
+    const bulkActionsDlq = new sqs.Queue(this, "BulkActionsDlq", {
+      queueName: withStageSuffix("media-manager-bulk-actions-dlq", stage),
+      retentionPeriod: Duration.days(14),
+    });
+
+    const bulkActionsQueue = new sqs.Queue(this, "BulkActionsQueue", {
+      queueName: withStageSuffix("media-manager-bulk-actions", stage),
+      visibilityTimeout: Duration.minutes(15),
+      retentionPeriod: Duration.days(4),
+      deadLetterQueue: {
+        queue: bulkActionsDlq,
+        maxReceiveCount: 3,
+      },
+    });
+
+    const jobsFunction = new lambda.Function(this, "JobsFunction", {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: "index.handler",
+      code: lambda.Code.fromAsset(".dist/lambda/api-jobs"),
+      timeout: Duration.seconds(30),
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      environment: {
+        ASSETS_TABLE_NAME: assetsTableName,
+        ASSETS_CONTAINER_INDEX: assetsContainerIndex,
+        BULK_ACTIONS_QUEUE_URL: bulkActionsQueue.queueUrl,
+      },
+    });
+
     const assetsFunctionCfn = assetsFunction.node.defaultChild as lambda.CfnFunction;
     assetsFunctionCfn.addPropertyOverride("Runtime", "nodejs22.x");
 
@@ -79,6 +108,9 @@ export class ApiStack extends Stack {
 
     const combosFunctionCfn = combosFunction.node.defaultChild as lambda.CfnFunction;
     combosFunctionCfn.addPropertyOverride("Runtime", "nodejs22.x");
+
+    const jobsFunctionCfn = jobsFunction.node.defaultChild as lambda.CfnFunction;
+    jobsFunctionCfn.addPropertyOverride("Runtime", "nodejs22.x");
 
     const assetsTableArn = Stack.of(this).formatArn({
       service: "dynamodb",
@@ -133,6 +165,8 @@ export class ApiStack extends Stack {
     assetsFunction.addToRolePolicy(tableReadWritePolicy);
     assetByIdFunction.addToRolePolicy(tableReadWritePolicy);
     combosFunction.addToRolePolicy(tableReadWritePolicy);
+    jobsFunction.addToRolePolicy(tableReadWritePolicy);
+    bulkActionsQueue.grantSendMessages(jobsFunction);
     combosFunction.addToRolePolicy(tableScanPolicy);
     combosFunction.addToRolePolicy(
       new iam.PolicyStatement({
@@ -204,6 +238,13 @@ export class ApiStack extends Stack {
       apiId: api.ref,
       integrationType: "AWS_PROXY",
       integrationUri: `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/${combosFunction.functionArn}/invocations`,
+      payloadFormatVersion: "2.0",
+    });
+
+    const jobsIntegration = new apigwv2.CfnIntegration(this, "JobsIntegration", {
+      apiId: api.ref,
+      integrationType: "AWS_PROXY",
+      integrationUri: `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/${jobsFunction.functionArn}/invocations`,
       payloadFormatVersion: "2.0",
     });
 
@@ -327,6 +368,30 @@ export class ApiStack extends Stack {
       authorizerId: authorizer.ref,
     });
 
+    new apigwv2.CfnRoute(this, "PostJobPreviewRoute", {
+      apiId: api.ref,
+      routeKey: "POST /jobs/preview",
+      target: `integrations/${jobsIntegration.ref}`,
+      authorizationType: "JWT",
+      authorizerId: authorizer.ref,
+    });
+
+    new apigwv2.CfnRoute(this, "PostJobsRoute", {
+      apiId: api.ref,
+      routeKey: "POST /jobs",
+      target: `integrations/${jobsIntegration.ref}`,
+      authorizationType: "JWT",
+      authorizerId: authorizer.ref,
+    });
+
+    new apigwv2.CfnRoute(this, "GetJobByIdRoute", {
+      apiId: api.ref,
+      routeKey: "GET /jobs/{id}",
+      target: `integrations/${jobsIntegration.ref}`,
+      authorizationType: "JWT",
+      authorizerId: authorizer.ref,
+    });
+
     new apigwv2.CfnRoute(this, "GetCombosRoute", {
       apiId: api.ref,
       routeKey: "GET /combos",
@@ -423,6 +488,12 @@ export class ApiStack extends Stack {
       sourceArn: executeApiArnPrefix,
     });
 
+    jobsFunction.addPermission("AllowHttpApiInvokeJobs", {
+      principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
+      action: "lambda:InvokeFunction",
+      sourceArn: executeApiArnPrefix,
+    });
+
     combosFunction.addPermission("AllowHttpApiInvokeCombos", {
       principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
       action: "lambda:InvokeFunction",
@@ -432,6 +503,11 @@ export class ApiStack extends Stack {
     new CfnOutput(this, "ApiUrlOutput", {
       value: api.attrApiEndpoint,
       exportName: stageExportName("API-URL", stage),
+    });
+
+    new CfnOutput(this, "BulkActionsQueueArnOutput", {
+      value: bulkActionsQueue.queueArn,
+      exportName: stageExportName("BULK-ACTIONS-QUEUE-ARN", stage),
     });
   }
 }

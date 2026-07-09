@@ -6,12 +6,14 @@ import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 type Props = {
   containerId?: string;
+  className?: string;
 };
 
-export function CreateFolderForm({ containerId }: Props) {
+export function CreateFolderForm({ containerId, className }: Props) {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -64,7 +66,7 @@ export function CreateFolderForm({ containerId }: Props) {
   }
 
   return (
-    <form className="rounded-xl border bg-card p-4 shadow-sm" onSubmit={onSubmit}>
+    <form className={cn("rounded-xl border bg-card p-4 shadow-sm", className)} onSubmit={onSubmit}>
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-56 flex-1">
           <label className="mb-1 block text-sm font-medium" htmlFor="folder-name">

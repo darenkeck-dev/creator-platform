@@ -1,0 +1,417 @@
+{
+  "schemaVersion": "tone-taxonomy/v2",
+  "toneDimensions": [
+    "valence",
+    "arousal",
+    "dominance",
+    "warmth",
+    "tension",
+    "intimacy",
+    "instability",
+    "nostalgia",
+    "beauty",
+    "menace"
+  ],
+  "dimensions": [
+    { "id": "valence", "descriptorThreshold": 0.25, "positiveDescriptor": "joyful", "negativeDescriptor": "melancholic" },
+    { "id": "arousal", "descriptorThreshold": 0.25, "positiveDescriptor": "energetic", "negativeDescriptor": "subdued" },
+    { "id": "dominance", "descriptorThreshold": 0.25, "positiveDescriptor": "commanding", "negativeDescriptor": "fragile" },
+    { "id": "warmth", "descriptorThreshold": 0.25, "positiveDescriptor": "cozy", "negativeDescriptor": "cold" },
+    { "id": "tension", "descriptorThreshold": 0.25, "positiveDescriptor": "suspenseful", "negativeDescriptor": "peaceful" },
+    { "id": "intimacy", "descriptorThreshold": 0.25, "positiveDescriptor": "intimate", "negativeDescriptor": "distant" },
+    { "id": "instability", "descriptorThreshold": 0.25, "positiveDescriptor": "chaotic", "negativeDescriptor": "stable" },
+    { "id": "nostalgia", "descriptorThreshold": 0.25, "positiveDescriptor": "nostalgic", "negativeDescriptor": "unsentimental" },
+    { "id": "beauty", "descriptorThreshold": 0.25, "positiveDescriptor": "beautiful", "negativeDescriptor": "ugly" },
+    { "id": "menace", "descriptorThreshold": 0.2, "positiveDescriptor": "dangerous", "negativeDescriptor": "safe" }
+  ],
+  "descriptors": [
+    {
+      "id": "mood.uplifting",
+      "slug": "uplifting",
+      "label": "Uplifting",
+      "status": "active",
+      "description": "Positive, hopeful, emotionally bright.",
+      "mappings": [
+        { "dimension": "valence", "weight": 0.65, "confidence": 0.85, "basis": "Convergent positive-valence signal across VAD lexicons and affect theory." },
+        { "dimension": "arousal", "weight": 0.2, "confidence": 0.45, "basis": "Weak positive activation secondary." }
+      ]
+    },
+    {
+      "id": "mood.joyful",
+      "slug": "joyful",
+      "label": "Joyful",
+      "status": "active",
+      "description": "Clearly positive, glad, happy, or delighted.",
+      "mappings": [
+        { "dimension": "valence", "weight": 0.8, "confidence": 0.9, "basis": "Strong direct positive-valence support in affective norm lexicons." }
+      ]
+    },
+    {
+      "id": "mood.melancholic",
+      "slug": "melancholic",
+      "label": "Melancholic",
+      "status": "active",
+      "description": "Sad, subdued, emotionally downcast, or wistful.",
+      "mappings": [
+        { "dimension": "valence", "weight": -0.75, "confidence": 0.85, "basis": "Low-valence prior from NRC-VAD, EmoLex sadness/negative flags, and affect theory." },
+        { "dimension": "arousal", "weight": -0.3, "confidence": 0.55, "basis": "Often lower energy, though context-dependent." },
+        { "dimension": "nostalgia", "weight": 0.3, "confidence": 0.15, "basis": "Project-specific media prior, not independently research-backed." }
+      ]
+    },
+    {
+      "id": "mood.sad",
+      "slug": "sad",
+      "label": "Sad",
+      "status": "active",
+      "description": "Unhappy, sorrowful, or emotionally negative.",
+      "mappings": [
+        { "dimension": "valence", "weight": -0.75, "confidence": 0.9, "basis": "Strong direct low-valence support in affective norm lexicons." }
+      ]
+    },
+    {
+      "id": "energy.energetic",
+      "slug": "energetic",
+      "label": "Energetic",
+      "status": "active",
+      "description": "Active, stimulating, high-motion, or high-intensity.",
+      "mappings": [
+        { "dimension": "arousal", "weight": 0.75, "confidence": 0.8, "basis": "Convergent high-arousal signal across media affect and VAD sources." },
+        { "dimension": "valence", "weight": 0.35, "confidence": 0.45, "basis": "Moderate positive-valence secondary in several sources." }
+      ]
+    },
+    {
+      "id": "energy.exciting",
+      "slug": "exciting",
+      "label": "Exciting",
+      "status": "active",
+      "description": "Stimulating, thrilling, animated, or emotionally activating.",
+      "mappings": [
+        { "dimension": "arousal", "weight": 0.65, "confidence": 0.55, "basis": "Circumplex/PAD quadrant placement and affect-theory support." },
+        { "dimension": "valence", "weight": 0.55, "confidence": 0.45, "basis": "Often positive-valence activation." }
+      ]
+    },
+    {
+      "id": "energy.subdued",
+      "slug": "subdued",
+      "label": "Subdued",
+      "status": "active",
+      "description": "Quiet, restrained, low-energy.",
+      "mappings": [
+        { "dimension": "arousal", "weight": -0.7, "confidence": 0.8, "basis": "Majority support for low arousal despite one NRC-VAD outlier." },
+        { "dimension": "valence", "weight": -0.15, "confidence": 0.35, "basis": "Weak negative-valence secondary." }
+      ]
+    },
+    {
+      "id": "temperature.warm",
+      "slug": "warm",
+      "label": "Warm",
+      "status": "active",
+      "description": "Inviting, soft, emotionally open.",
+      "mappings": [
+        { "dimension": "warmth", "weight": 0.6, "confidence": 0.65, "basis": "Project warmth anchor with indirect VAD support." },
+        { "dimension": "valence", "weight": 0.3, "confidence": 0.45, "basis": "Warmth is valence-adjacent in semantic differential sources." }
+      ]
+    },
+    {
+      "id": "temperature.cozy",
+      "slug": "cozy",
+      "label": "Cozy",
+      "status": "active",
+      "description": "Comfortable, sheltered, warm, and inviting.",
+      "mappings": [
+        { "dimension": "warmth", "weight": 0.7, "confidence": 0.75, "basis": "Cleaner warmth anchor than warm, with positive VAD support." },
+        { "dimension": "valence", "weight": 0.55, "confidence": 0.6, "basis": "Positive-valence support in Warriner and NRC-VAD." },
+        { "dimension": "arousal", "weight": -0.25, "confidence": 0.45, "basis": "Low-activation comfort association." }
+      ]
+    },
+    {
+      "id": "temperature.cold",
+      "slug": "cold",
+      "label": "Cold",
+      "status": "active",
+      "description": "Distant, cool, sterile, or emotionally removed.",
+      "mappings": [
+        { "dimension": "warmth", "weight": -0.45, "confidence": 0.55, "basis": "Indirect low-warmth support, diluted by literal-temperature senses." },
+        { "dimension": "valence", "weight": -0.2, "confidence": 0.35, "basis": "Weak negative-valence secondary." }
+      ]
+    },
+    {
+      "id": "pressure.tense",
+      "slug": "tense",
+      "label": "Tense",
+      "status": "active",
+      "description": "Pressurized, uneasy, or unresolved.",
+      "mappings": [
+        { "dimension": "tension", "weight": 0.55, "confidence": 0.55, "basis": "Tension construct support despite weak VAD arousal support." },
+        { "dimension": "valence", "weight": -0.45, "confidence": 0.55, "basis": "Negative affect association." }
+      ]
+    },
+    {
+      "id": "pressure.suspenseful",
+      "slug": "suspenseful",
+      "label": "Suspenseful",
+      "status": "active",
+      "description": "Suspenseful, anticipatory, unresolved, or dramatically tense.",
+      "mappings": [
+        { "dimension": "tension", "weight": 0.65, "confidence": 0.55, "basis": "Adds clearer tension/arousal anchor than tense alone." },
+        { "dimension": "arousal", "weight": 0.55, "confidence": 0.55, "basis": "NRC-VAD arousal support." }
+      ]
+    },
+    {
+      "id": "pressure.relaxed",
+      "slug": "relaxed",
+      "label": "Relaxed",
+      "status": "active",
+      "description": "Calm, low-pressure, settled.",
+      "mappings": [
+        { "dimension": "tension", "weight": -0.75, "confidence": 0.9, "basis": "Near-unanimous low-tension/low-arousal support." },
+        { "dimension": "arousal", "weight": -0.7, "confidence": 0.85, "basis": "Strong low-arousal support." },
+        { "dimension": "valence", "weight": 0.5, "confidence": 0.65, "basis": "Positive calm association." }
+      ]
+    },
+    {
+      "id": "pressure.peaceful",
+      "slug": "peaceful",
+      "label": "Peaceful",
+      "status": "active",
+      "description": "Peaceful, calm, safe, and untroubled.",
+      "mappings": [
+        { "dimension": "tension", "weight": -0.7, "confidence": 0.85, "basis": "Strongest-evidenced low-tension addition." },
+        { "dimension": "arousal", "weight": -0.75, "confidence": 0.85, "basis": "Convergent low-arousal support." },
+        { "dimension": "valence", "weight": 0.65, "confidence": 0.75, "basis": "Positive-valence support across lexicons." }
+      ]
+    },
+    {
+      "id": "danger.threatening",
+      "slug": "threatening",
+      "label": "Threatening",
+      "status": "active",
+      "description": "Ominous, dangerous, hostile, or intimidating.",
+      "mappings": [
+        { "dimension": "menace", "weight": 0.8, "confidence": 0.85, "basis": "Strong menace support across emotion lexicons and affect theory." },
+        { "dimension": "valence", "weight": -0.6, "confidence": 0.75, "basis": "Negative-valence association." },
+        { "dimension": "arousal", "weight": 0.45, "confidence": 0.6, "basis": "Threat tends to be activating." }
+      ]
+    },
+    {
+      "id": "danger.dangerous",
+      "slug": "dangerous",
+      "label": "Dangerous",
+      "status": "active",
+      "description": "Dangerous, risky, hostile, or hazardous.",
+      "mappings": [
+        { "dimension": "menace", "weight": 0.85, "confidence": 0.9, "basis": "Strongest companion to threatening with broad source consensus." },
+        { "dimension": "valence", "weight": -0.65, "confidence": 0.8, "basis": "Strong negative-valence support." },
+        { "dimension": "dominance", "weight": -0.35, "confidence": 0.45, "basis": "Can imply reduced safety/control for the subject or viewer." }
+      ]
+    },
+    {
+      "id": "danger.safe",
+      "slug": "safe",
+      "label": "Safe",
+      "status": "active",
+      "description": "Comforting, non-threatening, protected.",
+      "mappings": [
+        { "dimension": "menace", "weight": -0.75, "confidence": 0.9, "basis": "Clean low-menace descriptor across sources." },
+        { "dimension": "valence", "weight": 0.55, "confidence": 0.7, "basis": "Positive safety association." },
+        { "dimension": "dominance", "weight": 0.3, "confidence": 0.4, "basis": "Weak sense of secure control." }
+      ]
+    },
+    {
+      "id": "motion.unstable",
+      "slug": "unstable",
+      "label": "Unstable",
+      "status": "active",
+      "description": "Volatile, disorienting, unbalanced, or unsettled.",
+      "mappings": [
+        { "dimension": "instability", "weight": 0.6, "confidence": 0.75, "basis": "Direct project dimension anchor with lexicon support." },
+        { "dimension": "dominance", "weight": -0.55, "confidence": 0.6, "basis": "Signal driven partly by low dominance/potency." },
+        { "dimension": "valence", "weight": -0.4, "confidence": 0.55, "basis": "Negative association." }
+      ]
+    },
+    {
+      "id": "motion.chaotic",
+      "slug": "chaotic",
+      "label": "Chaotic",
+      "status": "active",
+      "description": "Chaotic, disorderly, turbulent, or visually disorienting.",
+      "mappings": [
+        { "dimension": "instability", "weight": 0.65, "confidence": 0.75, "basis": "Adds energetic-disorder coverage to instability." },
+        { "dimension": "arousal", "weight": 0.3, "confidence": 0.45, "basis": "Weak activating secondary." }
+      ]
+    },
+    {
+      "id": "motion.stable",
+      "slug": "stable",
+      "label": "Stable",
+      "status": "active",
+      "description": "Ordered, grounded, visually settled.",
+      "mappings": [
+        { "dimension": "instability", "weight": -0.55, "confidence": 0.75, "basis": "Convergent low-instability support." },
+        { "dimension": "dominance", "weight": 0.35, "confidence": 0.45, "basis": "Stable objects/scenes often imply potency/control." },
+        { "dimension": "arousal", "weight": -0.35, "confidence": 0.45, "basis": "Settled scenes are often lower arousal." }
+      ]
+    },
+    {
+      "id": "aesthetic.beautiful",
+      "slug": "beautiful",
+      "label": "Beautiful",
+      "status": "active",
+      "description": "Aesthetically pleasing, graceful, or visually attractive.",
+      "mappings": [
+        { "dimension": "beauty", "weight": 0.75, "confidence": 0.85, "basis": "Strong direct aesthetic/positive-evaluation support." },
+        { "dimension": "valence", "weight": 0.5, "confidence": 0.7, "basis": "Beauty is valence-adjacent in semantic differential sources." }
+      ]
+    },
+    {
+      "id": "aesthetic.gorgeous",
+      "slug": "gorgeous",
+      "label": "Gorgeous",
+      "status": "active",
+      "description": "Strikingly beautiful, rich, graceful, or visually pleasing.",
+      "mappings": [
+        { "dimension": "beauty", "weight": 0.7, "confidence": 0.8, "basis": "Cleaner beauty anchor with positive VAD and EmoLex support." },
+        { "dimension": "valence", "weight": 0.6, "confidence": 0.7, "basis": "Strong positive-valence association." }
+      ]
+    },
+    {
+      "id": "aesthetic.harsh",
+      "slug": "harsh",
+      "label": "Harsh",
+      "status": "active",
+      "description": "Abrasive, unpleasant, rough, or visually severe.",
+      "mappings": [
+        { "dimension": "beauty", "weight": -0.55, "confidence": 0.65, "basis": "Convergent negative aesthetic/evaluation support." },
+        { "dimension": "valence", "weight": -0.35, "confidence": 0.55, "basis": "Negative-valence secondary." }
+      ]
+    },
+    {
+      "id": "aesthetic.ugly",
+      "slug": "ugly",
+      "label": "Ugly",
+      "status": "active",
+      "description": "Aesthetically unpleasant, unattractive, rough, or visually off-putting.",
+      "mappings": [
+        { "dimension": "beauty", "weight": -0.6, "confidence": 0.7, "basis": "Literal negative aesthetic antonym; reduces harsh polysemy." },
+        { "dimension": "valence", "weight": -0.3, "confidence": 0.45, "basis": "Negative-valence association." }
+      ]
+    },
+    {
+      "id": "memory.nostalgic",
+      "slug": "nostalgic",
+      "label": "Nostalgic",
+      "status": "active",
+      "description": "Wistful, memory-like, retro, sentimental.",
+      "mappings": [
+        { "dimension": "nostalgia", "weight": 0.45, "confidence": 0.25, "basis": "Project-specific anchor; research support is weak and conflicting." }
+      ]
+    },
+    {
+      "id": "memory.unsentimental",
+      "slug": "unsentimental",
+      "label": "Unsentimental",
+      "status": "active",
+      "description": "Clinical, present-tense, emotionally dry.",
+      "mappings": [
+        { "dimension": "nostalgia", "weight": -0.4, "confidence": 0.2, "basis": "Project-specific opposite; weak research support." }
+      ]
+    },
+    {
+      "id": "proximity.intimate",
+      "slug": "intimate",
+      "label": "Intimate",
+      "status": "active",
+      "description": "Close, personal, private, emotionally near.",
+      "mappings": [
+        { "dimension": "intimacy", "weight": 0.6, "confidence": 0.65, "basis": "Project proximity anchor with positive VAD support." },
+        { "dimension": "valence", "weight": 0.35, "confidence": 0.45, "basis": "Positive-valence secondary; arousal omitted due sense ambiguity." }
+      ]
+    },
+    {
+      "id": "proximity.distant",
+      "slug": "distant",
+      "label": "Distant",
+      "status": "active",
+      "description": "Impersonal, detached, emotionally far.",
+      "mappings": [
+        { "dimension": "intimacy", "weight": -0.5, "confidence": 0.6, "basis": "Direct project proximity opposite." },
+        { "dimension": "valence", "weight": -0.2, "confidence": 0.35, "basis": "Weak negative-valence secondary after resolving lexicon conflict." }
+      ]
+    },
+    {
+      "id": "force.commanding",
+      "slug": "commanding",
+      "label": "Commanding",
+      "status": "active",
+      "description": "Powerful, dominant, forceful, large-scale.",
+      "mappings": [
+        { "dimension": "dominance", "weight": 0.7, "confidence": 0.65, "basis": "Potency/force/scale reading; most sources support despite Warriner outlier." },
+        { "dimension": "valence", "weight": 0.3, "confidence": 0.35, "basis": "Weak positive-valence secondary." }
+      ]
+    },
+    {
+      "id": "force.delicate",
+      "slug": "delicate",
+      "label": "Delicate",
+      "status": "active",
+      "description": "Light, subtle, fragile, or low-force.",
+      "mappings": [
+        { "dimension": "dominance", "weight": -0.4, "confidence": 0.35, "basis": "Downgraded negative-potency anchor; weak and inconsistent lexicon signal." }
+      ]
+    },
+    {
+      "id": "force.fragile",
+      "slug": "fragile",
+      "label": "Fragile",
+      "status": "active",
+      "description": "Vulnerable, breakable, low-force, easily overwhelmed.",
+      "mappings": [
+        { "dimension": "dominance", "weight": -0.55, "confidence": 0.55, "basis": "Recommended low-potency companion for delicate." },
+        { "dimension": "valence", "weight": -0.15, "confidence": 0.3, "basis": "Weak negative-valence secondary." }
+      ]
+    },
+    { "id": "system.neutral", "slug": "neutral", "label": "Neutral", "status": "system", "description": "No strong tone dimensions crossed the descriptor threshold." },
+    { "id": "system.balanced", "slug": "balanced", "label": "Balanced", "status": "system", "description": "No single affective direction dominates." },
+    { "id": "system.ambiguous", "slug": "ambiguous", "label": "Ambiguous", "status": "system", "description": "Model scores are too weak or mixed to label confidently." }
+  ],
+  "strengthScale": {
+    "none": 0.0,
+    "weak": 0.25,
+    "medium": 0.55,
+    "strong": 0.85,
+    "extreme": 1.0
+  },
+  "avoidRules": {
+    "uplifting": "melancholic",
+    "joyful": "sad",
+    "melancholic": "joyful",
+    "sad": "joyful",
+    "energetic": "subdued",
+    "exciting": "subdued",
+    "subdued": "energetic",
+    "warm": "cold",
+    "cozy": "cold",
+    "cold": "cozy",
+    "tense": "peaceful",
+    "suspenseful": "peaceful",
+    "relaxed": "suspenseful",
+    "peaceful": "suspenseful",
+    "threatening": "safe",
+    "dangerous": "safe",
+    "safe": "dangerous",
+    "unstable": "stable",
+    "chaotic": "stable",
+    "stable": "chaotic",
+    "beautiful": "ugly",
+    "gorgeous": "ugly",
+    "harsh": "gorgeous",
+    "ugly": "beautiful",
+    "nostalgic": "unsentimental",
+    "unsentimental": "nostalgic",
+    "intimate": "distant",
+    "distant": "intimate",
+    "commanding": "fragile",
+    "delicate": "commanding",
+    "fragile": "commanding"
+  }
+}

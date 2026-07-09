@@ -3,11 +3,7 @@ import { notFound } from "next/navigation";
 
 import { AssetDetailEditor } from "@/components/asset-detail-editor";
 import { FolderDetailView } from "@/components/folder-detail-view";
-import {
-  fetchAssetByIdFromApi,
-  fetchAssetChildrenFromApi,
-  fetchAssetLineageFromApi,
-} from "@/lib/assets-api";
+import { fetchAssetByIdFromApi, fetchAssetChildrenFromApi } from "@/lib/assets-api";
 
 type AssetPageProps = {
   params: Promise<{ id: string }>;
@@ -29,17 +25,11 @@ export default async function AssetDetailPage({ params }: AssetPageProps) {
     notFound();
   }
 
-  const [childrenResult, lineageResult] = await Promise.allSettled([
-    fetchAssetChildrenFromApi(asset.id),
-    fetchAssetLineageFromApi(asset.id),
-  ]);
-
-  const children = childrenResult.status === "fulfilled" ? childrenResult.value.assets : [];
-  const sourceAssets = lineageResult.status === "fulfilled" ? lineageResult.value.sources : [];
-
   if (asset.type === "folder") {
+    const childrenResult = await fetchAssetChildrenFromApi(asset.id).catch(() => null);
+    const children = childrenResult?.assets ?? [];
     return <FolderDetailView children={children} folder={asset} />;
   }
 
-  return <AssetDetailEditor children={children} initialAsset={asset} sourceAssets={sourceAssets} />;
+  return <AssetDetailEditor initialAsset={asset} />;
 }

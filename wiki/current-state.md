@@ -2,7 +2,7 @@
 
 ## Live shape
 
-- Monorepo: `apps/web`, `apps/darenkeck`, `infra/cdk`, `packages/contracts`, `packages/shared`.
+- Monorepo: `apps/web`, `apps/darenkeck`, `infra/cdk`, `packages/contracts`, `packages/shared`, `packages/tone-core`.
 - Workspace/package manifests are now versioned at `1.0.1` for upcoming release tracking.
 - Primary runtime flows are working: upload -> processing -> ready -> combo playback.
 - `darenkeck` static site is deployed on S3 + CloudFront with security headers and crawl metadata.
@@ -17,6 +17,13 @@ See also: [Architecture Map](architecture-map.md), [Deploy and Ops](deploy-and-o
 - Streaming CloudFront now emits CORS headers for derived HLS objects and supports preflight header forwarding.
 - `apps/darenkeck` local playback debug overlay is currently disabled for release preparation.
 - `ComboPlayer` startup now avoids audio `play()` during muted autoplay; audio playback begins on user unmute interaction.
+- `packages/tone-core` is the TypeScript-native tone analysis core for Lambda-native extraction; the existing Python `apps/tone-embedding` CLI remains unchanged as the experimental/reference implementation.
+- Prod processing now uses the zip-based Node `tone-core` tone-analysis worker with an account-local ffmpeg Lambda layer for video frame extraction.
+- Audio tone analysis now normalizes source audio to a known-good MP3 with ffmpeg before sending it to OpenAI, avoiding strict `input_audio` format failures on decodable originals.
+- New `tone-core` analyses use research-informed `tone-taxonomy/v2`: expanded descriptor keywords and weighted multi-dimension keyword mappings, with dominance defined as perceived potency/force/scale.
+- Asset records now support a bounded public `auditLog` trail for upload, conversion, MediaConvert, and tone-analysis lifecycle events; the asset detail UI renders it as an activity log.
+- Library and folder child views now support grid/list display, multi-select, select-all, and bulk delete using existing per-asset delete APIs.
+- Media Manager now has a generic job framework for long-running asset actions; recursive delete and queued tone/conversion reprocessing report progress through a bottom status bar.
 
 Details: [Recent Changes](recent-changes.md).
 
