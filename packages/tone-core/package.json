@@ -1,0 +1,26 @@
+{
+  "name": "@media-manager/tone-core",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./cli": "./src/cli.ts"
+  },
+  "scripts": {
+    "build": "bunx tsc -p tsconfig.json",
+    "lint": "bunx prettier --check \"{src,test}/**/*.ts\"",
+    "test": "bun test test",
+    "typecheck": "bunx tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "openai": "^4.104.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0"
+  }
+}

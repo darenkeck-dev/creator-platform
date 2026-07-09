@@ -22,6 +22,24 @@ export const ASSET_TAG_FACETS = [
 export const ASSET_TAG_WEIGHTS = ["weak", "moderate", "strong"] as const;
 export const ASSET_VISIBILITIES = ["private", "public"] as const;
 export const COMBO_VOTE_VALUES = ["up", "down", "none"] as const;
+export const ASSET_TONE_ANALYSIS_STATUSES = [
+  "not_started",
+  "queued",
+  "processing",
+  "ready",
+  "error",
+  "skipped",
+] as const;
+export const ASSET_TONE_ANALYSIS_PROFILES = ["openai-primary-v1"] as const;
+export const ASSET_TONE_TAXONOMY_VERSIONS = ["tone-taxonomy/v1", "tone-taxonomy/v2"] as const;
+export const ASSET_AUDIT_LOG_CATEGORIES = [
+  "upload",
+  "media_conversion",
+  "audio_conversion",
+  "tone_analysis",
+  "asset_metadata",
+] as const;
+export const ASSET_AUDIT_LOG_LEVELS = ["info", "warn", "error"] as const;
 
 export const AssetTypeSchema = z.enum(ASSET_TYPES);
 export const AssetStatusSchema = z.enum(ASSET_STATUSES);
@@ -31,6 +49,11 @@ export const AssetTagWeightSchema = z.enum(ASSET_TAG_WEIGHTS);
 export const AssetVisibilitySchema = z.enum(ASSET_VISIBILITIES);
 export const ProcessingProfileSchema = z.enum(PROCESSING_PROFILES);
 export const ComboVoteValueSchema = z.enum(COMBO_VOTE_VALUES);
+export const AssetToneAnalysisStatusSchema = z.enum(ASSET_TONE_ANALYSIS_STATUSES);
+export const AssetToneAnalysisProfileSchema = z.enum(ASSET_TONE_ANALYSIS_PROFILES);
+export const AssetToneTaxonomyVersionSchema = z.enum(ASSET_TONE_TAXONOMY_VERSIONS);
+export const AssetAuditLogCategorySchema = z.enum(ASSET_AUDIT_LOG_CATEGORIES);
+export const AssetAuditLogLevelSchema = z.enum(ASSET_AUDIT_LOG_LEVELS);
 
 export const AssetOriginalSchema = z.object({
   bucket: z.string().min(1),
@@ -87,6 +110,60 @@ export const AssetGenerationInfoSchema = z.object({
   createdBy: z.string().email(),
 });
 
+export const AssetToneAnalysisModelRunSummarySchema = z.object({
+  kind: z.string().min(1),
+  modelName: z.string().min(1),
+  modelVersion: z.string().min(1).optional(),
+});
+
+export const AssetToneAnalysisScoresSchema = z.object({
+  valence: z.number().min(-1).max(1).optional(),
+  arousal: z.number().min(-1).max(1).optional(),
+  dominance: z.number().min(-1).max(1).optional(),
+  warmth: z.number().min(-1).max(1).optional(),
+  tension: z.number().min(-1).max(1).optional(),
+  intimacy: z.number().min(-1).max(1).optional(),
+  instability: z.number().min(-1).max(1).optional(),
+  nostalgia: z.number().min(-1).max(1).optional(),
+  beauty: z.number().min(-1).max(1).optional(),
+  menace: z.number().min(-1).max(1).optional(),
+});
+
+export const AssetToneAnalysisInfoSchema = z.object({
+  status: AssetToneAnalysisStatusSchema,
+  profile: AssetToneAnalysisProfileSchema,
+  updatedAt: z.string().datetime(),
+  completedAt: z.string().datetime().optional(),
+  errorMessage: z.string().min(1).optional(),
+  analysisSchemaVersion: z.literal("asset-analysis/v1").optional(),
+  bundleSchemaVersion: z.literal("tone-analysis-bundle/v1").optional(),
+  toneTaxonomyVersion: AssetToneTaxonomyVersionSchema.optional(),
+  analysisBucket: z.string().min(1).optional(),
+  analysisKey: z.string().min(1).optional(),
+  bundleBucket: z.string().min(1).optional(),
+  bundleKey: z.string().min(1).optional(),
+  modelRuns: z.array(AssetToneAnalysisModelRunSummarySchema).optional(),
+  summary: z.string().min(1).optional(),
+  primaryWords: z.array(z.string().min(1)).optional(),
+  secondaryWords: z.array(z.string().min(1)).optional(),
+  avoidWords: z.array(z.string().min(1)).optional(),
+  scores: AssetToneAnalysisScoresSchema.optional(),
+  semanticSummary: z.string().min(1).optional(),
+  caption: z.string().min(1).optional(),
+  mood: z.string().min(1).optional(),
+});
+
+export const AssetAuditLogEntrySchema = z.object({
+  id: z.string().min(1),
+  at: z.string().datetime(),
+  category: AssetAuditLogCategorySchema,
+  level: AssetAuditLogLevelSchema,
+  message: z.string().min(1).max(300),
+  source: z.string().min(1).max(80),
+  code: z.string().min(1).max(80).optional(),
+  details: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+});
+
 export const AssetRecordSchema = z.object({
   id: z.string().min(1),
   schemaVersion: z.number().int().min(1),
@@ -111,6 +188,8 @@ export const AssetRecordSchema = z.object({
   stream: AssetStreamInfoSchema.optional(),
   processingProfile: ProcessingProfileSchema.optional(),
   conversion: AssetConversionInfoSchema.optional(),
+  toneAnalysis: AssetToneAnalysisInfoSchema.optional(),
+  auditLog: z.array(AssetAuditLogEntrySchema).max(100).optional(),
 });
 
 export const AssetDetailResponseSchema = z.object({
@@ -371,6 +450,9 @@ export type AssetTag = z.infer<typeof AssetTagSchema>;
 export type AssetRendition = z.infer<typeof AssetRenditionSchema>;
 export type AssetStreamInfo = z.infer<typeof AssetStreamInfoSchema>;
 export type AssetGenerationInfo = z.infer<typeof AssetGenerationInfoSchema>;
+export type AssetToneAnalysisStatus = z.infer<typeof AssetToneAnalysisStatusSchema>;
+export type AssetToneAnalysisProfile = z.infer<typeof AssetToneAnalysisProfileSchema>;
+export type AssetToneAnalysisInfo = z.infer<typeof AssetToneAnalysisInfoSchema>;
 export type AssetRecord = z.infer<typeof AssetRecordSchema>;
 export type AssetDetailResponse = z.infer<typeof AssetDetailResponseSchema>;
 export type AssetListResponse = z.infer<typeof AssetListResponseSchema>;

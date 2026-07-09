@@ -164,15 +164,26 @@ Exports:
 Responsibility:
 
 - Media processing orchestration and status updates.
+- Shared upload-event routing: EventBridge fans out originals S3 object-created events to per-workflow SQS queues.
 
 Creates:
 
 - MediaConvert service role.
 - `upload-trigger` Lambda (responds to original uploads, submits MediaConvert jobs or passthrough updates).
 - `mediaconvert-status` Lambda (updates asset status/stream metadata from MediaConvert events).
-- SQS queue for upload events + DLQ.
-- EventBridge rule: S3 Object Created -> SQS.
+- `tone-analysis` Node Lambda (imports `@media-manager/tone-core`, runs OpenAI primary tone analysis against originals, and writes tone artifacts).
+- SQS queue for media conversion upload events + DLQ.
+- SQS queue for tone analysis events + DLQ.
+- EventBridge rule: S3 Object Created -> media conversion queue and tone analysis queue.
 - EventBridge rule: MediaConvert state changes -> status updater Lambda.
+
+Notes:
+
+- EventBridge is the common event router; SQS is the durable work queue layer for each async workflow.
+- Conversion and tone analysis use separate queues so tone retries/backlogs do not affect MediaConvert submission or playback readiness.
+- Tone analysis reads the OpenAI key from SSM Parameter Store `SecureString` using `/media-manager/<stage>/openai-api-key` by default.
+- Video tone analysis expects an `ffmpeg` binary at `FFMPEG_PATH` (default `/opt/bin/ffmpeg`). Set `FFMPEG_LAYER_ARN` during deploy to attach a Lambda layer that provides it.
+- Current prod ffmpeg layer: `arn:aws:lambda:us-west-2:125455294948:layer:media-manager-ffmpeg:1`.
 
 ### `MediaManagerObservabilityStack` (`lib/observability-stack.ts`)
 
