@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { extname, join } from "node:path";
+import { join } from "node:path";
 import OpenAI from "openai";
 import {
   ASSET_ANALYSIS_SCHEMA_VERSION,
@@ -13,6 +13,7 @@ import {
   type VideoSemanticTone,
 } from "./schemas.js";
 import { extractVideoFrames } from "./frame-extraction.js";
+import { normalizeAudioForOpenAI } from "./audio-normalization.js";
 import {
   audioSemanticPrompt,
   audioStructurePrompt,
@@ -29,6 +30,8 @@ export type AnalyzeAudioFileInput = {
   apiKey?: string;
   audioModel?: string;
   structureModel?: string;
+  ffmpegPath?: string;
+  workDir?: string;
   createdAt?: string;
 };
 
@@ -52,7 +55,12 @@ export async function analyzeAudioFile(input: AnalyzeAudioFileInput): Promise<As
   const audioModel = input.audioModel ?? "gpt-audio";
   const structureModel =
     input.structureModel ?? process.env.OPENAI_AUDIO_STRUCTURE_MODEL ?? "gpt-5";
-  const audioAnalysis = await requestAudioDescription(client, input.sourcePath, audioModel);
+  const normalizedAudioPath = await normalizeAudioForOpenAI({
+    inputPath: input.sourcePath,
+    outputDir: input.workDir ?? join("/tmp", "tone-core-audio", input.assetId),
+    ffmpegPath: input.ffmpegPath,
+  });
+  const audioAnalysis = await requestAudioDescription(client, normalizedAudioPath, audioModel);
   const structured = await structureAudioAnalysis(client, audioAnalysis, structureModel);
   const tone = structuredDescriptorsToTone(structured.descriptorScores);
 
@@ -80,6 +88,7 @@ export async function analyzeAudioFile(input: AnalyzeAudioFileInput): Promise<As
           openaiModel: audioModel,
           structureModel,
           schemaVersion: AUDIO_SEMANTIC_TONE_SCHEMA_VERSION,
+          normalizedAudioFormat: "mp3",
         },
         tone,
         toneWords: toneToWords(tone),
@@ -171,7 +180,7 @@ async function requestAudioDescription(
             type: "input_audio",
             input_audio: {
               data: await fileToBase64(sourcePath),
-              format: audioFormat(sourcePath),
+              format: "mp3",
             },
           },
         ],
@@ -252,12 +261,4 @@ async function fileToBase64(path: string): Promise<string> {
 
 async function imageToDataUrl(path: string): Promise<string> {
   return `data:image/jpeg;base64,${await fileToBase64(path)}`;
-}
-
-function audioFormat(path: string): "mp3" | "wav" {
-  const extension = extname(path).toLowerCase();
-  if (extension === ".wav") {
-    return "wav";
-  }
-  return "mp3";
 }

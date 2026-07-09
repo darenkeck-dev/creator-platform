@@ -272,6 +272,8 @@ async function runToneCoreAnalysis(
       assetId: asset.id,
       title: asset.title,
       apiKey,
+      ffmpegPath: process.env.FFMPEG_PATH || "/opt/bin/ffmpeg",
+      workDir: join(workDir, "audio"),
     });
   }
 

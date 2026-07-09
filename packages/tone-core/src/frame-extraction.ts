@@ -48,7 +48,7 @@ export async function extractVideoFrames(input: ExtractVideoFramesInput): Promis
     .map((file) => join(input.outputDir, file));
 }
 
-async function runFfmpeg(input: {
+export async function runFfmpeg(input: {
   ffmpegPath: string;
   args: string[];
   timeoutMs: number;
