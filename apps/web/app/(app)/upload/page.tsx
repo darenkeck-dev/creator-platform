@@ -7,8 +7,8 @@ import {
   AssetUploadUrlResponseSchema,
   type VideoUploadMetadata,
 } from "@media-manager/contracts";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 
 import { Toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
@@ -176,8 +176,10 @@ async function getVideoUploadMetadata(file: File): Promise<VideoUploadMetadata |
   }
 }
 
-export default function UploadPage() {
+function UploadForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const activeContainerId = searchParams.get("containerId")?.trim() || "";
   const [assetType, setAssetType] = useState<"video" | "audio" | "image">("video");
   const [assetVisibility, setAssetVisibility] = useState<AssetVisibility>("private");
   const [assetTitle, setAssetTitle] = useState("");
@@ -185,9 +187,11 @@ export default function UploadPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [targetMode, setTargetMode] = useState<"root" | "existing" | "new">("root");
+  const [targetMode, setTargetMode] = useState<"root" | "existing" | "new">(
+    activeContainerId ? "existing" : "root"
+  );
   const [folders, setFolders] = useState<FolderOption[]>([]);
-  const [selectedFolderId, setSelectedFolderId] = useState("");
+  const [selectedFolderId, setSelectedFolderId] = useState(activeContainerId);
   const [newFolderTitle, setNewFolderTitle] = useState("");
   const [toast, setToast] = useState<ToastState>({
     open: false,
@@ -246,6 +250,15 @@ export default function UploadPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!activeContainerId) {
+      return;
+    }
+
+    setTargetMode("existing");
+    setSelectedFolderId(activeContainerId);
+  }, [activeContainerId]);
+
   const selectedFolder = folders.find((folder) => folder.id === selectedFolderId) ?? null;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -301,6 +314,7 @@ export default function UploadPage() {
             type: "folder",
             title: newTitle,
             description: "",
+            ...(activeContainerId ? { containerId: activeContainerId } : {}),
           }),
         });
 
@@ -609,5 +623,19 @@ export default function UploadPage() {
         </>
       ) : null}
     </section>
+  );
+}
+
+export default function UploadPage() {
+  return (
+    <Suspense
+      fallback={
+        <section className="mx-auto max-w-2xl space-y-6">
+          <p className="text-sm text-muted-foreground">Loading upload form...</p>
+        </section>
+      }
+    >
+      <UploadForm />
+    </Suspense>
   );
 }

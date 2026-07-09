@@ -35,6 +35,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 
 type Asset = AssetDetailResponse["asset"];
+type ToneScores = NonNullable<NonNullable<Asset["toneAnalysis"]>["scores"]>;
 
 type Props = {
   initialAsset: Asset;
@@ -53,10 +54,101 @@ function tagsEqual(a: AssetTag[], b: AssetTag[]) {
 
 function shouldPollAsset(asset: Asset) {
   const conversionStatus = asset.conversion?.status;
+  const toneAnalysisStatus = asset.toneAnalysis?.status;
   return (
     asset.status === "processing" ||
     conversionStatus === "queued" ||
-    conversionStatus === "processing"
+    conversionStatus === "processing" ||
+    toneAnalysisStatus === "queued" ||
+    toneAnalysisStatus === "processing"
+  );
+}
+
+function formatAuditDetails(details: Record<string, string | number | boolean> | undefined) {
+  if (!details) {
+    return null;
+  }
+
+  const entries = Object.entries(details);
+  if (entries.length === 0) {
+    return null;
+  }
+
+  return entries.map(([key, value]) => `${key}: ${String(value)}`).join(" · ");
+}
+
+const TONE_SCORE_LABELS: Array<[keyof ToneScores, string]> = [
+  ["valence", "Valence"],
+  ["arousal", "Arousal"],
+  ["dominance", "Dominance"],
+  ["warmth", "Warmth"],
+  ["tension", "Tension"],
+  ["intimacy", "Intimacy"],
+  ["instability", "Instability"],
+  ["nostalgia", "Nostalgia"],
+  ["beauty", "Beauty"],
+  ["menace", "Menace"],
+];
+
+function ToneWordList({ label, words }: { label: string; words?: string[] }) {
+  if (!words || words.length === 0) {
+    return null;
+  }
+
+  return (
+    <div>
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {words.map((word) => (
+          <Badge key={`${label}-${word}`} variant="secondary">
+            {word}
+          </Badge>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ToneScoreList({ scores }: { scores?: ToneScores }) {
+  if (!scores) {
+    return null;
+  }
+
+  const visibleScores = TONE_SCORE_LABELS.flatMap(([key, label]) => {
+    const value = scores[key];
+    return typeof value === "number" ? [{ key, label, value }] : [];
+  });
+
+  if (visibleScores.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {visibleScores.map((score) => {
+        const value = Math.max(-1, Math.min(1, score.value));
+        const startPercent = value < 0 ? 50 + value * 50 : 50;
+        const widthPercent = Math.abs(value) * 50;
+        return (
+          <div key={score.key}>
+            <div className="mb-1 flex items-center justify-between text-xs">
+              <span className="font-medium">{score.label}</span>
+              <span className="text-muted-foreground">{score.value.toFixed(2)}</span>
+            </div>
+            <div className="relative h-2 overflow-hidden rounded-full bg-muted">
+              <div className="absolute left-1/2 top-0 h-2 w-px bg-border" />
+              <div
+                className="absolute top-0 h-2 rounded-full bg-primary"
+                style={{
+                  left: `${startPercent}%`,
+                  width: `${widthPercent}%`,
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -98,8 +190,12 @@ export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = 
   ]);
 
   const streamReady = asset.status === "ready" && asset.stream?.hlsMasterUrl;
+  const assetId = asset.id;
+  const assetStatus = asset.status;
   const conversionStatus = asset.conversion?.status ?? "not_started";
+  const toneAnalysisStatus = asset.toneAnalysis?.status ?? "not_started";
   const containerFolder = folders.find((folder) => folder.id === asset.containerId) ?? null;
+  const auditLog = [...(asset.auditLog ?? [])].sort((a, b) => b.at.localeCompare(a.at));
 
   useEffect(() => {
     let cancelled = false;
@@ -329,7 +425,7 @@ export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = 
 
     const poll = async () => {
       try {
-        const response = await fetch(`/api/assets/${encodeURIComponent(asset.id)}`, {
+        const response = await fetch(`/api/assets/${encodeURIComponent(assetId)}`, {
           method: "GET",
           cache: "no-store",
         });
@@ -365,7 +461,7 @@ export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = 
       cancelled = true;
       clearInterval(intervalId);
     };
-  }, [asset, dirty, editMode, saving]);
+  }, [assetId, assetStatus, conversionStatus, dirty, editMode, saving, toneAnalysisStatus]);
 
   useEffect(() => {
     const onLinkClick = (event: MouseEvent) => {
@@ -496,6 +592,10 @@ export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = 
             <dd className="font-medium capitalize">{conversionStatus.replaceAll("_", " ")}</dd>
           </div>
           <div>
+            <dt className="text-muted-foreground">Tone Analysis</dt>
+            <dd className="font-medium capitalize">{toneAnalysisStatus.replaceAll("_", " ")}</dd>
+          </div>
+          <div>
             <dt className="text-muted-foreground">Owner</dt>
             <dd className="font-medium">{asset.ownerEmail}</dd>
           </div>
@@ -525,6 +625,42 @@ export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = 
               <dt className="text-muted-foreground">Conversion Error</dt>
               <dd className="font-medium text-red-700 dark:text-red-300">
                 {asset.conversion.errorMessage}
+              </dd>
+            </div>
+          ) : null}
+          {asset.toneAnalysis?.profile ? (
+            <div>
+              <dt className="text-muted-foreground">Tone Profile</dt>
+              <dd className="font-medium">{asset.toneAnalysis.profile}</dd>
+            </div>
+          ) : null}
+          {asset.toneAnalysis?.updatedAt ? (
+            <div>
+              <dt className="text-muted-foreground">Tone Updated</dt>
+              <dd className="font-medium">{asset.toneAnalysis.updatedAt}</dd>
+            </div>
+          ) : null}
+          {asset.toneAnalysis?.analysisBucket && asset.toneAnalysis.analysisKey ? (
+            <div className="sm:col-span-2">
+              <dt className="text-muted-foreground">Tone Analysis Artifact</dt>
+              <dd className="font-medium">
+                s3://{asset.toneAnalysis.analysisBucket}/{asset.toneAnalysis.analysisKey}
+              </dd>
+            </div>
+          ) : null}
+          {asset.toneAnalysis?.bundleBucket && asset.toneAnalysis.bundleKey ? (
+            <div className="sm:col-span-2">
+              <dt className="text-muted-foreground">Tone Bundle Artifact</dt>
+              <dd className="font-medium">
+                s3://{asset.toneAnalysis.bundleBucket}/{asset.toneAnalysis.bundleKey}
+              </dd>
+            </div>
+          ) : null}
+          {asset.toneAnalysis?.errorMessage ? (
+            <div className="sm:col-span-2">
+              <dt className="text-muted-foreground">Tone Analysis Error</dt>
+              <dd className="font-medium text-red-700 dark:text-red-300">
+                {asset.toneAnalysis.errorMessage}
               </dd>
             </div>
           ) : null}
@@ -579,6 +715,50 @@ export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = 
             Move to Root
           </Button>
         </div>
+      </div>
+
+      <div className="rounded-xl border bg-card p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-base font-semibold">Tone Analysis</h2>
+          <Badge variant="secondary">{toneAnalysisStatus.replaceAll("_", " ")}</Badge>
+        </div>
+        {asset.toneAnalysis?.summary || asset.toneAnalysis?.scores ? (
+          <div className="mt-4 space-y-5">
+            {asset.toneAnalysis.summary ? (
+              <p className="text-sm font-medium">{asset.toneAnalysis.summary}</p>
+            ) : null}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <ToneWordList label="Primary" words={asset.toneAnalysis.primaryWords} />
+              <ToneWordList label="Secondary" words={asset.toneAnalysis.secondaryWords} />
+              <ToneWordList label="Avoid" words={asset.toneAnalysis.avoidWords} />
+            </div>
+            <ToneScoreList scores={asset.toneAnalysis.scores} />
+            <dl className="grid gap-3 text-sm sm:grid-cols-2">
+              {asset.toneAnalysis.caption ? (
+                <div>
+                  <dt className="text-muted-foreground">Caption</dt>
+                  <dd className="font-medium">{asset.toneAnalysis.caption}</dd>
+                </div>
+              ) : null}
+              {asset.toneAnalysis.mood ? (
+                <div>
+                  <dt className="text-muted-foreground">Mood</dt>
+                  <dd className="font-medium">{asset.toneAnalysis.mood}</dd>
+                </div>
+              ) : null}
+              {asset.toneAnalysis.semanticSummary ? (
+                <div className="sm:col-span-2">
+                  <dt className="text-muted-foreground">Semantic Summary</dt>
+                  <dd className="font-medium">{asset.toneAnalysis.semanticSummary}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Tone summary and scores will appear here when analysis completes.
+          </p>
+        )}
       </div>
 
       <div className="rounded-xl border bg-card p-6 shadow-sm">
@@ -878,6 +1058,46 @@ export function AssetDetailEditor({ initialAsset, children = [], sourceAssets = 
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border bg-card p-6 shadow-sm">
+        <h2 className="text-base font-semibold">Activity Log</h2>
+        <div className="mt-4 space-y-3">
+          {auditLog.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No activity recorded yet.</p>
+          ) : (
+            auditLog.map((entry) => {
+              const details = formatAuditDetails(entry.details);
+              return (
+                <div className="rounded-lg border bg-background p-3 text-sm" key={entry.id}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge
+                        className={
+                          entry.level === "error"
+                            ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200"
+                            : undefined
+                        }
+                        variant="secondary"
+                      >
+                        {entry.level}
+                      </Badge>
+                      <span className="font-medium">{entry.message}</span>
+                    </div>
+                    <time className="text-xs text-muted-foreground" dateTime={entry.at}>
+                      {entry.at}
+                    </time>
+                  </div>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    {entry.category.replaceAll("_", " ")} · {entry.source}
+                    {entry.code ? ` · ${entry.code}` : ""}
+                  </div>
+                  {details ? <p className="mt-2 text-xs text-muted-foreground">{details}</p> : null}
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 

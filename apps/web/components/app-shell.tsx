@@ -1,13 +1,11 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { LogoutButton } from "@/components/logout-button";
 import { buttonVariants } from "@/components/ui/button";
 
 const navItems = [
-  { href: "/library", label: "Library" },
-  { href: "/upload", label: "Upload" },
   { href: "/combos", label: "Combos" },
 ];
 
@@ -33,7 +31,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
         </div>
       </header>
-      <Breadcrumbs />
+      <Suspense fallback={null}>
+        <Breadcrumbs />
+      </Suspense>
       <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">{children}</main>
     </div>
   );

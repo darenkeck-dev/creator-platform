@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { CreateFolderForm } from "@/components/create-folder-form";
+import { LibraryAssetBrowser } from "@/components/library-asset-browser";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -106,113 +106,79 @@ export function FolderDetailView({ folder, children }: Props) {
   return (
     <section className="space-y-6">
       <header className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">folder</Badge>
-          <Badge variant="secondary">children: {children.length}</Badge>
-          {folder.containerId ? (
-            <Link className="text-sm underline" href={`/library?containerId=${folder.containerId}`}>
-              Back to parent folder
-            </Link>
+        <div>
+          {editMode ? (
+            <div className="space-y-3 rounded-xl border bg-card p-4 shadow-sm">
+              <div>
+                <label className="mb-1 block text-sm font-medium" htmlFor="folder-title">
+                  Folder name
+                </label>
+                <Input
+                  id="folder-title"
+                  onChange={(event) => setTitle(event.target.value)}
+                  value={title}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium" htmlFor="folder-description">
+                  Description
+                </label>
+                <Textarea
+                  id="folder-description"
+                  onChange={(event) => setDescription(event.target.value)}
+                  rows={3}
+                  value={description}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button disabled={saving} onClick={() => void saveFolder()} type="button">
+                  {saving ? "Saving..." : "Save"}
+                </Button>
+                <Button
+                  onClick={() => {
+                    setTitle(folder.title);
+                    setDescription(folder.description);
+                    setEditMode(false);
+                  }}
+                  type="button"
+                  variant="outline"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
           ) : (
-            <Link className="text-sm underline" href="/library">
-              Back to library root
-            </Link>
+            <div className="py-2">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <h1 className="truncate text-2xl font-semibold tracking-tight">{folder.title}</h1>
+                  <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                    {folder.description ? <span>{folder.description}</span> : null}
+                    <span>ID: {folder.id}</span>
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button onClick={() => setEditMode(true)} type="button" variant="outline">
+                    Edit Folder
+                  </Button>
+                  <Button
+                    disabled={deleting}
+                    onClick={() => void deleteFolder()}
+                    type="button"
+                    variant="destructive"
+                  >
+                    {deleting ? "Deleting..." : "Delete Folder"}
+                  </Button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
-
-        {editMode ? (
-          <div className="space-y-3 rounded-xl border bg-card p-4 shadow-sm">
-            <div>
-              <label className="mb-1 block text-sm font-medium" htmlFor="folder-title">
-                Folder name
-              </label>
-              <Input
-                id="folder-title"
-                onChange={(event) => setTitle(event.target.value)}
-                value={title}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium" htmlFor="folder-description">
-                Description
-              </label>
-              <Textarea
-                id="folder-description"
-                onChange={(event) => setDescription(event.target.value)}
-                rows={3}
-                value={description}
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button disabled={saving} onClick={() => void saveFolder()} type="button">
-                {saving ? "Saving..." : "Save"}
-              </Button>
-              <Button
-                onClick={() => {
-                  setTitle(folder.title);
-                  setDescription(folder.description);
-                  setEditMode(false);
-                }}
-                type="button"
-                variant="outline"
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-xl border bg-card p-4 shadow-sm">
-            <h1 className="text-2xl font-semibold tracking-tight">{folder.title}</h1>
-            {folder.description ? (
-              <p className="mt-1 text-sm text-muted-foreground">{folder.description}</p>
-            ) : null}
-            <p className="mt-2 text-xs text-muted-foreground">ID: {folder.id}</p>
-            <div className="mt-4 flex gap-2">
-              <Button onClick={() => setEditMode(true)} type="button" variant="outline">
-                Edit Folder
-              </Button>
-              <Button
-                disabled={deleting}
-                onClick={() => void deleteFolder()}
-                type="button"
-                variant="destructive"
-              >
-                {deleting ? "Deleting..." : "Delete Folder"}
-              </Button>
-            </div>
-          </div>
-        )}
 
         {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
       </header>
 
-      <CreateFolderForm containerId={folder.id} />
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {children.length === 0 ? (
-          <p className="text-sm text-muted-foreground">This folder is empty.</p>
-        ) : null}
-        {children.map((asset) => (
-          <article
-            className="rounded-xl border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
-            key={asset.id}
-          >
-            <Link href={`/asset/${asset.id}`}>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">{asset.type}</p>
-              <h2 className="mt-2 text-base font-medium">{asset.title}</h2>
-              <p className="mt-3 text-xs text-muted-foreground">ID: {asset.id}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Status: {asset.status}</p>
-            </Link>
-            {asset.type === "folder" ? (
-              <div className="mt-3 text-xs text-muted-foreground">
-                <Link className="underline" href={`/asset/${asset.id}`}>
-                  Open folder
-                </Link>
-              </div>
-            ) : null}
-          </article>
-        ))}
-      </div>
+      <LibraryAssetBrowser assets={children} containerId={folder.id} />
     </section>
   );
 }
