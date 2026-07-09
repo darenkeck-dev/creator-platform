@@ -4,9 +4,12 @@
 
 - Folder delete currently deletes folder record only; should recursively delete contained assets + storage objects.
 - Upload/delete UI context should consistently respect active folder path.
+- Bulk delete currently loops over existing per-asset DELETE calls; consider a real batch API once deletion semantics are finalized.
 - Random combo quality tuning may still need guardrails beyond audio-repeat filtering.
 - Darenkeck mobile focus-loss handling needs hardening (background/foreground transitions should not leave combo state machine desynced).
 - Darenkeck mobile native play/pause interactions need explicit state-machine handling so UI and media element state stay aligned.
+- Tone extraction output needs simplification: reassess whether `.tonebundle.tar.gz` is needed now that display-ready tone summary/scores are stored directly on the asset record.
+- Decide whether existing `tone-taxonomy/v1` asset analyses should be reanalyzed or left historical now that new analyses emit `tone-taxonomy/v2`.
 
 ## Playback and UX watchlist
 

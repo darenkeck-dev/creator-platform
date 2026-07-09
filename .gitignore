@@ -29,3 +29,5 @@ build/
 apps/tone-embedding/examples/media/
 apps/tone-embedding/models/
 apps/tone-embedding/tests/output/
+
+research/tone-taxonomy-v2/sources/

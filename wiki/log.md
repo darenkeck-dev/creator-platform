@@ -206,3 +206,143 @@
 - Standardized tone app docs on `uv run --no-editable ...` because editable console-script behavior is unreliable after switching install modes.
 - Removed the stale `apps/tone-embedding/TODO.md` item and replaced it with explicit no-editable command guidance in the README/docs.
 - Improved CLI help output with command descriptions, clearer positional metavars, examples, and complete option help.
+
+## [2026-07-06] infra | tone analysis upload integration
+
+- Added optional `toneAnalysis` metadata to asset records for OpenAI primary tone artifacts and status tracking.
+- Added a separate tone-analysis SQS queue/DLQ and tone-analysis worker fed by originals S3 object-created events.
+- Worker reads the OpenAI API key from SSM `SecureString`, analyzes original audio/video assets via the tone CLI, writes analysis/bundle artifacts to the derived bucket, and updates `toneAnalysis` without changing top-level asset readiness.
+- Verified with `bun run typecheck`, `bun run test:infra`, `bun run --cwd infra/cdk build:lambda`, and `bun run build`.
+
+## [2026-07-07] deploy | tone analysis processing stack
+
+- Deployed `MediaManagerProcessingStack` with the initial tone-analysis container image Lambda, SQS queue/DLQ, EventBridge fan-out target, and IAM permissions.
+- Verified live Lambda configuration uses `/media-manager/prod/openai-api-key`, `media-originals-prod`, and `media-derived-prod`.
+- Verified `media-manager-originals-object-created` now targets both `media-manager-upload-events` and `media-manager-tone-analysis`.
+- Clarified docs that EventBridge is the shared upload-event router and SQS provides separate durable work queues for conversion and tone analysis.
+
+## [2026-07-07] web | expose async processing states
+
+- Updated the Media Manager web UI so library and folder asset cards show both conversion and tone-analysis state.
+- Updated asset details to show tone status, profile, artifact S3 paths, and errors, and to keep polling while tone analysis is queued/processing.
+- Verified with `bun run typecheck` and `bun run --cwd apps/web build`.
+
+## [2026-07-07] package | tone-core TypeScript foundation
+
+- Added `packages/tone-core` as a Bun/TypeScript workspace package for Lambda-native tone analysis while keeping the Python `apps/tone-embedding` CLI unchanged.
+- Ported v1 tone taxonomy, descriptor-to-tone mapping, tone word generation, combo scoring/vector layout, and nearest-neighbor helpers.
+- Added OpenAI audio/video analysis entrypoints and direct `ffmpeg` frame extraction via `child_process.spawn`, with an optional local CLI for smoke tests.
+- Verified with `bun run typecheck`, `bun run test`, and `bun run build`.
+
+## [2026-07-07] infra | tone worker moved to tone-core
+
+- Replaced the integrated Python/uv tone worker implementation with a bundled Node Lambda that imports `@media-manager/tone-core` directly.
+- Removed the tone-analysis Dockerfile/build-context staging path from CDK; `build:lambda` now bundles tone analysis as a normal Node artifact.
+- Added `FFMPEG_PATH` support for video frame extraction and optional `FFMPEG_LAYER_ARN` attachment for a Lambda ffmpeg layer.
+- The Node worker currently writes `asset-analysis.json`; `.tonebundle.tar.gz` generation is deferred until bundle creation is ported into `tone-core`.
+
+## [2026-07-07] deploy | node tone worker with ffmpeg layer
+
+- Built an account-local ffmpeg-only Lambda layer from the static Linux x86_64 ffmpeg release, published as `arn:aws:lambda:us-west-2:125455294948:layer:media-manager-ffmpeg:1`.
+- Deployed `MediaManagerProcessingStack` with `FFMPEG_LAYER_ARN` set to that layer ARN.
+- Verified live tone worker `MediaManagerProcessingSta-ToneAnalysisWorkerFuncti-Voz3eWjvMUQ6` is `PackageType=Zip`, `Runtime=nodejs22.x`, `Handler=index.handler`, `FFMPEG_PATH=/opt/bin/ffmpeg`, and has the ffmpeg layer attached.
+
+## [2026-07-07] fix | tone worker DynamoDB key and smoke test
+
+- Fixed the Node tone worker to read/update asset records using the live table key shape `{ pk: ASSET#<id>, sk: META }` instead of `{ id }`.
+- Added focused Lambda test coverage for tone-analysis DynamoDB key usage.
+- Redeployed `MediaManagerProcessingStack` with the fixed worker and the same ffmpeg layer.
+- Ran a live prod audio smoke with temporary asset `tone-smoke-20260707-node-audio`; the worker returned `processed=1`, wrote `asset-analysis.json`, and updated `toneAnalysis.status=ready`.
+- Removed the temporary smoke DynamoDB record plus originals/derived S3 objects after verification.
+
+## [2026-07-07] validation | node tone worker demo media smoke
+
+- Ran live Node Lambda tone-analysis smokes against the original Python tone demo clips from `apps/tone-embedding/examples/media/`.
+- Audio clips verified: `audio-demo-00.mp3`, `audio-demo-01.mp3`.
+- Video clips verified: `video-demo-00.m4v`, `video-demo-01.m4v`; this exercised the deployed ffmpeg Lambda layer for frame extraction.
+- All four temporary assets returned `processed=1`, reached `toneAnalysis.status=ready`, and wrote `derived/<assetId>/tone/asset-analysis.json`.
+- Removed all temporary smoke DynamoDB records plus staged originals and derived tone artifacts; processing queues and DLQs were clear afterward.
+
+## [2026-07-07] feature | asset audit log trail
+
+- Added `asset.auditLog` contract metadata with bounded public-safe entries: timestamp, category, level, message, source, code, and primitive details.
+- Added `infra/cdk/lambda/shared/asset-audit-log.ts` as the shared Node Lambda helper for appending and bounding audit entries.
+- Wired initial log points into asset creation, upload URL/multipart init/upload confirmation, upload-trigger conversion queue/submission/passthrough/failure, MediaConvert status updates, and tone-analysis start/skip/ready/failure.
+- Added an Activity Log section at the bottom of the Media Manager asset detail UI.
+
+## [2026-07-07] deploy | audit log backend updates
+
+- Deployed `MediaManagerApiStack` with audit-log-capable `api-assets` and `api-asset-by-id` lambdas.
+- Deployed `MediaManagerProcessingStack` with audit-log-capable `upload-trigger`, `mediaconvert-status`, and `tone-analysis` lambdas, preserving ffmpeg layer `arn:aws:lambda:us-west-2:125455294948:layer:media-manager-ffmpeg:1`.
+- Post-deploy checks passed: public API health returned `200`, upload/tone queues were empty, tone DLQ was empty, and updated lambdas reported fresh `LastModified` timestamps.
+- `apps/web` audit-log UI was built locally but not published from this repo because no web deploy script, CDK web stack, `.vercel` link, or local Vercel CLI was available.
+
+## [2026-07-07] feature | display tone on asset detail
+
+- Extended `asset.toneAnalysis` with display-ready tone fields: summary, primary/secondary/avoid words, scores, semantic summary, caption, and mood.
+- Updated the Node tone-analysis Lambda to copy display fields from `AssetAnalysis` into asset metadata when tone analysis reaches `ready`.
+- Added an asset detail Tone Analysis section with summary, badges, score bars, and semantic notes so the UI does not need to fetch or unpack derived artifacts for normal display.
+
+## [2026-07-08] fix | backfill tone display fields
+
+- Deployed `MediaManagerApiStack` and `MediaManagerProcessingStack` so API reads and new tone analyses use the display-ready `toneAnalysis` fields.
+- Added `bun run --cwd infra/cdk backfill:tone-analysis-display` to hydrate ready analyses that predated display-field writes.
+- Ran the prod backfill for two affected assets; both now have `summary`, `primaryWords`, and `scores` in `toneAnalysis`, and the follow-up dry run reports zero missing display fields.
+
+## [2026-07-08] fix | tone score chart bounds
+
+- Updated the asset detail Tone Analysis score bars to clamp signed values to `[-1, 1]` and render as zero-centered bipolar bars that cannot overflow their track.
+
+## [2026-07-08] research | tone taxonomy v2 brief
+
+- Added a research brief for another agent to review affective norm literature and propose `tone-taxonomy/v2` keyword and weighted mapping changes while keeping OpenAI output keyword-based.
+
+## [2026-07-08] feature | tone taxonomy v2 implementation
+
+- Implemented `tone-taxonomy/v2` in `packages/tone-core` with 11 added descriptors, weighted multi-dimension descriptor mappings, and dominance defined as perceived potency/force/scale.
+- Updated descriptor scoring to sum `strengthValue * mappingWeight` contributions by dimension and clamp final tone vector values to `[-1, 1]`.
+- Updated schemas/contracts so new analyses emit `tone-taxonomy/v2` while parsers accept existing `tone-taxonomy/v1` artifacts.
+- Verified with `bun run typecheck`, `bun run test`, `bun run --cwd infra/cdk build:lambda`, and `bun run build`.
+
+## [2026-07-08] deploy | tone taxonomy v2 backend
+
+- Deployed `MediaManagerApiStack` and `MediaManagerProcessingStack` with `tone-taxonomy/v2` support.
+- Preserved ffmpeg layer `arn:aws:lambda:us-west-2:125455294948:layer:media-manager-ffmpeg:1` on the tone-analysis Lambda.
+- Post-deploy checks passed: public API health returned `200`, tone queue was empty, tone DLQ was empty, and the tone worker reported a fresh `LastModified` timestamp.
+
+## [2026-07-08] docs | release roadmap in README
+
+- Replaced the stale root README with a concise repo overview, current state, common commands, and the roadmap to the next release milestone: collecting user input on combos.
+
+## [2026-07-08] web | library list view and bulk delete
+
+- Added a reusable `LibraryAssetBrowser` for library and folder child views with grid/list toggle, multi-select, select-all, and bulk delete through existing per-asset DELETE routes.
+- Updated the README roadmap to mark list view and initial bulk delete support as started.
+- Verified with `bun run --cwd apps/web typecheck` and `bun run --cwd apps/web build`.
+
+## [2026-07-08] web | media manager layout cleanup
+
+- Removed the redundant top-nav `Library` link because breadcrumbs and the `Media Manager` header already link back to the library.
+- Moved folder-child creation beside the folder name/edit/delete card on folder detail pages.
+- Replaced text-only asset type labels in library/folder browsers with icons for audio, video, image, and folder assets.
+- Verified with `bun run --cwd apps/web build` and a sequential `bun run --cwd apps/web typecheck` rerun after the known `.next/types` race.
+
+## [2026-07-08] web | context-aware add menu
+
+- Replaced direct create-folder surfaces with a compact `+` add menu that offers `Folder` and `Media upload` actions.
+- Folder creation now opens a compact dialog and creates folders in the active root/folder context.
+- Removed the top-nav `Upload` link; media upload is now reached through the contextual add menu.
+- `/upload?containerId=<folderId>` now defaults the upload destination to the active folder, preserving context from library/folder views.
+- Verified with `bun run --cwd apps/web typecheck` and `bun run --cwd apps/web build`.
+
+## [2026-07-08] web | remove library filters
+
+- Removed the Media Manager library filter form and related page-level parsing for type, facet, origin, and sort filters.
+- Library now loads the current root/folder asset set directly; backend/frontend API filter support remains available for internal folder pickers until filtering is redesigned.
+- Verified with `bun run --cwd apps/web typecheck` and `bun run --cwd apps/web build`.
+
+## [2026-07-08] web | breadcrumb asset titles
+
+- Updated breadcrumbs to resolve asset/folder IDs through the local asset API and display titles instead of raw IDs for asset pages and library folder context.
+- Wrapped app-shell breadcrumbs in `Suspense` because the breadcrumb component now reads search params.
+- Verified with `bun run --cwd apps/web build` and `bun run --cwd apps/web typecheck`.

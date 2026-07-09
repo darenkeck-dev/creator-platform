@@ -8,6 +8,7 @@
 - **Shared packages**
   - `packages/contracts`: shared schemas/types for API payloads and records.
   - `packages/shared`: shared playback components (`ComboPlayer`) and playback utilities.
+  - `packages/tone-core`: TypeScript tone schemas, OpenAI analysis helpers, ffmpeg frame extraction, combo scoring, and nearest-neighbor utilities for Lambda-native tone processing.
 - **Infra**
   - `infra/cdk`: stacks + lambda handlers for auth, api, processing, storage, streaming, observability, darenkeck site.
 
@@ -16,12 +17,17 @@
 1. Create asset metadata via API.
 2. Upload original media to originals S3 bucket.
 3. Confirm upload -> asset status `uploaded`.
-4. Upload-trigger lambda resolves profile:
+4. Originals S3 object-created events enter the shared processing eventing pattern: EventBridge routes the upload event to per-workflow SQS queues.
+5. The media conversion queue feeds `upload-trigger`, which resolves profile:
    - video: MediaConvert ladder
    - audio: MediaConvert audio HLS transcode
    - image/folder/passthrough profiles as configured
-5. MediaConvert status lambda updates `stream` metadata + `ready/error`.
-6. Playback APIs return stream URLs (`hlsMasterUrl` preferred).
+6. MediaConvert status lambda updates `stream` metadata + `ready/error`.
+7. The tone-analysis queue feeds `tone-analysis`, which independently analyzes original audio/video assets with the OpenAI primary tone pipeline and writes artifacts under `derived/<assetId>/tone/`.
+8. Node lambdas append public-safe asset lifecycle entries to `asset.auditLog` through `infra/cdk/lambda/shared/asset-audit-log.ts`.
+9. Playback APIs return stream URLs (`hlsMasterUrl` preferred).
+
+Eventing note: EventBridge is the common router. Separate SQS queues keep conversion and tone analysis operationally isolated so tone retries/backlogs do not delay playback processing.
 
 See also: [Current State](current-state.md), [Recent Changes](recent-changes.md).
 
