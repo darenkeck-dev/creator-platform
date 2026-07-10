@@ -191,6 +191,46 @@ describe("api-combos lambda", () => {
     expect(result.body).toContain('"userVote":"up"');
   });
 
+  it("stores tone reviews for owned combos", async () => {
+    stubSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return { Item: comboItem("combo-1") };
+      }
+
+      if (command instanceof PutCommand) {
+        const item = command.input.Item as Record<string, unknown>;
+        expect(item.pk).toBe("TONE_REVIEW#combo#combo-1");
+        expect(String(item.sk)).toStartWith("REVIEW#");
+        expect(item.ownerEmail).toBeUndefined();
+        expect(item.targetType).toBe("combo");
+        expect(item.targetId).toBe("combo-1");
+        expect(item.reviewSource).toBe("curator");
+        expect(item.taxonomyVersion).toBe("tone-taxonomy/v2");
+        expect(item.keywords).toEqual(["warm", "calm"]);
+        return {};
+      }
+
+      throw new Error("Unexpected command sequence");
+    });
+
+    const result = await handler(
+      withOwner({
+        requestContext: { http: { method: "POST" }, routeKey: "POST /tone-reviews" },
+        body: JSON.stringify({
+          targetType: "combo",
+          targetId: "combo-1",
+          reviewSource: "curator",
+          taxonomyVersion: "tone-taxonomy/v2",
+          keywords: ["warm", "calm"],
+          scores: { valence: 0.5 },
+        }),
+      })
+    );
+
+    expect(result.statusCode).toBe(201);
+    expect(result.body).toContain('"targetType":"combo"');
+  });
+
   it("keeps vote idempotent for repeated same action", async () => {
     stubSend(async (command) => {
       if (command instanceof GetCommand) {

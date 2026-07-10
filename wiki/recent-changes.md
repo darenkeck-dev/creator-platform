@@ -75,5 +75,6 @@
 - Replaced the integrated Python/container tone worker code path with a Node Lambda that imports `@media-manager/tone-core`; video analysis now uses `FFMPEG_PATH` and can attach an ffmpeg Lambda layer via `FFMPEG_LAYER_ARN`.
 - Prod tone-analysis Lambda is now a zip-based `nodejs22.x` function with `<your ffmpeg layer arn>` attached.
 - New tone analyses emit `toneTaxonomyVersion="tone-taxonomy/v2"`; existing v1 artifacts remain historical and should be reanalyzed/backfilled only if comparable v2 scores are needed.
+- Added first tone review capture slice: reusable review panel, asset/combo page wiring, and privacy-light `POST /tone-reviews` persistence for audio, video, and combo targets.
 
 Related: [Current State](current-state.md), [Open Issues](open-issues.md).

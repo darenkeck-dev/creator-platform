@@ -41,17 +41,17 @@ Release status: pre-release. The next release milestone is not public launch; it
 
 Release milestone: start collecting user input on combos so combo-level tone, delta, and affect data can be studied.
 
-1. **Media Manager UI cleanup**
-   - Add list views that support selecting multiple assets. Initial library/folder list view is in place.
-   - Add bulk actions for common asset operations. Initial bulk delete is in place for selected assets.
-   - Improve navigation around folders, asset creation, folder creation, and folder management.
-   - Fix folder management gaps, including recursive folder delete behavior.
+1. **Media Manager UI cleanup** - complete
+   - Library and folder views support list mode, multi-select, and bulk job actions.
+   - Bulk delete, tone reprocessing, and conversion reprocessing are backed by queued jobs.
+   - Folder navigation, contextual add/upload, breadcrumbs, folder management, and asset moves are cleaned up.
+   - Folder deletes expand server-side through descendants before deletion.
 
-2. **Tone review input**
-   - Build a reusable keyword/tone review input component.
-   - Use it as a user-facing input on combos.
-   - Use it as an internal QA input for standalone audio/video assets.
-   - For QA, show extracted model keywords/scores next to human input and compute the delta.
+2. **Tone review input** - started
+   - Reusable keyword/tone score review input is in place for standalone audio/video assets and combo pages.
+   - Combo pages can submit reviews for the combo, just the video source, or just the audio source.
+   - Reviews are stored through `POST /tone-reviews` as target-centered records without raw reviewer PII.
+   - Next: compute and display human-vs-model deltas.
    - Use those deltas to tune keyword weights, strength scales, and tone metric mappings.
 
 3. **Combo traversal**

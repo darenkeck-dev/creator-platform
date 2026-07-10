@@ -401,3 +401,12 @@
 
 - Tightened move dialog padding, centered folder row controls vertically, and added nested guide indentation for expanded folder levels.
 - Verified with `bun run --cwd apps/web typecheck` and `bun run --cwd apps/web build`.
+
+## [2026-07-10] feature | tone review capture first slice
+
+- Added shared tone review contracts for `audio`, `video`, and `combo` targets with human keywords, signed tone scores, and optional notes.
+- Added authenticated `POST /tone-reviews` API handling in the combos Lambda; it validates target ownership/type and stores target-centered review records in DynamoDB without raw reviewer email.
+- Added a reusable Media Manager tone review panel and wired it into standalone audio/video asset pages and combo detail pages.
+- Combo detail pages can submit reviews for the combo, just the video source, or just the audio source.
+- Added `TONE_REVIEW_PLAN.md` for the layered base mapping, human calibration, and local personalization approach.
+- Verified with `bun run typecheck`, `bun run --cwd infra/cdk test`, `bun run --cwd infra/cdk build:lambda`, and `bun run build`.

@@ -24,6 +24,7 @@ See also: [Architecture Map](architecture-map.md), [Deploy and Ops](deploy-and-o
 - Asset records now support a bounded public `auditLog` trail for upload, conversion, MediaConvert, and tone-analysis lifecycle events; the asset detail UI renders it as an activity log.
 - Library and folder child views now support grid/list display, multi-select, select-all, and bulk delete using existing per-asset delete APIs.
 - Media Manager now has a generic job framework for long-running asset actions; recursive delete and queued tone/conversion reprocessing report progress through a bottom status bar.
+- Tone review capture has started: audio/video asset pages and combo pages can submit target-centered human keywords and tone scores through `POST /tone-reviews` without storing raw reviewer PII.
 
 Details: [Recent Changes](recent-changes.md).
 

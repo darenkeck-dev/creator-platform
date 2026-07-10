@@ -18,6 +18,8 @@ import {
   JobDetailResponseSchema,
   JobPreviewInputSchema,
   JobPreviewResponseSchema,
+  ToneReviewInputSchema,
+  ToneReviewResponseSchema,
   AssetPlaybackUrlResponseSchema,
   MultipartAbortInputSchema,
   MultipartAbortResponseSchema,
@@ -58,6 +60,8 @@ import {
   type JobDetailResponse,
   type JobPreviewInput,
   type JobPreviewResponse,
+  type ToneReviewInput,
+  type ToneReviewResponse,
   type UpdateAssetInput,
 } from "@media-manager/contracts";
 import { cookies } from "next/headers";
@@ -404,6 +408,32 @@ export async function fetchJobFromApi(id: string): Promise<JobDetailResponse> {
   const parsed = JobDetailResponseSchema.safeParse(json);
   if (!parsed.success) {
     throw new Error("Job detail response failed validation");
+  }
+  return parsed.data;
+}
+
+export async function submitToneReviewInApi(
+  input: ToneReviewInput
+): Promise<ToneReviewResponse> {
+  const parsedInput = ToneReviewInputSchema.parse(input);
+  const response = await fetch(`${getApiBaseUrl()}/tone-reviews`, {
+    method: "POST",
+    headers: {
+      authorization: await getAuthHeader(),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(parsedInput),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to submit tone review: ${response.status}`);
+  }
+
+  const json = (await response.json()) as unknown;
+  const parsed = ToneReviewResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new Error("Tone review response failed validation");
   }
   return parsed.data;
 }

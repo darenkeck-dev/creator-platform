@@ -25,8 +25,9 @@
 6. MediaConvert status lambda updates `stream` metadata + `ready/error`.
 7. The tone-analysis queue feeds `tone-analysis`, which independently analyzes original audio/video assets with the OpenAI primary tone pipeline and writes artifacts under `derived/<assetId>/tone/`.
 8. Node lambdas append public-safe asset lifecycle entries to `asset.auditLog` through `infra/cdk/lambda/shared/asset-audit-log.ts`.
-9. Generic asset jobs use API-created job records plus an SQS-fed processing worker; `delete_assets` recursively expands selected folders via the container GSI and deletes deepest children first, while tone/conversion reprocess jobs queue existing processing workers.
-10. Playback APIs return stream URLs (`hlsMasterUrl` preferred).
+9. Tone review UI submits human keywords/scores for audio, video, or combo targets through `POST /tone-reviews`; the API validates ownership and stores review records in DynamoDB.
+10. Generic asset jobs use API-created job records plus an SQS-fed processing worker; `delete_assets` recursively expands selected folders via the container GSI and deletes deepest children first, while tone/conversion reprocess jobs queue existing processing workers.
+11. Playback APIs return stream URLs (`hlsMasterUrl` preferred).
 
 Eventing note: EventBridge is the common router. Separate SQS queues keep conversion and tone analysis operationally isolated so tone retries/backlogs do not delay playback processing.
 

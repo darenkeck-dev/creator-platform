@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { AssetPlayer } from "@/components/asset-player";
 import { MoveAssetsDialog } from "@/components/move-assets-dialog";
 import { ReprocessAssetsDialog } from "@/components/reprocess-assets-dialog";
+import { ToneReviewPanel } from "@/components/tone-review-panel";
 import {
   Dialog,
   DialogContent,
@@ -688,6 +689,25 @@ export function AssetDetailEditor({ initialAsset }: Props) {
           </p>
         )}
       </div>
+
+      {asset.type === "audio" || asset.type === "video" ? (
+        <ToneReviewPanel
+          description="Review the extracted keywords and adjust scores for this asset."
+          targets={[
+            {
+              targetType: asset.type,
+              targetId: asset.id,
+              label: asset.type === "audio" ? "Audio" : "Video",
+              taxonomyVersion: asset.toneAnalysis?.toneTaxonomyVersion,
+              initialKeywords: [
+                ...(asset.toneAnalysis?.primaryWords ?? []),
+                ...(asset.toneAnalysis?.secondaryWords ?? []),
+              ],
+              initialScores: asset.toneAnalysis?.scores,
+            },
+          ]}
+        />
+      ) : null}
 
       <div className="rounded-xl border bg-card p-6 shadow-sm">
         <h2 className="text-base font-semibold">Editable Metadata</h2>

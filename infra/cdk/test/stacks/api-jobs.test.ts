@@ -47,5 +47,9 @@ describe("api stack jobs", () => {
     template.hasResourceProperties("AWS::ApiGatewayV2::Route", {
       RouteKey: "GET /jobs/{id}",
     });
+    template.hasResourceProperties("AWS::ApiGatewayV2::Route", {
+      RouteKey: "POST /tone-reviews",
+      AuthorizationType: "JWT",
+    });
   });
 });

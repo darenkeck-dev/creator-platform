@@ -22,6 +22,8 @@ import {
   ComboVoteValueSchema,
   CreateComboInputSchema,
   PublicRandomComboResponseSchema,
+  ToneReviewInputSchema,
+  ToneReviewResponseSchema,
   type ComboVoteValue,
 } from "@media-manager/contracts";
 import { randomUUID } from "node:crypto";
@@ -674,6 +676,60 @@ async function voteOnComboByAssets(
   return await voteOnCombo(syntheticEvent, combo.id);
 }
 
+async function submitToneReview(event: HttpEvent): Promise<{ statusCode: number; body: string }> {
+  const tableName = getTableName();
+  const ownerEmail = getOwnerEmail(event);
+  const parsedBody = ToneReviewInputSchema.safeParse(parseBody(event.body));
+  if (!parsedBody.success) {
+    return response(400, { message: "Invalid request body", issues: parsedBody.error.issues });
+  }
+
+  const input = parsedBody.data;
+  if (input.targetType === "combo") {
+    const combo = await getComboById(tableName, input.targetId);
+    if (!combo) {
+      return response(404, { message: "Combo not found" });
+    }
+    if (combo.ownerEmail !== ownerEmail) {
+      return response(403, { message: "Forbidden" });
+    }
+  } else {
+    const asset = await getAssetById(tableName, input.targetId);
+    if (!asset) {
+      return response(404, { message: "Asset not found" });
+    }
+    if (asset.ownerEmail !== ownerEmail || asset.type !== input.targetType) {
+      return response(403, { message: "Forbidden" });
+    }
+  }
+
+  const now = new Date().toISOString();
+  const review = ToneReviewResponseSchema.shape.review.parse({
+    id: `tone_review_${randomUUID()}`,
+    schemaVersion: ASSET_SCHEMA_VERSION,
+    ...input,
+    keywords: [...new Set(input.keywords.map((keyword) => keyword.trim()).filter(Boolean))],
+    ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  await db.send(
+    new PutCommand({
+      TableName: tableName,
+      Item: {
+        pk: `TONE_REVIEW#${review.targetType}#${review.targetId}`,
+        sk: `REVIEW#${review.createdAt}#${review.id}`,
+        gsi1pk: `TONE_REVIEW#${review.reviewSource}`,
+        gsi1sk: `${review.createdAt}#${review.id}`,
+        ...review,
+      },
+    })
+  );
+
+  return response(201, ToneReviewResponseSchema.parse({ review }));
+}
+
 function shuffleInPlace<T>(items: T[]): void {
   for (let i = items.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -994,6 +1050,10 @@ export async function handler(event: HttpEvent): Promise<{ statusCode: number; b
 
     if (method === "POST" && routeKey === "POST /combos/vote") {
       return await voteOnComboByAssets(event);
+    }
+
+    if (method === "POST" && routeKey === "POST /tone-reviews") {
+      return await submitToneReview(event);
     }
 
     if (method === "GET" && routeKey === "GET /public/combos/random") {

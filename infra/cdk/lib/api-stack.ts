@@ -416,6 +416,14 @@ export class ApiStack extends Stack {
       authorizerId: authorizer.ref,
     });
 
+    new apigwv2.CfnRoute(this, "PostToneReviewsRoute", {
+      apiId: api.ref,
+      routeKey: "POST /tone-reviews",
+      target: `integrations/${combosIntegration.ref}`,
+      authorizationType: "JWT",
+      authorizerId: authorizer.ref,
+    });
+
     new apigwv2.CfnRoute(this, "GetComboByIdRoute", {
       apiId: api.ref,
       routeKey: "GET /combos/{id}",

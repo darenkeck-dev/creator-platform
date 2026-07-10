@@ -535,6 +535,32 @@ export const ComboVoteByAssetsInputSchema = z.object({
   action: z.enum(["up", "down", "clear"]),
 });
 
+export const ToneReviewTargetTypeSchema = z.enum(["audio", "video", "combo"]);
+export const ToneReviewSourceSchema = z.enum(["curator", "anonymous", "authenticated"]);
+export const ToneReviewInputSchema = z.object({
+  targetType: ToneReviewTargetTypeSchema,
+  targetId: z.string().min(1),
+  reviewSource: ToneReviewSourceSchema.default("curator"),
+  reviewerId: z.string().min(1).max(128).optional(),
+  taxonomyVersion: AssetToneTaxonomyVersionSchema.optional(),
+  keywords: z.array(z.string().trim().min(1).max(40)).max(24).default([]),
+  scores: AssetToneAnalysisScoresSchema.optional(),
+  modelScoresSnapshot: AssetToneAnalysisScoresSchema.optional(),
+  baseScoresSnapshot: AssetToneAnalysisScoresSchema.optional(),
+  notes: z.string().max(1000).optional(),
+});
+
+export const ToneReviewRecordSchema = ToneReviewInputSchema.extend({
+  id: z.string().min(1),
+  schemaVersion: z.number().int().min(1),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+export const ToneReviewResponseSchema = z.object({
+  review: ToneReviewRecordSchema,
+});
+
 export const ComboDeleteResponseSchema = z.object({
   id: z.string().min(1),
   deleted: z.literal(true),
@@ -612,5 +638,10 @@ export type ComboListResponse = z.infer<typeof ComboListResponseSchema>;
 export type CreateComboInput = z.infer<typeof CreateComboInputSchema>;
 export type ComboVoteInput = z.infer<typeof ComboVoteInputSchema>;
 export type ComboVoteByAssetsInput = z.infer<typeof ComboVoteByAssetsInputSchema>;
+export type ToneReviewTargetType = z.infer<typeof ToneReviewTargetTypeSchema>;
+export type ToneReviewSource = z.infer<typeof ToneReviewSourceSchema>;
+export type ToneReviewInput = z.infer<typeof ToneReviewInputSchema>;
+export type ToneReviewRecord = z.infer<typeof ToneReviewRecordSchema>;
+export type ToneReviewResponse = z.infer<typeof ToneReviewResponseSchema>;
 export type ComboDeleteResponse = z.infer<typeof ComboDeleteResponseSchema>;
 export type PublicRandomComboResponse = z.infer<typeof PublicRandomComboResponseSchema>;
