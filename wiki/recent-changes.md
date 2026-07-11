@@ -92,5 +92,6 @@
 - Split review listings by intent: `/review` now lists only reviews for the current asset/combo target, while `/combos` lists all combo reviews and links back into the review surface.
 - Changed human review capture to start blank/neutral for audio, video, and combo targets; UI submissions no longer include `modelScoresSnapshot` from extracted source tone values.
 - Replaced the Review tone tree/fixed pager with an adaptive five-keyword picker: the initial set is random, then `>` generates three taxonomy-adjacent suggestions from the latest selection plus two random exploration suggestions.
+- Extracted combo playback plus tone keyword submission into shared `ComboToneReviewPlayer`; Media Manager combo review now uses it with an overlaid Next button while audio/video review stays app-local.
 
 Related: [Current State](current-state.md), [Open Issues](open-issues.md).

@@ -158,6 +158,7 @@ export default async function ReviewPage({ searchParams }: ReviewPageProps) {
       <ReviewHeader
         currentAudioAssetId={selectedCombo.audioAssetId}
         currentTargetId={selectedCombo.id}
+        showNext={false}
         targetType="combo"
       />
 

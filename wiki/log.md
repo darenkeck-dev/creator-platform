@@ -1,5 +1,15 @@
 # Wiki Log
 
+## [2026-07-10] bug | combo player end-state frame jump
+
+- Added playback watchlist item: combo video appears to jump frames when reaching the end. Debug ended/replay state, loop flags, pause-at-end behavior, and final sync/seek signals.
+
+## [2026-07-10] refactor | shared combo review surface
+
+- Added `packages/shared` `ComboToneReviewPlayer`, wrapping `ComboPlayer` with adaptive keyword selection, selected chips, submit, loading overlay, and overlaid Next.
+- Refactored Media Manager combo review mode to use the shared component; audio/video review remains in the web-specific workbench.
+- Kept submission app-owned via callback so Media Manager can submit authenticated curator reviews and `darenkeck.com` can later wire anonymous public reviews through a separate endpoint.
+
 ## [2026-07-10] ui | review keyword picker
 
 - Replaced the Review page tone tree interaction with an adaptive five-keyword picker.

@@ -1,6 +1,8 @@
 "use client";
 
 import type { AssetDetailResponse, ToneReviewRecord, ToneReviewTargetType } from "@media-manager/contracts";
+import { ComboToneReviewPlayer } from "@media-manager/shared";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { ReviewMediaPlayer } from "@/components/review-media-player";
@@ -792,6 +794,7 @@ export function ToneReviewWorkbench({
   media,
   targetReviews,
 }: Props) {
+  const router = useRouter();
   const targetIndex = 0;
   const targetKey = String(targetIndex);
   const keywordSeed = `${target.targetType}:${target.targetId}`;
@@ -904,6 +907,56 @@ export function ToneReviewWorkbench({
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function submitComboReview(payload: {
+    keywords: string[];
+    scores: Record<ToneScoreKey, number>;
+  }) {
+    setSubmitSucceeded(false);
+    setMessage(null);
+
+    const response = await fetch("/api/tone-reviews", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        targetType: target.targetType,
+        targetId: target.targetId,
+        reviewSource: "curator",
+        ...(target.taxonomyVersion ? { taxonomyVersion: target.taxonomyVersion } : {}),
+        ...(target.targetType === "combo"
+          ? {
+              sourceVideoAssetId: target.sourceVideoAssetId,
+              sourceAudioAssetId: target.sourceAudioAssetId,
+            }
+          : {}),
+        keywords: payload.keywords,
+        scores: payload.scores,
+      }),
+    });
+
+    if (!response.ok) {
+      setMessage("Could not save review. Please try again.");
+      throw new Error("Failed to submit review");
+    }
+
+    setMessage(`Saved ${target.label.toLowerCase()} review.`);
+    setSubmitSucceeded(true);
+  }
+
+  function loadNextCombo() {
+    if (media.targetType !== "combo") {
+      return;
+    }
+
+    setLoadingNext(true);
+    const params = new URLSearchParams({ targetType: "combo", next: String(Date.now()) });
+    params.set("previousTargetId", media.id);
+    if (target.sourceAudioAssetId) {
+      params.set("previousAudioAssetId", target.sourceAudioAssetId);
+    }
+    router.push(`/review?${params.toString()}`);
+    router.refresh();
   }
 
   const keywordPicker = (
@@ -1019,7 +1072,23 @@ export function ToneReviewWorkbench({
     <section className="space-y-6">
       <div className="space-y-6">
         <div className="relative">
-          {isAudioReview ? (
+          {media.targetType === "combo" ? (
+            <ComboToneReviewPlayer
+              combo={{
+                comboId: media.id,
+                videoAssetId: target.sourceVideoAssetId ?? "",
+                audioAssetId: target.sourceAudioAssetId ?? "",
+                videoTitle: media.videoTitle,
+                audioTitle: media.audioTitle,
+                videoSrc: media.videoSrc,
+                audioSrc: media.audioSrc,
+              }}
+              loadingNext={loadingNext}
+              onNext={loadNextCombo}
+              onSubmit={(payload) => submitComboReview(payload)}
+              scores={scores}
+            />
+          ) : isAudioReview ? (
             <div className="space-y-4">
               <div className="rounded-xl bg-black p-4 shadow-sm sm:p-6">{keywordPicker}</div>
               <ReviewMediaPlayer {...media} />
@@ -1040,7 +1109,7 @@ export function ToneReviewWorkbench({
               </div>
             </>
           )}
-          {loadingNext ? (
+          {media.targetType !== "combo" && loadingNext ? (
             <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-black/20">
               <div className="h-12 w-12 animate-spin rounded-full border-4 border-white/35 border-t-white" />
             </div>
@@ -1095,9 +1164,11 @@ export function ToneReviewWorkbench({
           </div>
 
           <div className="mt-6 flex items-center gap-3">
-            <Button disabled={submitting} onClick={() => void submitReview()} type="button">
-              {submitting ? "Saving..." : "Save Review"}
-            </Button>
+            {media.targetType !== "combo" ? (
+              <Button disabled={submitting} onClick={() => void submitReview()} type="button">
+                {submitting ? "Saving..." : "Save Review"}
+              </Button>
+            ) : null}
             {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
           </div>
         </div>

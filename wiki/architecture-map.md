@@ -7,7 +7,7 @@
   - `apps/darenkeck`: public combo-consumer site (random combo playback).
 - **Shared packages**
   - `packages/contracts`: shared schemas/types for API payloads and records.
-  - `packages/shared`: shared playback components (`ComboPlayer`) and playback utilities.
+- `packages/shared`: shared playback/review components (`ComboPlayer`, `ComboToneReviewPlayer`) and playback utilities.
   - `packages/tone-core`: TypeScript tone schemas, OpenAI analysis helpers, ffmpeg frame extraction, combo scoring, and nearest-neighbor utilities for Lambda-native tone processing.
 - **Infra**
   - `infra/cdk`: stacks + lambda handlers for auth, api, processing, storage, streaming, observability, darenkeck site.
@@ -64,6 +64,8 @@ Details: [Deploy and Ops](deploy-and-ops.md).
 ## Review navigation
 
 - `/review` remains the capture surface. It defaults to random combos, supports `targetType=combo|audio|video`, and shows only reviews for the currently loaded target.
+- Combo capture uses `packages/shared` `ComboToneReviewPlayer`; app-specific loaders own target selection, review history, and submit callbacks.
 - Review capture initializes keywords empty and scores at neutral zero for all target types. Source asset tone analyses can be loaded from the assets themselves when needed, but are not copied into review submissions as model snapshots.
 - Keyword capture shows five leaf keywords at a time. The initial set is target-seeded random; each `>` advances to a new set using the latest selected keyword as an anchor, preferring three taxonomy-adjacent leaves plus two random exploration leaves. Selected keywords remain removable from the bottom chip row.
+- `darenkeck.com` can reuse the shared combo review surface, but anonymous public review writes require a separate public submission endpoint from the authenticated Media Manager `POST /tone-reviews` path.
 - `/combos` is the all-combo-review index. It lists combo review records and links each record back to `/review?targetType=combo&comboId=...`, including source asset ids when available for synthetic/random combos.

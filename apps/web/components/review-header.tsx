@@ -12,9 +12,10 @@ type Props = {
   targetType: ReviewTargetType;
   currentTargetId?: string;
   currentAudioAssetId?: string;
+  showNext?: boolean;
 };
 
-export function ReviewHeader({ targetType, currentTargetId, currentAudioAssetId }: Props) {
+export function ReviewHeader({ targetType, currentTargetId, currentAudioAssetId, showNext = true }: Props) {
   const router = useRouter();
   const [loadingNext, setLoadingNext] = useState(false);
 
@@ -53,14 +54,16 @@ export function ReviewHeader({ targetType, currentTargetId, currentAudioAssetId 
           ))}
         </div>
       </div>
-      <button
-        className="rounded-lg border border-primary bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-70"
-        disabled={loadingNext}
-        onClick={loadNext}
-        type="button"
-      >
-        Next
-      </button>
+      {showNext ? (
+        <button
+          className="rounded-lg border border-primary bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-70"
+          disabled={loadingNext}
+          onClick={loadNext}
+          type="button"
+        >
+          Next
+        </button>
+      ) : null}
     </header>
   );
 }

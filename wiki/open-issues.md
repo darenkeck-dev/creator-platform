@@ -15,6 +15,7 @@
 
 - Validate timeline handoff behavior (video-master while muted -> audio-master after unmute) across long/short clip mismatches.
 - Keep monitoring loop-boundary artifacts on real browser/device matrix.
+- Debug combo-player end-state video frame jump: when playback reaches the end, the video appears to jump frames before/around the ended/replay state. Inspect timeline-ended handling, loop flags, pause-at-end behavior, and final seek/sync signals.
 - Validate combo-player transitions for interruption paths (`visibilitychange`, app switch, screen lock, native media control pause/play).
 
 ## Docs/process
