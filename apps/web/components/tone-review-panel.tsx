@@ -22,8 +22,6 @@ type ReviewTarget = {
   targetId: string;
   label: string;
   taxonomyVersion?: "tone-taxonomy/v1" | "tone-taxonomy/v2";
-  initialKeywords?: string[];
-  initialScores?: Partial<ToneScores>;
 };
 
 type Props = {
@@ -49,14 +47,10 @@ function parseKeywords(input: string) {
   return [...new Set(input.split(/[\n,]/).map((keyword) => keyword.trim()).filter(Boolean))];
 }
 
-function initialScoreState(target: ReviewTarget): Record<ToneScoreKey, number> {
+function initialScoreState(): Record<ToneScoreKey, number> {
   return Object.fromEntries(
-    SCORE_KEYS.map(([key]) => [key, target.initialScores?.[key] ?? 0])
+    SCORE_KEYS.map(([key]) => [key, 0])
   ) as Record<ToneScoreKey, number>;
-}
-
-function keywordText(target: ReviewTarget) {
-  return (target.initialKeywords ?? []).join(", ");
 }
 
 export function ToneReviewPanel({
@@ -67,10 +61,10 @@ export function ToneReviewPanel({
   const [selectedTargetKey, setSelectedTargetKey] = useState("0");
   const selectedTarget = targets[Number(selectedTargetKey)] ?? targets[0];
   const [keywordsByTarget, setKeywordsByTarget] = useState<Record<string, string>>(() =>
-    Object.fromEntries(targets.map((target, index) => [String(index), keywordText(target)]))
+    Object.fromEntries(targets.map((_, index) => [String(index), ""]))
   );
   const [scoresByTarget, setScoresByTarget] = useState<Record<string, Record<ToneScoreKey, number>>>(
-    () => Object.fromEntries(targets.map((target, index) => [String(index), initialScoreState(target)]))
+    () => Object.fromEntries(targets.map((_, index) => [String(index), initialScoreState()]))
   );
   const [notesByTarget, setNotesByTarget] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -80,7 +74,7 @@ export function ToneReviewPanel({
     return null;
   }
 
-  const scores = scoresByTarget[selectedTargetKey] ?? initialScoreState(selectedTarget);
+  const scores = scoresByTarget[selectedTargetKey] ?? initialScoreState();
   const keywordValue = keywordsByTarget[selectedTargetKey] ?? "";
   const notes = notesByTarget[selectedTargetKey] ?? "";
 
@@ -101,9 +95,6 @@ export function ToneReviewPanel({
             : {}),
           keywords: parseKeywords(keywordValue),
           scores,
-          ...(selectedTarget.initialScores
-            ? { modelScoresSnapshot: selectedTarget.initialScores }
-            : {}),
           ...(notes.trim() ? { notes: notes.trim() } : {}),
         }),
       });

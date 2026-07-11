@@ -540,6 +540,8 @@ export const ToneReviewSourceSchema = z.enum(["curator", "anonymous", "authentic
 export const ToneReviewInputSchema = z.object({
   targetType: ToneReviewTargetTypeSchema,
   targetId: z.string().min(1),
+  sourceVideoAssetId: z.string().min(1).optional(),
+  sourceAudioAssetId: z.string().min(1).optional(),
   reviewSource: ToneReviewSourceSchema.default("curator"),
   reviewerId: z.string().min(1).max(128).optional(),
   taxonomyVersion: AssetToneTaxonomyVersionSchema.optional(),
@@ -559,6 +561,18 @@ export const ToneReviewRecordSchema = ToneReviewInputSchema.extend({
 
 export const ToneReviewResponseSchema = z.object({
   review: ToneReviewRecordSchema,
+});
+
+export const ToneReviewListQuerySchema = z.object({
+  targetType: ToneReviewTargetTypeSchema.optional(),
+  targetId: z.string().min(1).optional(),
+  cursor: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+});
+
+export const ToneReviewListResponseSchema = z.object({
+  reviews: z.array(ToneReviewRecordSchema),
+  nextCursor: z.string().min(1).optional(),
 });
 
 export const ComboDeleteResponseSchema = z.object({
@@ -643,5 +657,7 @@ export type ToneReviewSource = z.infer<typeof ToneReviewSourceSchema>;
 export type ToneReviewInput = z.infer<typeof ToneReviewInputSchema>;
 export type ToneReviewRecord = z.infer<typeof ToneReviewRecordSchema>;
 export type ToneReviewResponse = z.infer<typeof ToneReviewResponseSchema>;
+export type ToneReviewListQuery = z.infer<typeof ToneReviewListQuerySchema>;
+export type ToneReviewListResponse = z.infer<typeof ToneReviewListResponseSchema>;
 export type ComboDeleteResponse = z.infer<typeof ComboDeleteResponseSchema>;
 export type PublicRandomComboResponse = z.infer<typeof PublicRandomComboResponseSchema>;

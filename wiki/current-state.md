@@ -25,6 +25,10 @@ See also: [Architecture Map](architecture-map.md), [Deploy and Ops](deploy-and-o
 - Library and folder child views now support grid/list display, multi-select, select-all, and bulk delete using existing per-asset delete APIs.
 - Media Manager now has a generic job framework for long-running asset actions; recursive delete and queued tone/conversion reprocessing report progress through a bottom status bar.
 - Tone review capture has started: audio/video asset pages and combo pages can submit target-centered human keywords and tone scores through `POST /tone-reviews` without storing raw reviewer PII.
+- Media Manager includes a dedicated `Review` route with a top-right Combo/Audio/Video switch; it defaults to a random public combo, switches to fresh random audio/video assets from the full owned asset pool, uses a target-seeded keyword pager that shows about five semantic leaf keywords at a time, and shows only reviews for the current asset/combo target.
+- Human review capture starts blank/neutral for combo, audio, and video targets. OpenAI-extracted tone remains displayed on asset detail pages, but review inputs are independent human judgments rather than edits to model output.
+- The `Combos` page is now the all-combo-review index, linking reviewed combinations back into the review surface.
+- Auth guard middleware covers app and same-origin API routes; missing/expired Cognito JWT cookies redirect page requests to login with the original path preserved and return JSON `401` for API requests. Cognito web client ID/access token validity is configured for 12 hours.
 
 Details: [Recent Changes](recent-changes.md).
 

@@ -699,11 +699,6 @@ export function AssetDetailEditor({ initialAsset }: Props) {
               targetId: asset.id,
               label: asset.type === "audio" ? "Audio" : "Video",
               taxonomyVersion: asset.toneAnalysis?.toneTaxonomyVersion,
-              initialKeywords: [
-                ...(asset.toneAnalysis?.primaryWords ?? []),
-                ...(asset.toneAnalysis?.secondaryWords ?? []),
-              ],
-              initialScores: asset.toneAnalysis?.scores,
             },
           ]}
         />

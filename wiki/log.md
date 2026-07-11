@@ -1,5 +1,28 @@
 # Wiki Log
 
+## [2026-07-10] ui | review keyword pager
+
+- Replaced the Review page tone tree interaction with a seeded shuffled keyword-page picker.
+- Each page shows about five semantic leaf keywords, supports multi-select, has centered category/dot position display plus `<`/`>` navigation, and keeps selected keyword chips removable at the bottom of the media area.
+
+## [2026-07-10] behavior | independent human review capture
+
+- Changed dedicated Review and detail-page review panels so audio, video, and combo review inputs start with empty keywords and neutral zero scores.
+- Stopped UI review submissions from sending `modelScoresSnapshot`; extracted OpenAI tone remains available from asset records and visible on asset detail pages.
+- Preserved combo review `sourceVideoAssetId` and `sourceAudioAssetId` so source media and current source tone analyses can be reloaded when needed without caching source values on review records.
+
+## [2026-07-10] behavior | review listing split
+
+- Added `targetId` support to `GET /tone-reviews` so the API can query reviews for a specific audio/video/combo target partition.
+- Updated `/review` to show only reviews for the currently loaded target at the bottom of the page.
+- Converted `/combos` into the all-combo-review index, resolving source asset titles when available and linking records back into `/review`.
+
+## [2026-07-10] fix | expired auth handling
+
+- Expanded `apps/web` auth middleware coverage to Review, Combos, Combo detail, and same-origin API proxy routes.
+- Middleware now detects expired JWT cookies, clears them, redirects page requests to login with the original path preserved, and returns JSON `401` for API calls instead of allowing server components to throw `Missing auth token`.
+- Set Cognito web client ID/access token validity to 12 hours in `MediaManagerAuthStack`; silent refresh remains future work because the app does not persist refresh tokens.
+
 ## [2026-04-10] bootstrap | wiki initialized
 
 - Created `wiki/` synthesized context layer with cross-linked pages.
@@ -410,3 +433,79 @@
 - Combo detail pages can submit reviews for the combo, just the video source, or just the audio source.
 - Added `TONE_REVIEW_PLAN.md` for the layered base mapping, human calibration, and local personalization approach.
 - Verified with `bun run typecheck`, `bun run --cwd infra/cdk test`, `bun run --cwd infra/cdk build:lambda`, and `bun run build`.
+
+## [2026-07-10] web | dedicated review tab
+
+- Added `/review` as a Media Manager tab for combo-first tone review work.
+- The review page loads a saved combo with playback, a sidebar queue of combos, and target switching between combo, video, and audio.
+- Added keyword chip selection while keeping tone score sliders and `POST /tone-reviews` submission wiring available.
+
+## [2026-07-10] web | random review queue and review listing
+
+- Updated `/review` to default to `GET /public/combos/random` when no combo id is selected, matching the public site style of random combo review.
+- The review workbench starts combo playback muted/autoplay and sends source video/audio asset ids with combo review submissions.
+- Added `GET /tone-reviews` contracts, API route, web proxy/helper, and a paginated reviewed-combo sidebar backed by the review-source GSI.
+- Verified with `bun run typecheck`, `bun run --cwd infra/cdk test`, `bun run --cwd infra/cdk build:lambda`, and `bun run build`.
+
+## [2026-07-10] deploy | api tone review routes
+
+- Deployed `MediaManagerApiStack` with tone review route updates.
+- CloudFormation created `GET /tone-reviews` and `POST /tone-reviews` API Gateway routes and updated the API Lambda functions.
+- API output remains `https://adenvmeabg.execute-api.us-west-2.amazonaws.com`.
+
+## [2026-07-10] web | review keyword tree and slider guidance
+
+- Updated the Review workbench keyword input from flat extracted chips to a 3-level broad-to-specific emotion tree covering joy, calm, intimacy, sadness, fear, anger, power, mystery, beauty, strangeness, and menace regions.
+- Added hover/focus descriptions to keyword tree nodes and tone score slider info icons so reviewers can understand exactly what each descriptor applies to.
+- Model-extracted keywords remain available as optional suggestions, while human-selected keywords start empty for each target.
+
+## [2026-07-10] web | review media target switching
+
+- Refactored `/review` around one active review target at a time: random combo by default, or a fresh random ready audio/video asset when switching target type.
+- Moved the Combo/Audio/Video switch into the reviewer card header next to the target title.
+- Added a large framed review media surface: combos reuse shared `ComboPlayer` background mode, videos use the same cover/center/scale treatment, and audio gets a focused visual panel.
+- Muted-first playback remains the default; combo mode uses the shared darenkeck-style overlay mute button, and single audio/video modes use a matching overlay toggle.
+
+## [2026-07-10] web/api | review header switch and full asset random pool
+
+- Moved the Review Combo/Audio/Video switch into the page header, aligned right of the `Review` title.
+- Added `scope=all` support to `GET /assets` so authenticated review asset selection can draw from all owned media, including assets nested inside folders.
+- Updated random audio/video review selection to use the full owned asset pool and avoid the misleading `No ready video assets` state when reviewable nested videos exist.
+- Verified with `bun run typecheck`, `bun run --cwd infra/cdk test`, `bun run --cwd infra/cdk build:lambda`, and `bun run build`.
+
+## [2026-07-10] web | review single asset playback
+
+- Updated Review audio/video modes to render the existing asset detail `AssetPlayer` instead of the custom review media surface.
+- Combo mode still uses shared `ComboPlayer` background mode with the darenkeck-style overlay mute control.
+- Tightened random video review selection to choose videos that the normal asset detail player can render (`status=ready` with HLS stream metadata).
+
+## [2026-07-10] deploy | api asset scope all
+
+- Deployed `MediaManagerApiStack` with the `GET /assets?scope=all` Lambda update for review audio/video random selection.
+- CloudFormation updated `AssetsFunction`; API output remains `https://adenvmeabg.execute-api.us-west-2.amazonaws.com`.
+
+## [2026-07-10] web | review full-width player layout
+
+- Updated the Review workbench to use a full-width media player/reviewer flow instead of a two-column layout.
+- Moved Review Queue and Reviewed Combos into below-player sections.
+- Raised the shared combo background mute toggle z-index to match the darenkeck overlay behavior so it remains visible in the Review page.
+
+## [2026-07-10] web | review next target control
+
+- Added a `Next` button to the Review header that reloads the current target type and fetches a fresh random combo, audio asset, or video asset.
+
+## [2026-07-10] shared | combo mute control anchored to player
+
+- Updated the shared background `ComboPlayer` built-in mute control to use the darenkeck visual treatment while anchoring it absolutely inside the player instead of fixing it to the viewport.
+
+## [2026-07-10] shared | combo pause and replay overlay
+
+- Added background `ComboPlayer` click-to-pause behavior while playing.
+- When paused or ended, the player dims the video and shows a centered play button; clicking play resumes from the current position when paused or restarts from the beginning after timeline end.
+
+## [2026-07-10] web | compact tone selection overlay
+
+- Reduced the Review tone roots from eleven regions to six compact roots: Positive, Calm/Tender, Sad/Longing, Fear/Suspense, Anger/Tension, and Power/Strange/Dark.
+- Moved tone keyword selection onto the media surface as a transparent overlay with rows of buttons.
+- Root buttons switch active branches; child nodes with children navigate deeper; final leaf keywords toggle selection without showing separate back, clear, selected-chip, or model-suggestion sections.
+- Removed the tone overlay background container; tone buttons now stand alone, default to no root selected, and sit alongside the combo mute/unmute control.

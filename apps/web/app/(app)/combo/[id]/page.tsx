@@ -1,4 +1,3 @@
-import type { AssetDetailResponse } from "@media-manager/contracts";
 import { notFound } from "next/navigation";
 
 import { ComboPlayer } from "@/components/combo-player";
@@ -14,43 +13,6 @@ type PageProps = {
     id: string;
   }>;
 };
-type Asset = AssetDetailResponse["asset"];
-type ToneScores = NonNullable<NonNullable<Asset["toneAnalysis"]>["scores"]>;
-
-const TONE_SCORE_KEYS = [
-  "valence",
-  "arousal",
-  "dominance",
-  "warmth",
-  "tension",
-  "intimacy",
-  "instability",
-  "nostalgia",
-  "beauty",
-  "menace",
-] as const;
-
-function averageToneScores(
-  videoScores: ToneScores | undefined,
-  audioScores: ToneScores | undefined
-) {
-  if (!videoScores && !audioScores) {
-    return undefined;
-  }
-
-  return Object.fromEntries(
-    TONE_SCORE_KEYS.flatMap((key) => {
-      const values = [videoScores?.[key], audioScores?.[key]].filter(
-        (value): value is number => typeof value === "number"
-      );
-      if (values.length === 0) {
-        return [];
-      }
-      return [[key, values.reduce((sum, value) => sum + value, 0) / values.length]];
-    })
-  );
-}
-
 export default async function ComboDetailPage({ params }: PageProps) {
   const { id } = await params;
   if (!id) {
@@ -80,15 +42,6 @@ export default async function ComboDetailPage({ params }: PageProps) {
     getPlaybackUrlInApi(audioAsset.id),
   ]);
 
-  const videoKeywords = [
-    ...(videoAsset.toneAnalysis?.primaryWords ?? []),
-    ...(videoAsset.toneAnalysis?.secondaryWords ?? []),
-  ];
-  const audioKeywords = [
-    ...(audioAsset.toneAnalysis?.primaryWords ?? []),
-    ...(audioAsset.toneAnalysis?.secondaryWords ?? []),
-  ];
-
   return (
     <div className="space-y-6">
       <ComboPlayer
@@ -108,27 +61,18 @@ export default async function ComboDetailPage({ params }: PageProps) {
             taxonomyVersion:
               videoAsset.toneAnalysis?.toneTaxonomyVersion ??
               audioAsset.toneAnalysis?.toneTaxonomyVersion,
-            initialKeywords: [...new Set([...videoKeywords, ...audioKeywords])],
-            initialScores: averageToneScores(
-              videoAsset.toneAnalysis?.scores,
-              audioAsset.toneAnalysis?.scores
-            ),
           },
           {
             targetType: "video",
             targetId: videoAsset.id,
             label: "Video",
             taxonomyVersion: videoAsset.toneAnalysis?.toneTaxonomyVersion,
-            initialKeywords: videoKeywords,
-            initialScores: videoAsset.toneAnalysis?.scores,
           },
           {
             targetType: "audio",
             targetId: audioAsset.id,
             label: "Audio",
             taxonomyVersion: audioAsset.toneAnalysis?.toneTaxonomyVersion,
-            initialKeywords: audioKeywords,
-            initialScores: audioAsset.toneAnalysis?.scores,
           },
         ]}
       />

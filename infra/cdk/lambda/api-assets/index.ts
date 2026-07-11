@@ -38,6 +38,7 @@ const ListAssetsQuerySchema = z.object({
   origin: AssetOriginSchema.optional(),
   facet: AssetTagFacetSchema.optional(),
   containerId: z.string().min(1).optional(),
+  scope: z.enum(["container", "all"]).default("container"),
   sort: z.enum(["newest", "oldest"]).default("newest"),
 });
 
@@ -313,24 +314,40 @@ async function listAssets(event: HttpEvent): Promise<{ statusCode: number; body:
     return response(400, { message: "Invalid query parameters", issues: parsedQuery.error.issues });
   }
 
-  const { type, origin, facet, containerId, sort } = parsedQuery.data;
+  const { type, origin, facet, containerId, scope, sort } = parsedQuery.data;
   const ownerEmail = getOwnerEmail(event);
   const tableName = getRequiredEnv("ASSETS_TABLE_NAME");
   const containerIndex = getRequiredEnv("ASSETS_CONTAINER_INDEX");
+  const createdAtIndex = getRequiredEnv("ASSETS_CREATED_AT_INDEX");
 
   const result = await db.send(
-    new QueryCommand({
-      TableName: tableName,
-      IndexName: containerIndex,
-      KeyConditionExpression: "gsi2pk = :partitionKey",
-      FilterExpression: "ownerEmail = :ownerEmail",
-      ExpressionAttributeValues: {
-        ":partitionKey": toContainerIndexPk(containerId),
-        ":ownerEmail": ownerEmail,
-      },
-      ScanIndexForward: false,
-      Limit: 100,
-    })
+    new QueryCommand(
+      scope === "all"
+        ? {
+            TableName: tableName,
+            IndexName: createdAtIndex,
+            KeyConditionExpression: "gsi1pk = :partitionKey",
+            FilterExpression: "ownerEmail = :ownerEmail",
+            ExpressionAttributeValues: {
+              ":partitionKey": "ASSET",
+              ":ownerEmail": ownerEmail,
+            },
+            ScanIndexForward: false,
+            Limit: 200,
+          }
+        : {
+            TableName: tableName,
+            IndexName: containerIndex,
+            KeyConditionExpression: "gsi2pk = :partitionKey",
+            FilterExpression: "ownerEmail = :ownerEmail",
+            ExpressionAttributeValues: {
+              ":partitionKey": toContainerIndexPk(containerId),
+              ":ownerEmail": ownerEmail,
+            },
+            ScanIndexForward: false,
+            Limit: 100,
+          }
+    )
   );
 
   const items = (result.Items ?? []) as Array<Record<string, unknown>>;

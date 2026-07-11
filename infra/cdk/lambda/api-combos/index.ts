@@ -23,6 +23,8 @@ import {
   CreateComboInputSchema,
   PublicRandomComboResponseSchema,
   ToneReviewInputSchema,
+  ToneReviewListQuerySchema,
+  ToneReviewListResponseSchema,
   ToneReviewResponseSchema,
   type ComboVoteValue,
 } from "@media-manager/contracts";
@@ -128,6 +130,20 @@ function parseComboId(event: HttpEvent): string {
   }
 
   return parsed.data;
+}
+
+function encodeCursor(key: Record<string, unknown> | undefined): string | undefined {
+  if (!key) {
+    return undefined;
+  }
+  return Buffer.from(JSON.stringify(key), "utf-8").toString("base64url");
+}
+
+function decodeCursor(cursor: string | undefined): Record<string, unknown> | undefined {
+  if (!cursor) {
+    return undefined;
+  }
+  return JSON.parse(Buffer.from(cursor, "base64url").toString("utf-8")) as Record<string, unknown>;
 }
 
 function buildPairKey(ownerEmail: string, videoAssetId: string, audioAssetId: string): string {
@@ -688,9 +704,24 @@ async function submitToneReview(event: HttpEvent): Promise<{ statusCode: number;
   if (input.targetType === "combo") {
     const combo = await getComboById(tableName, input.targetId);
     if (!combo) {
-      return response(404, { message: "Combo not found" });
-    }
-    if (combo.ownerEmail !== ownerEmail) {
+      if (!input.sourceVideoAssetId || !input.sourceAudioAssetId) {
+        return response(404, { message: "Combo not found" });
+      }
+      const [videoAsset, audioAsset] = await Promise.all([
+        getAssetById(tableName, input.sourceVideoAssetId),
+        getAssetById(tableName, input.sourceAudioAssetId),
+      ]);
+      if (
+        !videoAsset ||
+        !audioAsset ||
+        videoAsset.ownerEmail !== ownerEmail ||
+        audioAsset.ownerEmail !== ownerEmail ||
+        videoAsset.type !== "video" ||
+        audioAsset.type !== "audio"
+      ) {
+        return response(403, { message: "Forbidden" });
+      }
+    } else if (combo.ownerEmail !== ownerEmail) {
       return response(403, { message: "Forbidden" });
     }
   } else {
@@ -728,6 +759,78 @@ async function submitToneReview(event: HttpEvent): Promise<{ statusCode: number;
   );
 
   return response(201, ToneReviewResponseSchema.parse({ review }));
+}
+
+async function listToneReviews(event: HttpEvent): Promise<{ statusCode: number; body: string }> {
+  const parsedQuery = ToneReviewListQuerySchema.safeParse(event.queryStringParameters ?? {});
+  if (!parsedQuery.success) {
+    return response(400, { message: "Invalid query parameters", issues: parsedQuery.error.issues });
+  }
+
+  const tableName = getTableName();
+  getOwnerEmail(event);
+  const { targetType, targetId, cursor, limit } = parsedQuery.data;
+
+  if (targetId && !targetType) {
+    return response(400, { message: "targetType is required when targetId is provided" });
+  }
+
+  if (targetType && targetId) {
+    const result = await db.send(
+      new QueryCommand({
+        TableName: tableName,
+        KeyConditionExpression: "pk = :pk",
+        ExpressionAttributeValues: {
+          ":pk": `TONE_REVIEW#${targetType}#${targetId}`,
+        },
+        ScanIndexForward: false,
+        Limit: limit,
+        ExclusiveStartKey: decodeCursor(cursor),
+      })
+    );
+
+    const reviews = (result.Items ?? []).flatMap((item) => {
+      const parsed = ToneReviewResponseSchema.shape.review.safeParse(item);
+      return parsed.success ? [parsed.data] : [];
+    });
+
+    return response(
+      200,
+      ToneReviewListResponseSchema.parse({
+        reviews,
+        nextCursor: encodeCursor(result.LastEvaluatedKey),
+      })
+    );
+  }
+
+  const result = await db.send(
+    new QueryCommand({
+      TableName: tableName,
+      IndexName: getCreatedAtIndex(),
+      KeyConditionExpression: "gsi1pk = :pk",
+      ExpressionAttributeValues: {
+        ":pk": "TONE_REVIEW#curator",
+        ...(targetType ? { ":targetType": targetType } : {}),
+      },
+      ...(targetType ? { FilterExpression: "targetType = :targetType" } : {}),
+      ScanIndexForward: false,
+      Limit: limit,
+      ExclusiveStartKey: decodeCursor(cursor),
+    })
+  );
+
+  const reviews = (result.Items ?? []).flatMap((item) => {
+    const parsed = ToneReviewResponseSchema.shape.review.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  });
+
+  return response(
+    200,
+    ToneReviewListResponseSchema.parse({
+      reviews,
+      nextCursor: encodeCursor(result.LastEvaluatedKey),
+    })
+  );
 }
 
 function shuffleInPlace<T>(items: T[]): void {
@@ -1054,6 +1157,10 @@ export async function handler(event: HttpEvent): Promise<{ statusCode: number; b
 
     if (method === "POST" && routeKey === "POST /tone-reviews") {
       return await submitToneReview(event);
+    }
+
+    if (method === "GET" && routeKey === "GET /tone-reviews") {
+      return await listToneReviews(event);
     }
 
     if (method === "GET" && routeKey === "GET /public/combos/random") {

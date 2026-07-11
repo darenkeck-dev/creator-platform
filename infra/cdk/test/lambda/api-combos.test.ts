@@ -231,6 +231,80 @@ describe("api-combos lambda", () => {
     expect(result.body).toContain('"targetType":"combo"');
   });
 
+  it("lists combo tone reviews", async () => {
+    stubSend(async (command) => {
+      if (command instanceof QueryCommand) {
+        expect(command.input.IndexName).toBe("AssetByCreatedAt");
+        expect(command.input.ExpressionAttributeValues?.[":pk"]).toBe("TONE_REVIEW#curator");
+        expect(command.input.ExpressionAttributeValues?.[":targetType"]).toBe("combo");
+        return {
+          Items: [
+            {
+              id: "tone_review_1",
+              schemaVersion: 1,
+              targetType: "combo",
+              targetId: "combo-1",
+              sourceVideoAssetId: "video-1",
+              sourceAudioAssetId: "audio-1",
+              reviewSource: "curator",
+              keywords: ["warm"],
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+        };
+      }
+
+      throw new Error("Unexpected command sequence");
+    });
+
+    const result = await handler(
+      withOwner({
+        requestContext: { http: { method: "GET" }, routeKey: "GET /tone-reviews" },
+        queryStringParameters: { targetType: "combo", limit: "10" },
+      })
+    );
+
+    expect(result.statusCode).toBe(200);
+    expect(result.body).toContain('"targetId":"combo-1"');
+  });
+
+  it("lists tone reviews for a specific target", async () => {
+    stubSend(async (command) => {
+      if (command instanceof QueryCommand) {
+        expect(command.input.IndexName).toBeUndefined();
+        expect(command.input.KeyConditionExpression).toBe("pk = :pk");
+        expect(command.input.ExpressionAttributeValues?.[":pk"]).toBe("TONE_REVIEW#video#video-1");
+        return {
+          Items: [
+            {
+              id: "tone_review_1",
+              schemaVersion: 1,
+              targetType: "video",
+              targetId: "video-1",
+              reviewSource: "curator",
+              keywords: ["tense"],
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+        };
+      }
+
+      throw new Error("Unexpected command sequence");
+    });
+
+    const result = await handler(
+      withOwner({
+        requestContext: { http: { method: "GET" }, routeKey: "GET /tone-reviews" },
+        queryStringParameters: { targetType: "video", targetId: "video-1", limit: "10" },
+      })
+    );
+
+    expect(result.statusCode).toBe(200);
+    expect(result.body).toContain('"targetId":"video-1"');
+  });
+
   it("keeps vote idempotent for repeated same action", async () => {
     stubSend(async (command) => {
       if (command instanceof GetCommand) {

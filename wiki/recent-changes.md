@@ -76,5 +76,21 @@
 - Prod tone-analysis Lambda is now a zip-based `nodejs22.x` function with `<your ffmpeg layer arn>` attached.
 - New tone analyses emit `toneTaxonomyVersion="tone-taxonomy/v2"`; existing v1 artifacts remain historical and should be reanalyzed/backfilled only if comparable v2 scores are needed.
 - Added first tone review capture slice: reusable review panel, asset/combo page wiring, and privacy-light `POST /tone-reviews` persistence for audio, video, and combo targets.
+- Added a dedicated Media Manager `Review` tab with combo playback, a review queue, target switching, keyword chip selection, and score submission wiring.
+- Updated the `Review` tab to default to a random public combo, use muted/autoplay combo playback, include source asset ids on combo review submissions, and show paginated reviewed combos from `GET /tone-reviews`.
+- Replaced flat Review keyword chips with a broad-to-specific 3-level emotion tree and added hover/focus descriptions for tone score sliders and keyword nodes.
+- Updated Review target switching so Combo/Audio/Video selects a fresh random target of that type, with combo playback using the darenkeck background player treatment and single video/audio modes using the same large framed, muted-first review surface.
+- Changed Review audio/video modes to use the normal asset detail `AssetPlayer`; only combo mode keeps the darenkeck-style background combo player.
+- Updated the Review layout so the media player spans the page width and the Review Queue/Reviewed Combos sections sit below; raised the combo mute overlay z-index for visibility.
+- Added a Review header `Next` button for loading a fresh random target of the currently selected Combo/Audio/Video mode.
+- Anchored the background `ComboPlayer` built-in mute control inside the player so the Review combo mute button does not follow page scroll.
+- Added background `ComboPlayer` pause/replay overlay behavior: click video to pause, dim with centered play button, resume in place when paused, restart when ended.
+- Reworked Review tone selection into a compact transparent media overlay with six roots and row-based branch/leaf buttons.
+- Tone selection now defaults to no selected root and renders standalone overlay buttons without a background panel, aligned beside the combo mute/unmute control.
+- Moved the Review Combo/Audio/Video switch into the top page header and added `scope=all` asset listing support so random audio/video review can draw from nested owned media instead of only root library assets.
+- Improved expired auth handling: middleware now protects Review/Combos/API paths, clears expired JWT cookies, redirects page requests back through login with `next`, returns JSON `401` for same-origin API requests, and the Cognito web client uses 12-hour ID/access token validity.
+- Split review listings by intent: `/review` now lists only reviews for the current asset/combo target, while `/combos` lists all combo reviews and links back into the review surface.
+- Changed human review capture to start blank/neutral for audio, video, and combo targets; UI submissions no longer include `modelScoresSnapshot` from extracted source tone values.
+- Replaced the Review tone tree with a target-seeded leaf-keyword pager that shows about five semantically related keyword options at a time, with centered category/dot position display and backward/forward navigation.
 
 Related: [Current State](current-state.md), [Open Issues](open-issues.md).

@@ -4,9 +4,11 @@ import { Suspense, type ReactNode } from "react";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { JobStatusProvider } from "@/components/job-status-provider";
 import { LogoutButton } from "@/components/logout-button";
+import { ReviewNavLink } from "@/components/review-nav-link";
 import { buttonVariants } from "@/components/ui/button";
 
 const navItems = [
+  { href: "/review", label: "Review" },
   { href: "/combos", label: "Combos" },
 ];
 
@@ -20,15 +22,18 @@ export function AppShell({ children }: { children: ReactNode }) {
             Media Manager
           </Link>
           <nav className="flex items-center gap-2">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={buttonVariants({ variant: "ghost", size: "sm" })}
-              >
-                {item.label}
-              </Link>
-            ))}
+            <ReviewNavLink />
+            {navItems
+              .filter((item) => item.href !== "/review")
+              .map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={buttonVariants({ variant: "ghost", size: "sm" })}
+                >
+                  {item.label}
+                </Link>
+              ))}
             <LogoutButton />
           </nav>
         </div>

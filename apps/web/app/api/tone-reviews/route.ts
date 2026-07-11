@@ -1,7 +1,33 @@
-import { ToneReviewInputSchema, ToneReviewResponseSchema } from "@media-manager/contracts";
+import {
+  ToneReviewInputSchema,
+  ToneReviewListQuerySchema,
+  ToneReviewListResponseSchema,
+  ToneReviewResponseSchema,
+} from "@media-manager/contracts";
 import { NextResponse } from "next/server";
 
-import { submitToneReviewInApi } from "@/lib/assets-api";
+import { listToneReviewsFromApi, submitToneReviewInApi } from "@/lib/assets-api";
+
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const parsedQuery = ToneReviewListQuerySchema.safeParse(
+    Object.fromEntries(url.searchParams.entries())
+  );
+  if (!parsedQuery.success) {
+    return NextResponse.json(
+      { message: "Invalid query parameters", issues: parsedQuery.error.issues },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const reviews = await listToneReviewsFromApi(parsedQuery.data);
+    return NextResponse.json(ToneReviewListResponseSchema.parse(reviews));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to list tone reviews";
+    return NextResponse.json({ message }, { status: 500 });
+  }
+}
 
 export async function POST(request: Request) {
   let rawBody: unknown;

@@ -25,7 +25,7 @@
 6. MediaConvert status lambda updates `stream` metadata + `ready/error`.
 7. The tone-analysis queue feeds `tone-analysis`, which independently analyzes original audio/video assets with the OpenAI primary tone pipeline and writes artifacts under `derived/<assetId>/tone/`.
 8. Node lambdas append public-safe asset lifecycle entries to `asset.auditLog` through `infra/cdk/lambda/shared/asset-audit-log.ts`.
-9. Tone review UI submits human keywords/scores for audio, video, or combo targets through `POST /tone-reviews`; the API validates ownership and stores review records in DynamoDB.
+9. Tone review UI submits human keywords/scores for audio, video, or combo targets through `POST /tone-reviews`; the API validates ownership and stores review records in DynamoDB. `GET /tone-reviews` reads the review-source GSI for global review lists, or directly queries a target partition when `targetType` and `targetId` are provided.
 10. Generic asset jobs use API-created job records plus an SQS-fed processing worker; `delete_assets` recursively expands selected folders via the container GSI and deletes deepest children first, while tone/conversion reprocess jobs queue existing processing workers.
 11. Playback APIs return stream URLs (`hlsMasterUrl` preferred).
 
@@ -54,3 +54,16 @@ See also: [Current State](current-state.md), [Recent Changes](recent-changes.md)
 - Darenkeck static assets: `deploy:darenkeck:prod` or staging variant.
 
 Details: [Deploy and Ops](deploy-and-ops.md).
+
+## Auth/session behavior
+
+- `apps/web` stores a Cognito JWT in the `mm_auth_token` HTTP-only cookie after Hosted UI callback.
+- Middleware protects authenticated app routes and same-origin `/api` proxy routes, clears missing/expired auth cookies, redirects page requests to `/login?error=expired&next=...`, and returns JSON `401` for API requests.
+- The Cognito web client is configured with 12-hour ID/access token validity; silent refresh is not implemented because the web app does not persist a refresh token.
+
+## Review navigation
+
+- `/review` remains the capture surface. It defaults to random combos, supports `targetType=combo|audio|video`, and shows only reviews for the currently loaded target.
+- Review capture initializes keywords empty and scores at neutral zero for all target types. Source asset tone analyses can be loaded from the assets themselves when needed, but are not copied into review submissions as model snapshots.
+- Keyword capture uses target-seeded shuffled pages of semantic leaf keywords, about five per page. Reviewers can move backward/forward with `<` and `>`, use dot indicators for page position, and remove selected keywords from the bottom chip row.
+- `/combos` is the all-combo-review index. It lists combo review records and links each record back to `/review?targetType=combo&comboId=...`, including source asset ids when available for synthetic/random combos.

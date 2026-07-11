@@ -48,9 +48,11 @@ Release milestone: start collecting user input on combos so combo-level tone, de
    - Folder deletes expand server-side through descendants before deletion.
 
 2. **Tone review input** - started
-   - Reusable keyword/tone score review input is in place for standalone audio/video assets and combo pages.
-   - Combo pages can submit reviews for the combo, just the video source, or just the audio source.
-   - Reviews are stored through `POST /tone-reviews` as target-centered records without raw reviewer PII.
+    - Reusable keyword/tone score review input is in place for standalone audio/video assets and combo pages.
+    - Media Manager has a dedicated `Review` tab that defaults to a random public combo, can switch to fresh random audio/video assets, starts muted playback, and uses a 3-level emotion tree to select tone keywords.
+    - Combo pages can submit reviews for the combo, just the video source, or just the audio source.
+    - Reviews are stored through `POST /tone-reviews` as target-centered records without raw reviewer PII.
+    - Reviewed combos can be listed through `GET /tone-reviews` for paginated review traversal.
    - Next: compute and display human-vs-model deltas.
    - Use those deltas to tune keyword weights, strength scales, and tone metric mappings.
 

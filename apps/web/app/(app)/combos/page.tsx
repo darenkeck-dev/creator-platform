@@ -1,29 +1,33 @@
 import Link from "next/link";
 
-import { ComboCreateForm } from "@/components/combo-create-form";
-import { ComboManagementList } from "@/components/combo-management-list";
-import { fetchAssetByIdFromApi, listCombosFromApi } from "@/lib/assets-api";
+import { fetchAssetByIdFromApi, listToneReviewsFromApi } from "@/lib/assets-api";
+
+async function safeAssetTitle(id: string | undefined, fallback: string) {
+  if (!id) {
+    return fallback;
+  }
+
+  try {
+    const asset = await fetchAssetByIdFromApi(id);
+    return asset?.title ?? id;
+  } catch {
+    return id;
+  }
+}
 
 export default async function CombosPage() {
-  const [combos] = await Promise.all([listCombosFromApi()]);
+  const reviewed = await listToneReviewsFromApi({ targetType: "combo", limit: 50 });
 
-  const comboItems = await Promise.all(
-    combos.map(async (combo) => {
-      const [videoAsset, audioAsset] = await Promise.all([
-        fetchAssetByIdFromApi(combo.videoAssetId),
-        fetchAssetByIdFromApi(combo.audioAssetId),
+  const reviewItems = await Promise.all(
+    reviewed.reviews.map(async (review) => {
+      const [videoTitle, audioTitle] = await Promise.all([
+        safeAssetTitle(review.sourceVideoAssetId, "Video"),
+        safeAssetTitle(review.sourceAudioAssetId, "Audio"),
       ]);
 
       return {
-        id: combo.id,
-        videoAssetId: combo.videoAssetId,
-        audioAssetId: combo.audioAssetId,
-        videoTitle: videoAsset?.title ?? combo.videoAssetId,
-        audioTitle: audioAsset?.title ?? combo.audioAssetId,
-        score: combo.score,
-        upvotes: combo.upvotes,
-        downvotes: combo.downvotes,
-        thumbnailUrl: videoAsset?.stream?.posterUrl,
+        review,
+        label: `${videoTitle} + ${audioTitle}`,
       };
     })
   );
@@ -31,27 +35,48 @@ export default async function CombosPage() {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Combinations</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Combo Reviews</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Pair video and audio for preview. Saved combos are listed below.
+          Browse human tone reviews captured for video and audio combinations.
         </p>
       </header>
 
-      <ComboCreateForm />
+      <div className="rounded-xl border bg-card p-4 shadow-sm">
+        <div className="space-y-2">
+          {reviewItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No combo reviews yet.</p>
+          ) : null}
+          {reviewItems.map(({ review, label }) => (
+            <Link
+              className="block rounded-lg border px-3 py-2 text-sm transition hover:bg-muted"
+              href={
+                review.sourceVideoAssetId && review.sourceAudioAssetId
+                  ? `/review?targetType=combo&comboId=${encodeURIComponent(review.targetId)}&videoAssetId=${encodeURIComponent(review.sourceVideoAssetId)}&audioAssetId=${encodeURIComponent(review.sourceAudioAssetId)}`
+                  : `/review?targetType=combo&comboId=${encodeURIComponent(review.targetId)}`
+              }
+              key={review.id}
+            >
+              <span className="block font-medium">{label}</span>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {new Date(review.createdAt).toLocaleString()}
+              </span>
+              {review.keywords.length > 0 ? (
+                <span className="mt-2 flex flex-wrap gap-1.5">
+                  {review.keywords.map((keyword) => (
+                    <span className="rounded-full border px-2 py-0.5 text-xs" key={keyword}>
+                      {keyword}
+                    </span>
+                  ))}
+                </span>
+              ) : null}
+            </Link>
+          ))}
+        </div>
+      </div>
 
-      <ComboManagementList items={comboItems} />
-
-      <p className="text-xs text-muted-foreground">
-        Voting is disabled in the media management UI. Use your client app for combo voting.
-      </p>
-
-      <p className="text-xs text-muted-foreground">
-        Preview route:{" "}
-        <Link className="underline" href="/combos/preview">
-          /combos/preview
-        </Link>{" "}
-        with `videoAssetId` and `audioAssetId` query params.
-      </p>
+      <Link className="text-sm underline" href="/review?targetType=combo">
+        Review a random combo
+      </Link>
     </section>
   );
 }

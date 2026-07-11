@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import {
   ComboTrackKind,
@@ -193,7 +193,7 @@ export function ComboPlayer({
       });
   }
 
-  function renderAudioToggleButton(classNameValue: string) {
+  function renderAudioToggleButton(classNameValue: string, style?: CSSProperties) {
     const label = effectiveAudioMuted ? "Unmute audio" : "Mute audio";
 
     return (
@@ -207,6 +207,7 @@ export function ComboPlayer({
         }}
         title={label}
         type="button"
+        style={style}
       >
         <svg
           aria-hidden="true"
@@ -820,13 +821,20 @@ export function ComboPlayer({
     duration,
     masterTrack,
   };
+  const shouldShowBackgroundPlayOverlay =
+    (showBuiltInMuteControl || !suppressUi) &&
+    !snapshot.isPlaying &&
+    (snapshot.phase === ComboPlayerPhase.Ready ||
+      snapshot.phase === ComboPlayerPhase.Stalled ||
+      snapshot.phase === ComboPlayerPhase.Ended);
 
   if (variant === ComboPlayerVariant.Background) {
     return (
       <section className={`relative h-full w-full overflow-hidden ${className ?? ""}`}>
         {showBuiltInMuteControl
           ? renderAudioToggleButton(
-              "pointer-events-auto fixed z-30 inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/40 bg-black/45 text-white shadow-lg backdrop-blur-sm [left:max(1.5rem,env(safe-area-inset-left))] [top:max(1.5rem,env(safe-area-inset-top))]"
+              "pointer-events-auto absolute z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/40 bg-black/45 text-white shadow-lg backdrop-blur-sm",
+              { left: 16, top: 16 }
             )
           : null}
         <video
@@ -859,6 +867,11 @@ export function ComboPlayer({
           }}
           onPause={() => handlePlaybackPausedSignal(ComboTrackKind.Video)}
           onPlay={handlePlaybackStartedSignal}
+          onClick={() => {
+            if (snapshot.isPlaying) {
+              void togglePlayback();
+            }
+          }}
           onTimeUpdate={() => {
             handleTimelineTimeUpdateSignal();
           }}
@@ -904,16 +917,28 @@ export function ComboPlayer({
           }}
           ref={assignAudioElement}
         />
-        {!suppressUi &&
-        !snapshot.isPlaying &&
-        (snapshot.phase === ComboPlayerPhase.Ready ||
-          snapshot.phase === ComboPlayerPhase.Stalled) ? (
+        {shouldShowBackgroundPlayOverlay ? (
+          <div className="pointer-events-none absolute inset-0 z-20 bg-black/50" />
+        ) : null}
+        {shouldShowBackgroundPlayOverlay ? (
           <button
-            className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full border border-white/40 bg-black/45 px-4 py-2 text-xs font-medium tracking-wide text-white"
+            aria-label={snapshot.phase === ComboPlayerPhase.Ended ? "Replay combo" : "Play combo"}
+            className="absolute left-1/2 top-1/2 z-30 flex shrink-0 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-xl border border-white/50 bg-black/55 px-6 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/70"
             onClick={() => void togglePlayback()}
+            style={{ height: 64, minWidth: 96 }}
+            title={snapshot.phase === ComboPlayerPhase.Ended ? "Replay" : "Play"}
             type="button"
           >
-            Tap to Play
+            <svg
+              aria-hidden="true"
+              className="ml-1"
+              fill="currentColor"
+              height="28"
+              viewBox="0 0 24 24"
+              width="28"
+            >
+              <path d="M8 5v14l11-7z" />
+            </svg>
           </button>
         ) : null}
       </section>
