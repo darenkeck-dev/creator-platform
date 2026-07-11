@@ -65,5 +65,5 @@ Details: [Deploy and Ops](deploy-and-ops.md).
 
 - `/review` remains the capture surface. It defaults to random combos, supports `targetType=combo|audio|video`, and shows only reviews for the currently loaded target.
 - Review capture initializes keywords empty and scores at neutral zero for all target types. Source asset tone analyses can be loaded from the assets themselves when needed, but are not copied into review submissions as model snapshots.
-- Keyword capture uses target-seeded shuffled pages of semantic leaf keywords, about five per page. Reviewers can move backward/forward with `<` and `>`, use dot indicators for page position, and remove selected keywords from the bottom chip row.
+- Keyword capture shows five leaf keywords at a time. The initial set is target-seeded random; each `>` advances to a new set using the latest selected keyword as an anchor, preferring three taxonomy-adjacent leaves plus two random exploration leaves. Selected keywords remain removable from the bottom chip row.
 - `/combos` is the all-combo-review index. It lists combo review records and links each record back to `/review?targetType=combo&comboId=...`, including source asset ids when available for synthetic/random combos.

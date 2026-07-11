@@ -1,9 +1,10 @@
 # Wiki Log
 
-## [2026-07-10] ui | review keyword pager
+## [2026-07-10] ui | review keyword picker
 
-- Replaced the Review page tone tree interaction with a seeded shuffled keyword-page picker.
-- Each page shows about five semantic leaf keywords, supports multi-select, has centered category/dot position display plus `<`/`>` navigation, and keeps selected keyword chips removable at the bottom of the media area.
+- Replaced the Review page tone tree interaction with an adaptive five-keyword picker.
+- The initial option set is target-seeded random; each `>` advances using the latest selected keyword as a taxonomy anchor, preferring three adjacent leaf descriptors plus two random exploration descriptors.
+- Selected keyword chips remain removable at the bottom of the media area and review submit still appears after the descriptor threshold is met.
 
 ## [2026-07-10] behavior | independent human review capture
 

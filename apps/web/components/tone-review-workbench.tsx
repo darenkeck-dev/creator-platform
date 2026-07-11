@@ -69,6 +69,7 @@ const SCORE_KEYS: Array<[ToneScoreKey, string]> = [
 const MAX_KEYWORDS = 24;
 const MIN_KEYWORDS_TO_SUBMIT = 3;
 const KEYWORDS_PER_PAGE = 5;
+const ADJACENT_KEYWORDS_PER_PAGE = 3;
 
 const SCORE_DESCRIPTIONS: Record<ToneScoreKey, string> = {
   valence:
@@ -664,9 +665,12 @@ function initialScoreState(): Record<ToneScoreKey, number> {
   ) as Record<ToneScoreKey, number>;
 }
 
-type KeywordPage = {
-  category: string;
-  keywords: KeywordNode[];
+type KeywordLeaf = KeywordNode & {
+  rootLabel: string;
+  branchLabel: string;
+  rootIndex: number;
+  branchIndex: number;
+  leafIndex: number;
 };
 
 function seededRandom(seed: string) {
@@ -694,41 +698,93 @@ function shuffled<T>(items: T[], random: () => number) {
   return next;
 }
 
-function buildKeywordPages(seed: string): KeywordPage[] {
-  const random = seededRandom(seed);
-  const groups = REVIEW_KEYWORD_TREE.flatMap((root) =>
-    (root.children ?? []).flatMap((branch) => {
-      const leaves = branch.children ?? [];
-      return leaves.length > 0
-        ? [{ category: `${root.label} / ${branch.label}`, keywords: shuffled(leaves, random) }]
-        : [];
-    })
+function keywordLeaves() {
+  return REVIEW_KEYWORD_TREE.flatMap((root, rootIndex) =>
+    (root.children ?? []).flatMap((branch, branchIndex) =>
+      (branch.children ?? []).map((leaf, leafIndex) => ({
+        ...leaf,
+        rootLabel: root.label,
+        branchLabel: branch.label,
+        rootIndex,
+        branchIndex,
+        leafIndex,
+      }))
+    )
   );
+}
 
-  const shuffledGroups = shuffled(groups, random);
-  const pages: KeywordPage[] = [];
-  let currentCategory = "";
-  let currentKeywords: KeywordNode[] = [];
-
-  for (const group of shuffledGroups) {
-    for (const keyword of group.keywords) {
-      if (currentKeywords.length === 0) {
-        currentCategory = group.category;
-      }
-      currentKeywords.push(keyword);
-      if (currentKeywords.length === KEYWORDS_PER_PAGE) {
-        pages.push({ category: currentCategory, keywords: currentKeywords });
-        currentCategory = "";
-        currentKeywords = [];
-      }
+function pickKeywords(
+  candidates: KeywordLeaf[],
+  excluded: Set<string>,
+  count: number,
+  random: () => number
+) {
+  const picked: KeywordLeaf[] = [];
+  for (const candidate of shuffled(candidates, random)) {
+    if (picked.length >= count) {
+      break;
     }
+    if (excluded.has(candidate.label)) {
+      continue;
+    }
+    excluded.add(candidate.label);
+    picked.push(candidate);
+  }
+  return picked;
+}
+
+function buildAdaptiveKeywordOptions(input: {
+  seed: string;
+  selectedKeywords: string[];
+  shownKeywords: string[];
+  anchorKeyword?: string;
+  round: number;
+}) {
+  const leaves = keywordLeaves();
+  const random = seededRandom(`${input.seed}:${input.round}:${input.anchorKeyword ?? "random"}`);
+  const selectedSet = new Set(input.selectedKeywords);
+  const shownSet = new Set(input.shownKeywords);
+  const excluded = new Set([...selectedSet, ...shownSet]);
+
+  const anchor = input.anchorKeyword
+    ? leaves.find((leaf) => leaf.label === input.anchorKeyword)
+    : undefined;
+  if (!anchor) {
+    return pickKeywords(leaves, excluded, KEYWORDS_PER_PAGE, random);
   }
 
-  if (currentKeywords.length > 0) {
-    pages.push({ category: currentCategory, keywords: currentKeywords });
+  const sameBranch = leaves.filter(
+    (leaf) => leaf.rootIndex === anchor.rootIndex && leaf.branchIndex === anchor.branchIndex
+  );
+  const sameRoot = leaves.filter(
+    (leaf) => leaf.rootIndex === anchor.rootIndex && leaf.branchIndex !== anchor.branchIndex
+  );
+  const adjacent = [
+    ...pickKeywords(sameBranch, excluded, ADJACENT_KEYWORDS_PER_PAGE, random),
+    ...pickKeywords(sameRoot, excluded, ADJACENT_KEYWORDS_PER_PAGE, random),
+  ].slice(0, ADJACENT_KEYWORDS_PER_PAGE);
+  const randomExplorationCount = KEYWORDS_PER_PAGE - adjacent.length;
+  const differentRootLeaves = leaves.filter((leaf) => leaf.rootIndex !== anchor.rootIndex);
+  const randomExploration = [
+    ...pickKeywords(differentRootLeaves, excluded, randomExplorationCount, random),
+    ...pickKeywords(leaves, excluded, randomExplorationCount, random),
+  ].slice(0, randomExplorationCount);
+  const options = shuffled([...adjacent, ...randomExploration], random);
+
+  if (options.length === KEYWORDS_PER_PAGE) {
+    return options;
   }
 
-  return pages;
+  const fallbackExcluded = new Set([...selectedSet, ...options.map((option) => option.label)]);
+  return [
+    ...options,
+    ...pickKeywords(leaves, fallbackExcluded, KEYWORDS_PER_PAGE - options.length, random),
+  ];
+}
+
+function initialKeywordOptions(seed: string) {
+  const random = seededRandom(seed);
+  return pickKeywords(keywordLeaves(), new Set(), KEYWORDS_PER_PAGE, random);
 }
 
 export function ToneReviewWorkbench({
@@ -737,24 +793,30 @@ export function ToneReviewWorkbench({
   targetReviews,
 }: Props) {
   const targetIndex = 0;
+  const targetKey = String(targetIndex);
+  const keywordSeed = `${target.targetType}:${target.targetId}`;
   const [selectedKeywordsByTarget, setSelectedKeywordsByTarget] = useState<Record<string, string[]>>(
     () => ({ "0": [] })
   );
   const [scoresByTarget, setScoresByTarget] = useState<Record<string, Record<ToneScoreKey, number>>>(
     () => ({ "0": initialScoreState() })
   );
-  const [keywordPageByTarget, setKeywordPageByTarget] = useState<Record<string, number>>({});
+  const [keywordOptionsByTarget, setKeywordOptionsByTarget] = useState<Record<string, KeywordLeaf[]>>(
+    () => ({ [targetKey]: initialKeywordOptions(keywordSeed) })
+  );
+  const [shownKeywordsByTarget, setShownKeywordsByTarget] = useState<Record<string, string[]>>(
+    () => ({ [targetKey]: keywordOptionsByTarget[targetKey]?.map((keyword) => keyword.label) ?? [] })
+  );
+  const [lastSelectedKeywordByTarget, setLastSelectedKeywordByTarget] = useState<Record<string, string | undefined>>({});
+  const [keywordRoundByTarget, setKeywordRoundByTarget] = useState<Record<string, number>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitSucceeded, setSubmitSucceeded] = useState(false);
   const [loadingNext, setLoadingNext] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const targetKey = String(targetIndex);
   const selectedKeywords = selectedKeywordsByTarget[targetKey] ?? [];
   const scores = scoresByTarget[targetKey] ?? initialScoreState();
-  const keywordPages = buildKeywordPages(`${target.targetType}:${target.targetId}`);
-  const currentKeywordPageIndex = Math.min(keywordPageByTarget[targetKey] ?? 0, Math.max(keywordPages.length - 1, 0));
-  const currentKeywordPage = keywordPages[currentKeywordPageIndex];
+  const currentKeywordOptions = keywordOptionsByTarget[targetKey] ?? [];
   const selectedKeywordSet = new Set(selectedKeywords);
 
   useEffect(() => {
@@ -768,6 +830,7 @@ export function ToneReviewWorkbench({
 
   function toggleKeyword(keyword: string) {
     setSubmitSucceeded(false);
+    const selecting = !selectedKeywordSet.has(keyword);
     setSelectedKeywordsByTarget((previous) => {
       const current = previous[targetKey] ?? [];
       const next = current.includes(keyword)
@@ -778,19 +841,29 @@ export function ToneReviewWorkbench({
         [targetKey]: next,
       };
     });
-  }
-
-  function showNextKeywordPage() {
-    setKeywordPageByTarget((previous) => ({
+    setLastSelectedKeywordByTarget((previous) => ({
       ...previous,
-      [targetKey]: ((previous[targetKey] ?? 0) + 1) % Math.max(keywordPages.length, 1),
+      [targetKey]: selecting ? keyword : previous[targetKey] === keyword ? undefined : previous[targetKey],
     }));
   }
 
-  function showPreviousKeywordPage() {
-    setKeywordPageByTarget((previous) => ({
+  function showNextKeywordOptions() {
+    const nextRound = (keywordRoundByTarget[targetKey] ?? 0) + 1;
+    const nextOptions = buildAdaptiveKeywordOptions({
+      seed: keywordSeed,
+      selectedKeywords,
+      shownKeywords: shownKeywordsByTarget[targetKey] ?? [],
+      anchorKeyword: lastSelectedKeywordByTarget[targetKey],
+      round: nextRound,
+    });
+    setKeywordRoundByTarget((previous) => ({ ...previous, [targetKey]: nextRound }));
+    setKeywordOptionsByTarget((previous) => ({ ...previous, [targetKey]: nextOptions }));
+    setShownKeywordsByTarget((previous) => ({
       ...previous,
-      [targetKey]: ((previous[targetKey] ?? 0) - 1 + Math.max(keywordPages.length, 1)) % Math.max(keywordPages.length, 1),
+      [targetKey]: unique([
+        ...(previous[targetKey] ?? []),
+        ...nextOptions.map((keyword) => keyword.label),
+      ]),
     }));
   }
 
@@ -841,22 +914,11 @@ export function ToneReviewWorkbench({
           to { opacity: 1; transform: translateY(0) scale(1); }
         }
       `}</style>
-      {currentKeywordPage ? (
-        <div className="space-y-1.5" key={`${target.targetType}:${target.targetId}:${currentKeywordPageIndex}`}>
-          <div className="text-center text-xs text-white/75">
-            {currentKeywordPage.category}
-          </div>
+      {currentKeywordOptions.length > 0 ? (
+        <div className="space-y-1.5" key={`${target.targetType}:${target.targetId}:${keywordRoundByTarget[targetKey] ?? 0}`}>
           <div className="flex items-center justify-center gap-2">
-            <button
-              aria-label="Show previous keyword page"
-              className="flex h-8 min-w-6 items-center justify-center px-1 text-xl font-semibold text-white transition hover:text-white/75"
-              onClick={showPreviousKeywordPage}
-              type="button"
-            >
-              &lt;
-            </button>
             <div className="flex min-w-0 flex-wrap justify-center gap-2" style={{ animation: "tone-review-button-in 140ms ease-out both" }}>
-              {currentKeywordPage.keywords.map((node) => {
+              {currentKeywordOptions.map((node) => {
                 const selected = selectedKeywordSet.has(node.label);
                 return (
                   <button
@@ -877,25 +939,13 @@ export function ToneReviewWorkbench({
               })}
             </div>
             <button
-              aria-label="Show next keyword page"
+              aria-label="Show next keyword options"
               className="flex h-8 min-w-6 items-center justify-center px-1 text-xl font-semibold text-white transition hover:text-white/75"
-              onClick={showNextKeywordPage}
+              onClick={showNextKeywordOptions}
               type="button"
             >
               &gt;
             </button>
-          </div>
-          <div className="flex justify-center gap-1.5 pt-1" aria-label="Keyword page position">
-            {keywordPages.map((page, index) => (
-              <span
-                aria-current={index === currentKeywordPageIndex ? "step" : undefined}
-                className={cn(
-                  "h-1.5 w-1.5 rounded-full transition",
-                  index === currentKeywordPageIndex ? "bg-white" : "bg-white/30"
-                )}
-                key={`${page.category}:${index}`}
-              />
-            ))}
           </div>
         </div>
       ) : null}

@@ -91,6 +91,6 @@
 - Improved expired auth handling: middleware now protects Review/Combos/API paths, clears expired JWT cookies, redirects page requests back through login with `next`, returns JSON `401` for same-origin API requests, and the Cognito web client uses 12-hour ID/access token validity.
 - Split review listings by intent: `/review` now lists only reviews for the current asset/combo target, while `/combos` lists all combo reviews and links back into the review surface.
 - Changed human review capture to start blank/neutral for audio, video, and combo targets; UI submissions no longer include `modelScoresSnapshot` from extracted source tone values.
-- Replaced the Review tone tree with a target-seeded leaf-keyword pager that shows about five semantically related keyword options at a time, with centered category/dot position display and backward/forward navigation.
+- Replaced the Review tone tree/fixed pager with an adaptive five-keyword picker: the initial set is random, then `>` generates three taxonomy-adjacent suggestions from the latest selection plus two random exploration suggestions.
 
 Related: [Current State](current-state.md), [Open Issues](open-issues.md).
