@@ -36,6 +36,7 @@
     "synth": "bun run build && bun run build:lambda && node ./node_modules/aws-cdk/bin/cdk synth",
     "deploy:auth": "bun run build && bun run build:lambda && node ./node_modules/aws-cdk/bin/cdk deploy MediaManagerAuthStack --require-approval never --parameters GoogleOAuthClientId=$GOOGLE_OAUTH_CLIENT_ID --parameters GoogleOAuthClientSecret=$GOOGLE_OAUTH_CLIENT_SECRET",
     "deploy:data": "bun run build && bun run build:lambda && node ./node_modules/aws-cdk/bin/cdk deploy MediaManagerDataStack --require-approval never",
+    "deploy:vectors": "bun run build && bun run build:lambda && node ./node_modules/aws-cdk/bin/cdk deploy MediaManagerVectorStack --require-approval never",
     "deploy:storage": "bun run build && bun run build:lambda && node ./node_modules/aws-cdk/bin/cdk deploy MediaManagerStorageStack --require-approval never",
     "deploy:streaming": "bun run build && bun run build:lambda && node ./node_modules/aws-cdk/bin/cdk deploy MediaManagerStreamingStack --require-approval never",
     "deploy:darenkeck-site": "bun run build && bun run build:lambda && node ./node_modules/aws-cdk/bin/cdk deploy MediaManagerDarenkeckSiteStack --require-approval never",

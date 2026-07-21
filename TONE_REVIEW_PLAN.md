@@ -96,7 +96,7 @@ Keep server-side review capture focused on improving the shared base mapping unt
 - `toneAnalysis.adjustedScores` stores the current audio/video OpenAI-plus-curator vector.
 - `toneAnalysis.scoreAdjustment` records the algorithm version, curator sums/counts by dimension, and computation timestamps.
 - Review submission and OpenAI reprocessing rebuild the materialized adjustment from append-only curator reviews.
-- Effective asset scoring reads `adjustedScores ?? scores`.
+- Effective asset scoring overlays sparse curator adjustments on model scores: `{ ...scores, ...adjustedScores }`.
 - Reviews are submitted only from the dedicated Review page using keywords; detail pages do not contain review controls.
 - The API ignores client score input and derives audio/video review scores from keyword aliases mapped into `tone-taxonomy/v2` descriptors.
 - Asset detail score bars show the OpenAI segment, a contrasting adjustment segment, and a marker at the original OpenAI endpoint.

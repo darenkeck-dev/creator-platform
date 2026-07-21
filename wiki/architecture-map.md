@@ -10,7 +10,7 @@
 - `packages/shared`: shared playback/review components (`ComboPlayer`, `ComboToneReviewPlayer`) and playback utilities.
   - `packages/tone-core`: TypeScript tone schemas, OpenAI analysis helpers, ffmpeg frame extraction, combo scoring, and nearest-neighbor utilities for Lambda-native tone processing.
 - **Infra**
-  - `infra/cdk`: stacks + lambda handlers for auth, api, processing, storage, streaming, observability, darenkeck site.
+  - `infra/cdk`: stacks + lambda handlers for auth, api, processing, storage, streaming, vectors, observability, darenkeck site.
 
 ## Data and media flow
 
@@ -29,6 +29,7 @@
 10. After an audio/video curator review, the API queries that target's curator reviews and materializes a versioned OpenAI-plus-curator weighted mean on the asset. The tone worker repeats this rebuild after OpenAI reanalysis; combo reviews remain isolated from source assets.
 11. Generic asset jobs use API-created job records plus an SQS-fed processing worker; `delete_assets` recursively expands selected folders via the container GSI and deletes deepest children first, while tone/conversion reprocess jobs queue existing processing workers.
 12. Playback APIs return stream URLs (`hlsMasterUrl` preferred).
+13. The MVP vector foundation uses one retained S3 Vectors bucket and a 10-dimensional Euclidean `asset-tone-v1` index. Future synchronization overlays sparse curator adjustments on model scores and writes the result in the canonical `asset-tone-vector/v1` order; DynamoDB remains authoritative and no combination vectors are persisted.
 
 Eventing note: EventBridge is the common router. Separate SQS queues keep conversion and tone analysis operationally isolated so tone retries/backlogs do not delay playback processing.
 
@@ -50,7 +51,7 @@ See also: [Current State](current-state.md), [Recent Changes](recent-changes.md)
 
 ## Deployment model
 
-- API/processing: CDK stacks via root scripts (`deploy:api`, `deploy:processing`).
+- API/processing/vectors: CDK stacks via root scripts (`deploy:api`, `deploy:processing`, `deploy:vectors`).
 - Darenkeck infra: `deploy:darenkeck-site` (CloudFront/S3 config).
 - Darenkeck static assets: `deploy:darenkeck:prod` or staging variant.
 

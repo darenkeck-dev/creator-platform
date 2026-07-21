@@ -1,5 +1,23 @@
 # Wiki Log
 
+## [2026-07-21] foundation | S3 Vectors asset index
+
+- Selected S3 Vectors for the MVP and fixed the initial `combo-selection/v1` behavior: controlled-route rollout, five recent combo exclusions, three recent audio exclusions, and distance-weighted top-five sampling.
+- Added the canonical `asset-tone-vector/v1` contract and ten-dimension ordering to `tone-core`, including tested sparse-adjustment overlay semantics.
+- Added `MediaManagerVectorStack` with a retained S3 vector bucket, retained 10-dimensional Euclidean `asset-tone-v1` index, stage-aware outputs, deployment commands, and synthesis tests.
+- Kept DynamoDB authoritative; vector deployment, lifecycle synchronization, reconciliation, and public selection remain pending.
+
+## [2026-07-20] planning | MVP release plan
+
+- Added `MVP_RELEASE_PLAN.md` with release gates for the 20-audio/20-video corpus, curator calibration, public combo reviews, `darenkeck.com` integration, playback validation, privacy, operations, and rollback.
+- Defined a vector-database architecture that indexes effective source asset tone vectors only, generates candidate pairs dynamically, performs global tone-search restarts, and continues with nearest-neighbor walks requiring new audio while allowing the same video.
+- Kept combination precomputation, combination vector indexing, live learning from public reviews, free-text interpretation, accounts, and personalization outside the MVP.
+
+## [2026-07-20] ui | condensed status activity table
+
+- Moved the asset Activity Log into the collapsed Status Details disclosure.
+- Replaced stacked activity cards with a compact table for time, level, activity, source, and details, with horizontal overflow on narrow screens.
+
 ## [2026-07-20] ui | asset playback placement
 
 - Moved the Playback card directly below Status on asset detail pages.

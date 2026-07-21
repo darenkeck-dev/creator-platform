@@ -4,6 +4,7 @@
 
 - API stack: `bun run deploy:api`
 - Processing stack: `bun run deploy:processing`
+- S3 Vectors stack: `bun run deploy:vectors`
 - Darenkeck site infra (CloudFront/S3 settings): `bun run deploy:darenkeck-site`
 - Darenkeck static site publish (build + sync + invalidation): `bun run deploy:darenkeck:prod`
 
@@ -13,6 +14,7 @@
 - `infra/cdk/lambda/upload-trigger`, `mediaconvert-status`, or `tone-analysis` -> deploy processing stack.
 - `infra/cdk/lambda/api-jobs` or job API routes/queue config -> deploy API stack, then processing stack for worker changes.
 - `infra/cdk/lambda/jobs-worker` -> deploy processing stack after the API stack has exported the bulk-actions queue.
+- `infra/cdk/lib/vector-stack.ts` -> deploy vectors stack.
 - `infra/cdk/lib/darenkeck-site-stack.ts` -> deploy darenkeck site infra stack.
 - `apps/darenkeck/*` runtime/static content -> deploy darenkeck static site.
 
@@ -65,6 +67,13 @@ Migration note:
 - If older ready tone analyses are missing display fields on the asset record, run `bun run --cwd infra/cdk backfill:tone-analysis-display` first, then `bun run --cwd infra/cdk backfill:tone-analysis-display -- --apply` after reviewing the dry run.
 - Audio/video curator adjustment materialization requires the tone worker's DynamoDB `Query` permission, so deploy both API and processing stacks for adjustment changes.
 - To inspect tone reviews before a full reset, run `bun run --cwd infra/cdk purge:tone-reviews`. Permanently delete the reported production records only with `bun run --cwd infra/cdk purge:tone-reviews -- --apply --confirm-production`; the purge also clears materialized audio/video adjustments derived from deleted reviews.
+
+## Asset tone vector index
+
+- `bun run deploy:vectors` creates `MediaManagerVectorStack` with one retained S3 vector bucket and the retained `asset-tone-v1` index.
+- The index stores 10-dimensional `float32` vectors in the canonical `asset-tone-vector/v1` order and uses Euclidean distance.
+- Stack outputs export the vector bucket ARN, index ARN, and index name with stage-aware names.
+- DynamoDB remains authoritative. The vector stack is not yet deployed, and asset upsert/delete synchronization and reconciliation are still pending.
 
 ## Known operational nits
 

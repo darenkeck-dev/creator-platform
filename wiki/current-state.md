@@ -33,6 +33,7 @@ See also: [Architecture Map](architecture-map.md), [Deploy and Ops](deploy-and-o
 - Audio/video curator keywords are mapped server-side into taxonomy score vectors; client-provided scores are ignored. Asset detail dumbbell bars compare extracted and adjusted values with a colored delta connector.
 - Audio/video asset pages list their target-specific review history at the bottom and link directly to `/review` with that asset preselected for manual review.
 - Production tone reviews were reset on 2026-07-15 so curator calibration starts clean under the adjusted-score workflow.
+- The MVP vector backend is S3 Vectors. `MediaManagerVectorStack` now defines a retained 10-dimensional Euclidean `asset-tone-v1` index, and `tone-core` owns the canonical `asset-tone-vector/v1` record contract; deployment and asset synchronization are not yet complete.
 - Auth guard middleware covers app and same-origin API routes; missing/expired Cognito JWT cookies redirect page requests to login with the original path preserved and return JSON `401` for API requests. Cognito web client ID/access token validity is configured for 12 hours.
 
 Details: [Recent Changes](recent-changes.md).

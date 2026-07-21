@@ -26,6 +26,7 @@
     "test:infra": "bun run --cwd infra/cdk test",
     "deploy:auth": "set -a && . ./.env && set +a && bun run --cwd infra/cdk deploy:auth",
     "deploy:data": "set -a && . ./.env && set +a && bun run --cwd infra/cdk deploy:data",
+    "deploy:vectors": "set -a && . ./.env && set +a && bun run --cwd infra/cdk deploy:vectors",
     "deploy:api": "set -a && . ./.env && set +a && bun run --cwd infra/cdk deploy:api",
     "deploy:processing": "set -a && . ./.env && set +a && bun run --cwd infra/cdk deploy:processing",
     "deploy:darenkeck-site": "set -a && . ./.env && set +a && bun run --cwd infra/cdk deploy:darenkeck-site",

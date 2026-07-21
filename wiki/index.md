@@ -23,3 +23,8 @@ Raw planning/checklist docs were moved to `raw_sources/` and are treated as sour
 - `raw_sources/infra/cdk/AUDIO_TRANSCODE_ROLLOUT_CHECKLIST.md`
 - `raw_sources/tone_based_audio_video_explorer.md`
 - `raw_sources/tone_based_audio_video_explorer_v1_v3.md`
+
+## Active Plans
+
+- `MVP_RELEASE_PLAN.md` - release milestones for corpus preparation, curator calibration, vector-backed tone selection, nearest-neighbor walking, public reviews, and launch readiness.
+- `TONE_REVIEW_PLAN.md` - review data model, privacy rules, and curator-adjusted asset scoring.
