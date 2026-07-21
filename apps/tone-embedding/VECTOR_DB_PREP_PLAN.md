@@ -2,6 +2,8 @@
 
 This app should not own vector database infrastructure. Its job is to generate deterministic, versioned vectors and metadata that Media Manager can index in a vector backend later.
 
+The MVP described in `../../MVP_RELEASE_PLAN.md` uses an S3 Vectors asset index and dynamically computes combination candidates. The combination-vector export described here is post-MVP preparation and does not define the MVP retrieval index.
+
 ## Target Boundary
 
 - `tone-embedding` emits `combo-analysis/v1` rows with `nearestNeighborVector` and `vectorLayout`.

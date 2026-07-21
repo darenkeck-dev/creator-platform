@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source "../../../packages/shared/src";
 
 :root {
   --background: oklch(0.16 0.015 258);

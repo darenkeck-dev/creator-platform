@@ -10,11 +10,13 @@
 - Darenkeck mobile native play/pause interactions need explicit state-machine handling so UI and media element state stay aligned.
 - Tone extraction output needs simplification: reassess whether `.tonebundle.tar.gz` is needed now that display-ready tone summary/scores are stored directly on the asset record.
 - Decide whether existing `tone-taxonomy/v1` asset analyses should be reanalyzed or left historical now that new analyses emit `tone-taxonomy/v2`.
+- Deploy `MediaManagerVectorStack`, then add queue-backed asset vector upsert/delete synchronization and a dry-run-first reconciliation command before enabling public tone selection.
 
 ## Playback and UX watchlist
 
 - Validate timeline handoff behavior (video-master while muted -> audio-master after unmute) across long/short clip mismatches.
 - Keep monitoring loop-boundary artifacts on real browser/device matrix.
+- Debug combo-player end-state video frame jump: when playback reaches the end, the video appears to jump frames before/around the ended/replay state. Inspect timeline-ended handling, loop flags, pause-at-end behavior, and final seek/sync signals.
 - Validate combo-player transitions for interruption paths (`visibilitychange`, app switch, screen lock, native media control pause/play).
 
 ## Docs/process

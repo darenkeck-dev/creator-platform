@@ -12,6 +12,7 @@ type LoginPageProps = {
 
 const errorMessages: Record<string, string> = {
   config: "Auth provider is not configured yet.",
+  expired: "Your session expired. Sign in again to continue.",
   oauth: "Sign-in was canceled or failed.",
   token: "We could not complete sign-in. Please try again."
 };

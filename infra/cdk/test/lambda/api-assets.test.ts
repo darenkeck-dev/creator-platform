@@ -384,6 +384,45 @@ describe("api-assets lambda", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("lists all owned assets when scope is all", async () => {
+    stubSend(async (command) => {
+      if (!(command instanceof QueryCommand)) {
+        throw new Error("Expected QueryCommand");
+      }
+
+      expect(command.input.IndexName).toBe("AssetByCreatedAt");
+      expect(
+        (command.input.ExpressionAttributeValues as Record<string, unknown>)[":partitionKey"]
+      ).toBe("ASSET");
+      expect(command.input.FilterExpression).toBe("ownerEmail = :ownerEmail");
+
+      return {
+        Items: [
+          {
+            id: "asset-1",
+            schemaVersion: 1,
+            ownerEmail: "owner@example.com",
+            type: "video",
+            title: "Nested video",
+            description: "ok",
+            status: "ready",
+            original: { bucket: "b", key: "k", size: 1, contentType: "video/mp4" },
+            tags: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+            containerId: "folder-1",
+          },
+        ],
+      };
+    });
+
+    const result = await handler(createGetEventWithQuery({ scope: "all", type: "video" }));
+    expect(result.statusCode).toBe(200);
+    const body = parseBody(result) as { assets: Array<{ id: string }> };
+    expect(body.assets).toHaveLength(1);
+    expect(body.assets[0]?.id).toBe("asset-1");
+  });
+
   it("filters assets by type and facet on GET", async () => {
     stubSend(async (command) => {
       if (!(command instanceof QueryCommand)) {

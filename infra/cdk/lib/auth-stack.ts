@@ -115,6 +115,8 @@ export class AuthStack extends Stack {
       userPool,
       userPoolClientName: withStageSuffix("media-manager-web-client", stage),
       generateSecret: false,
+      accessTokenValidity: Duration.hours(12),
+      idTokenValidity: Duration.hours(12),
       authFlows: {
         userSrp: true,
       },

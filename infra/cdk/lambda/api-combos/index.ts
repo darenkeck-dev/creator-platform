@@ -1,4 +1,4 @@
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import {
   DeleteCommand,
   DynamoDBDocumentClient,
@@ -6,6 +6,7 @@ import {
   PutCommand,
   QueryCommand,
   ScanCommand,
+  TransactWriteCommand,
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
@@ -22,14 +23,20 @@ import {
   ComboVoteValueSchema,
   CreateComboInputSchema,
   PublicRandomComboResponseSchema,
+  ToneReviewInputSchema,
+  ToneReviewListQuerySchema,
+  ToneReviewListResponseSchema,
+  ToneReviewResponseSchema,
   type ComboVoteValue,
 } from "@media-manager/contracts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { reviewKeywordsToToneScores } from "@media-manager/tone-core";
 import {
   readAssetRecordWithUpgrade,
   safeReadAssetRecordWithUpgrade,
 } from "../shared/asset-record-versioning";
+import { materializeCuratorToneAdjustment } from "../shared/curator-tone-adjustment";
 
 type HttpEvent = {
   requestContext?: {
@@ -126,6 +133,20 @@ function parseComboId(event: HttpEvent): string {
   }
 
   return parsed.data;
+}
+
+function encodeCursor(key: Record<string, unknown> | undefined): string | undefined {
+  if (!key) {
+    return undefined;
+  }
+  return Buffer.from(JSON.stringify(key), "utf-8").toString("base64url");
+}
+
+function decodeCursor(cursor: string | undefined): Record<string, unknown> | undefined {
+  if (!cursor) {
+    return undefined;
+  }
+  return JSON.parse(Buffer.from(cursor, "base64url").toString("utf-8")) as Record<string, unknown>;
 }
 
 function buildPairKey(ownerEmail: string, videoAssetId: string, audioAssetId: string): string {
@@ -674,6 +695,218 @@ async function voteOnComboByAssets(
   return await voteOnCombo(syntheticEvent, combo.id);
 }
 
+async function submitToneReview(event: HttpEvent): Promise<{ statusCode: number; body: string }> {
+  const tableName = getTableName();
+  const ownerEmail = getOwnerEmail(event);
+  const parsedBody = ToneReviewInputSchema.safeParse(parseBody(event.body));
+  if (!parsedBody.success) {
+    return response(400, { message: "Invalid request body", issues: parsedBody.error.issues });
+  }
+
+  const input = parsedBody.data;
+  let targetAsset: z.infer<typeof AssetRecordSchema> | null = null;
+  if (input.targetType === "combo") {
+    const combo = await getComboById(tableName, input.targetId);
+    if (!combo) {
+      if (!input.sourceVideoAssetId || !input.sourceAudioAssetId) {
+        return response(404, { message: "Combo not found" });
+      }
+      const [videoAsset, audioAsset] = await Promise.all([
+        getAssetById(tableName, input.sourceVideoAssetId),
+        getAssetById(tableName, input.sourceAudioAssetId),
+      ]);
+      if (
+        !videoAsset ||
+        !audioAsset ||
+        videoAsset.ownerEmail !== ownerEmail ||
+        audioAsset.ownerEmail !== ownerEmail ||
+        videoAsset.type !== "video" ||
+        audioAsset.type !== "audio"
+      ) {
+        return response(403, { message: "Forbidden" });
+      }
+    } else if (combo.ownerEmail !== ownerEmail) {
+      return response(403, { message: "Forbidden" });
+    }
+  } else {
+    const asset = await getAssetById(tableName, input.targetId);
+    if (!asset) {
+      return response(404, { message: "Asset not found" });
+    }
+    if (asset.ownerEmail !== ownerEmail || asset.type !== input.targetType) {
+      return response(403, { message: "Forbidden" });
+    }
+    if (
+      asset.toneAnalysis?.status !== "ready" ||
+      !asset.toneAnalysis.scores ||
+      !asset.toneAnalysis.toneTaxonomyVersion
+    ) {
+      return response(409, { message: "A completed OpenAI tone analysis is required" });
+    }
+    targetAsset = asset;
+  }
+
+  const now = new Date().toISOString();
+  const {
+    reviewSource: _submittedReviewSource,
+    taxonomyVersion: submittedTaxonomyVersion,
+    scores: _submittedScores,
+    ...reviewFields
+  } = input;
+  const keywords = [...new Set(input.keywords.map((keyword) => keyword.trim()).filter(Boolean))];
+  const keywordScores = targetAsset ? reviewKeywordsToToneScores(keywords) : undefined;
+  if (targetAsset && Object.keys(keywordScores ?? {}).length === 0) {
+    return response(400, { message: "At least one supported tone keyword is required" });
+  }
+  const review = ToneReviewResponseSchema.shape.review.parse({
+    id: `tone_review_${randomUUID()}`,
+    schemaVersion: ASSET_SCHEMA_VERSION,
+    ...reviewFields,
+    reviewSource: "curator",
+    ...(targetAsset?.toneAnalysis?.toneTaxonomyVersion
+      ? { taxonomyVersion: targetAsset.toneAnalysis.toneTaxonomyVersion }
+      : !targetAsset && submittedTaxonomyVersion
+        ? { taxonomyVersion: submittedTaxonomyVersion }
+        : {}),
+    keywords,
+    ...(keywordScores ? { scores: keywordScores } : {}),
+    ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const reviewItem = {
+    pk: `TONE_REVIEW#${review.targetType}#${review.targetId}`,
+    sk: `REVIEW#${review.createdAt}#${review.id}`,
+    gsi1pk: `TONE_REVIEW#${review.reviewSource}`,
+    gsi1sk: `${review.createdAt}#${review.id}`,
+    ...review,
+  };
+
+  if (targetAsset) {
+    try {
+      await db.send(
+        new TransactWriteCommand({
+          TransactItems: [
+            {
+              ConditionCheck: {
+                TableName: tableName,
+                Key: { pk: `ASSET#${targetAsset.id}`, sk: "META" },
+                ConditionExpression:
+                  "toneAnalysis.#status = :ready AND toneAnalysis.scores = :scores AND toneAnalysis.toneTaxonomyVersion = :taxonomyVersion",
+                ExpressionAttributeNames: { "#status": "status" },
+                ExpressionAttributeValues: {
+                  ":ready": "ready",
+                  ":scores": targetAsset.toneAnalysis!.scores,
+                  ":taxonomyVersion": targetAsset.toneAnalysis!.toneTaxonomyVersion,
+                },
+              },
+            },
+            { Put: { TableName: tableName, Item: reviewItem } },
+          ],
+        })
+      );
+    } catch (error) {
+      if (error instanceof TransactionCanceledException) {
+        return response(409, { message: "Tone analysis changed; reload and review again" });
+      }
+      throw error;
+    }
+  } else {
+    await db.send(new PutCommand({ TableName: tableName, Item: reviewItem }));
+  }
+
+  if (review.targetType === "audio" || review.targetType === "video") {
+    try {
+      await materializeCuratorToneAdjustment({
+        db,
+        tableName,
+        assetId: review.targetId,
+      });
+    } catch (error) {
+      console.error("Failed to materialize curator-adjusted tone scores", {
+        assetId: review.targetId,
+        reviewId: review.id,
+        error,
+      });
+    }
+  }
+
+  return response(201, ToneReviewResponseSchema.parse({ review }));
+}
+
+async function listToneReviews(event: HttpEvent): Promise<{ statusCode: number; body: string }> {
+  const parsedQuery = ToneReviewListQuerySchema.safeParse(event.queryStringParameters ?? {});
+  if (!parsedQuery.success) {
+    return response(400, { message: "Invalid query parameters", issues: parsedQuery.error.issues });
+  }
+
+  const tableName = getTableName();
+  getOwnerEmail(event);
+  const { targetType, targetId, cursor, limit } = parsedQuery.data;
+
+  if (targetId && !targetType) {
+    return response(400, { message: "targetType is required when targetId is provided" });
+  }
+
+  if (targetType && targetId) {
+    const result = await db.send(
+      new QueryCommand({
+        TableName: tableName,
+        KeyConditionExpression: "pk = :pk",
+        ExpressionAttributeValues: {
+          ":pk": `TONE_REVIEW#${targetType}#${targetId}`,
+        },
+        ScanIndexForward: false,
+        Limit: limit,
+        ExclusiveStartKey: decodeCursor(cursor),
+      })
+    );
+
+    const reviews = (result.Items ?? []).flatMap((item) => {
+      const parsed = ToneReviewResponseSchema.shape.review.safeParse(item);
+      return parsed.success ? [parsed.data] : [];
+    });
+
+    return response(
+      200,
+      ToneReviewListResponseSchema.parse({
+        reviews,
+        nextCursor: encodeCursor(result.LastEvaluatedKey),
+      })
+    );
+  }
+
+  const result = await db.send(
+    new QueryCommand({
+      TableName: tableName,
+      IndexName: getCreatedAtIndex(),
+      KeyConditionExpression: "gsi1pk = :pk",
+      ExpressionAttributeValues: {
+        ":pk": "TONE_REVIEW#curator",
+        ...(targetType ? { ":targetType": targetType } : {}),
+      },
+      ...(targetType ? { FilterExpression: "targetType = :targetType" } : {}),
+      ScanIndexForward: false,
+      Limit: limit,
+      ExclusiveStartKey: decodeCursor(cursor),
+    })
+  );
+
+  const reviews = (result.Items ?? []).flatMap((item) => {
+    const parsed = ToneReviewResponseSchema.shape.review.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  });
+
+  return response(
+    200,
+    ToneReviewListResponseSchema.parse({
+      reviews,
+      nextCursor: encodeCursor(result.LastEvaluatedKey),
+    })
+  );
+}
+
 function shuffleInPlace<T>(items: T[]): void {
   for (let i = items.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -996,6 +1229,14 @@ export async function handler(event: HttpEvent): Promise<{ statusCode: number; b
       return await voteOnComboByAssets(event);
     }
 
+    if (method === "POST" && routeKey === "POST /tone-reviews") {
+      return await submitToneReview(event);
+    }
+
+    if (method === "GET" && routeKey === "GET /tone-reviews") {
+      return await listToneReviews(event);
+    }
+
     if (method === "GET" && routeKey === "GET /public/combos/random") {
       return await getRandomPublicCombo(event);
     }
@@ -1017,6 +1258,11 @@ export async function handler(event: HttpEvent): Promise<{ statusCode: number; b
     return response(405, { message: "Method not allowed" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
+    console.error("API request failed", {
+      method: event.requestContext?.http?.method,
+      routeKey: event.requestContext?.routeKey,
+      error,
+    });
     return response(500, { message });
   }
 }

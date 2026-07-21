@@ -47,5 +47,22 @@ describe("api stack jobs", () => {
     template.hasResourceProperties("AWS::ApiGatewayV2::Route", {
       RouteKey: "GET /jobs/{id}",
     });
+    template.hasResourceProperties("AWS::ApiGatewayV2::Route", {
+      RouteKey: "POST /tone-reviews",
+      AuthorizationType: "JWT",
+    });
+    template.hasResourceProperties("AWS::ApiGatewayV2::Route", {
+      RouteKey: "GET /tone-reviews",
+      AuthorizationType: "JWT",
+    });
+    template.hasResourceProperties("AWS::IAM::Policy", {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: Match.arrayWith(["dynamodb:ConditionCheckItem"]),
+          }),
+        ]),
+      },
+    });
   });
 });

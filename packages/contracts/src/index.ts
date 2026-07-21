@@ -55,11 +55,36 @@ export const ProcessingProfileMetadataSchema = z.object({
   mode: z.enum(["mediaconvert", "passthrough"]),
 });
 export const PROCESSING_PROFILE_METADATA = [
-  { id: "video-standard-v1", label: "Video standard", supportedTypes: ["video"], mode: "mediaconvert" },
-  { id: "audio-passthrough-v1", label: "Audio passthrough", supportedTypes: ["audio"], mode: "passthrough" },
-  { id: "audio-transcode-hls-v1", label: "Audio HLS", supportedTypes: ["audio"], mode: "mediaconvert" },
-  { id: "image-passthrough-v1", label: "Image passthrough", supportedTypes: ["image"], mode: "passthrough" },
-  { id: "folder-meta-v1", label: "Folder metadata", supportedTypes: ["folder"], mode: "passthrough" },
+  {
+    id: "video-standard-v1",
+    label: "Video standard",
+    supportedTypes: ["video"],
+    mode: "mediaconvert",
+  },
+  {
+    id: "audio-passthrough-v1",
+    label: "Audio passthrough",
+    supportedTypes: ["audio"],
+    mode: "passthrough",
+  },
+  {
+    id: "audio-transcode-hls-v1",
+    label: "Audio HLS",
+    supportedTypes: ["audio"],
+    mode: "mediaconvert",
+  },
+  {
+    id: "image-passthrough-v1",
+    label: "Image passthrough",
+    supportedTypes: ["image"],
+    mode: "passthrough",
+  },
+  {
+    id: "folder-meta-v1",
+    label: "Folder metadata",
+    supportedTypes: ["folder"],
+    mode: "passthrough",
+  },
 ] as const;
 export const ComboVoteValueSchema = z.enum(COMBO_VOTE_VALUES);
 export const AssetToneAnalysisStatusSchema = z.enum(ASSET_TONE_ANALYSIS_STATUSES);
@@ -142,6 +167,32 @@ export const AssetToneAnalysisScoresSchema = z.object({
   menace: z.number().min(-1).max(1).optional(),
 });
 
+export const AssetToneScoreAdjustmentDimensionSchema = z.object({
+  curatorScoreSum: z.number(),
+  curatorReviewCount: z.number().int().min(0),
+});
+
+export const AssetToneScoreAdjustmentSchema = z.object({
+  schemaVersion: z.literal("tone-score-adjustment/v1"),
+  algorithm: z.literal("model-prior-mean/v1"),
+  modelWeight: z.literal(1),
+  curatorReviewCount: z.number().int().min(1),
+  dimensions: z.object({
+    valence: AssetToneScoreAdjustmentDimensionSchema.optional(),
+    arousal: AssetToneScoreAdjustmentDimensionSchema.optional(),
+    dominance: AssetToneScoreAdjustmentDimensionSchema.optional(),
+    warmth: AssetToneScoreAdjustmentDimensionSchema.optional(),
+    tension: AssetToneScoreAdjustmentDimensionSchema.optional(),
+    intimacy: AssetToneScoreAdjustmentDimensionSchema.optional(),
+    instability: AssetToneScoreAdjustmentDimensionSchema.optional(),
+    nostalgia: AssetToneScoreAdjustmentDimensionSchema.optional(),
+    beauty: AssetToneScoreAdjustmentDimensionSchema.optional(),
+    menace: AssetToneScoreAdjustmentDimensionSchema.optional(),
+  }),
+  computedAt: z.string().datetime(),
+  latestReviewAt: z.string().datetime(),
+});
+
 export const AssetToneAnalysisInfoSchema = z.object({
   status: AssetToneAnalysisStatusSchema,
   profile: AssetToneAnalysisProfileSchema,
@@ -161,6 +212,8 @@ export const AssetToneAnalysisInfoSchema = z.object({
   secondaryWords: z.array(z.string().min(1)).optional(),
   avoidWords: z.array(z.string().min(1)).optional(),
   scores: AssetToneAnalysisScoresSchema.optional(),
+  adjustedScores: AssetToneAnalysisScoresSchema.optional(),
+  scoreAdjustment: AssetToneScoreAdjustmentSchema.optional(),
   semanticSummary: z.string().min(1).optional(),
   caption: z.string().min(1).optional(),
   mood: z.string().min(1).optional(),
@@ -535,6 +588,46 @@ export const ComboVoteByAssetsInputSchema = z.object({
   action: z.enum(["up", "down", "clear"]),
 });
 
+export const ToneReviewTargetTypeSchema = z.enum(["audio", "video", "combo"]);
+export const ToneReviewSourceSchema = z.enum(["curator", "anonymous", "authenticated"]);
+export const ToneReviewInputSchema = z.object({
+  targetType: ToneReviewTargetTypeSchema,
+  targetId: z.string().min(1),
+  sourceVideoAssetId: z.string().min(1).optional(),
+  sourceAudioAssetId: z.string().min(1).optional(),
+  reviewSource: ToneReviewSourceSchema.default("curator"),
+  reviewerId: z.string().min(1).max(128).optional(),
+  taxonomyVersion: AssetToneTaxonomyVersionSchema.optional(),
+  keywords: z.array(z.string().trim().min(1).max(40)).max(24).default([]),
+  scores: AssetToneAnalysisScoresSchema.optional(),
+  modelScoresSnapshot: AssetToneAnalysisScoresSchema.optional(),
+  baseScoresSnapshot: AssetToneAnalysisScoresSchema.optional(),
+  notes: z.string().max(1000).optional(),
+});
+
+export const ToneReviewRecordSchema = ToneReviewInputSchema.extend({
+  id: z.string().min(1),
+  schemaVersion: z.number().int().min(1),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+export const ToneReviewResponseSchema = z.object({
+  review: ToneReviewRecordSchema,
+});
+
+export const ToneReviewListQuerySchema = z.object({
+  targetType: ToneReviewTargetTypeSchema.optional(),
+  targetId: z.string().min(1).optional(),
+  cursor: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+});
+
+export const ToneReviewListResponseSchema = z.object({
+  reviews: z.array(ToneReviewRecordSchema),
+  nextCursor: z.string().min(1).optional(),
+});
+
 export const ComboDeleteResponseSchema = z.object({
   id: z.string().min(1),
   deleted: z.literal(true),
@@ -566,6 +659,8 @@ export type AssetGenerationInfo = z.infer<typeof AssetGenerationInfoSchema>;
 export type AssetToneAnalysisStatus = z.infer<typeof AssetToneAnalysisStatusSchema>;
 export type AssetToneAnalysisProfile = z.infer<typeof AssetToneAnalysisProfileSchema>;
 export type AssetToneAnalysisInfo = z.infer<typeof AssetToneAnalysisInfoSchema>;
+export type AssetToneAnalysisScores = z.infer<typeof AssetToneAnalysisScoresSchema>;
+export type AssetToneScoreAdjustment = z.infer<typeof AssetToneScoreAdjustmentSchema>;
 export type AssetRecord = z.infer<typeof AssetRecordSchema>;
 export type AssetDetailResponse = z.infer<typeof AssetDetailResponseSchema>;
 export type AssetListResponse = z.infer<typeof AssetListResponseSchema>;
@@ -612,5 +707,12 @@ export type ComboListResponse = z.infer<typeof ComboListResponseSchema>;
 export type CreateComboInput = z.infer<typeof CreateComboInputSchema>;
 export type ComboVoteInput = z.infer<typeof ComboVoteInputSchema>;
 export type ComboVoteByAssetsInput = z.infer<typeof ComboVoteByAssetsInputSchema>;
+export type ToneReviewTargetType = z.infer<typeof ToneReviewTargetTypeSchema>;
+export type ToneReviewSource = z.infer<typeof ToneReviewSourceSchema>;
+export type ToneReviewInput = z.infer<typeof ToneReviewInputSchema>;
+export type ToneReviewRecord = z.infer<typeof ToneReviewRecordSchema>;
+export type ToneReviewResponse = z.infer<typeof ToneReviewResponseSchema>;
+export type ToneReviewListQuery = z.infer<typeof ToneReviewListQuerySchema>;
+export type ToneReviewListResponse = z.infer<typeof ToneReviewListResponseSchema>;
 export type ComboDeleteResponse = z.infer<typeof ComboDeleteResponseSchema>;
 export type PublicRandomComboResponse = z.infer<typeof PublicRandomComboResponseSchema>;

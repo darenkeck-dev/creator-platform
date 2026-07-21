@@ -11,6 +11,7 @@ import { ObservabilityStack } from "../lib/observability-stack";
 import { ProcessingStack } from "../lib/processing-stack";
 import { StorageStack } from "../lib/storage-stack";
 import { StreamingStack } from "../lib/streaming-stack";
+import { VectorStack } from "../lib/vector-stack";
 import { normalizeStage, withStageSuffix } from "../lib/stage";
 
 const app = new cdk.App();
@@ -37,6 +38,12 @@ new DataStack(app, "MediaManagerDataStack", {
   env: stackEnv,
   stage,
   stackName: withStageSuffix("MediaManagerDataStack", stage),
+});
+
+new VectorStack(app, "MediaManagerVectorStack", {
+  env: stackEnv,
+  stage,
+  stackName: withStageSuffix("MediaManagerVectorStack", stage),
 });
 
 new StorageStack(app, "MediaManagerStorageStack", {

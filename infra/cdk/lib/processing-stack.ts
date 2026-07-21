@@ -226,7 +226,7 @@ export class ProcessingStack extends Stack {
 
     toneAnalysisWorker.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: ["dynamodb:GetItem", "dynamodb:UpdateItem"],
+        actions: ["dynamodb:GetItem", "dynamodb:UpdateItem", "dynamodb:Query"],
         resources: [assetsTableArn],
       })
     );

@@ -10,6 +10,7 @@ import {
   MultipartCompleteInputSchema,
   JobPreviewInputSchema,
   JobRecordSchema,
+  ToneReviewInputSchema,
 } from "@media-manager/contracts";
 
 describe("contracts", () => {
@@ -142,6 +143,26 @@ describe("contracts", () => {
 
     expect(comboParsed.success).toBe(true);
     expect(voteParsed.success).toBe(true);
+  });
+
+  it("supports tone review payloads", () => {
+    const parsed = ToneReviewInputSchema.safeParse({
+      targetType: "combo",
+      targetId: "combo-1",
+      reviewSource: "curator",
+      taxonomyVersion: "tone-taxonomy/v2",
+      keywords: ["warm", "calm"],
+      scores: {
+        valence: 0.5,
+        arousal: -0.25,
+      },
+      modelScoresSnapshot: {
+        valence: 0.25,
+      },
+      notes: "Good fit.",
+    });
+
+    expect(parsed.success).toBe(true);
   });
 
   it("supports generic asset job preview and progress records", () => {

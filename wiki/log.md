@@ -1,5 +1,109 @@
 # Wiki Log
 
+## [2026-07-21] foundation | S3 Vectors asset index
+
+- Selected S3 Vectors for the MVP and fixed the initial `combo-selection/v1` behavior: controlled-route rollout, five recent combo exclusions, three recent audio exclusions, and distance-weighted top-five sampling.
+- Added the canonical `asset-tone-vector/v1` contract and ten-dimension ordering to `tone-core`, including tested sparse-adjustment overlay semantics.
+- Added `MediaManagerVectorStack` with a retained S3 vector bucket, retained 10-dimensional Euclidean `asset-tone-v1` index, stage-aware outputs, deployment commands, and synthesis tests.
+- Kept DynamoDB authoritative; vector deployment, lifecycle synchronization, reconciliation, and public selection remain pending.
+
+## [2026-07-20] planning | MVP release plan
+
+- Added `MVP_RELEASE_PLAN.md` with release gates for the 20-audio/20-video corpus, curator calibration, public combo reviews, `darenkeck.com` integration, playback validation, privacy, operations, and rollback.
+- Defined a vector-database architecture that indexes effective source asset tone vectors only, generates candidate pairs dynamically, performs global tone-search restarts, and continues with nearest-neighbor walks requiring new audio while allowing the same video.
+- Kept combination precomputation, combination vector indexing, live learning from public reviews, free-text interpretation, accounts, and personalization outside the MVP.
+
+## [2026-07-20] ui | condensed status activity table
+
+- Moved the asset Activity Log into the collapsed Status Details disclosure.
+- Replaced stacked activity cards with a compact table for time, level, activity, source, and details, with horizontal overflow on narrow screens.
+
+## [2026-07-20] ui | asset playback placement
+
+- Moved the Playback card directly below Status on asset detail pages.
+
+## [2026-07-20] ui | simplified asset status details
+
+- Removed Depth from the asset Status card.
+- Moved Container, Root, MediaConvert Job, Tone Analysis Artifact, and Original into a collapsed Details disclosure below the primary status fields.
+- Reduced the primary Status grid to Status, Conversion, Tone Analysis, Type, and Visibility; all remaining operational metadata now lives under Details.
+- Renamed the vague Profile label to Conversion Profile.
+- Promoted the overall state into the card title (`Status: Ready`) and compacted Conversion, Tone Analysis, Type, Visibility, and the refresh action into the same responsive row when space allows.
+
+## [2026-07-20] ui | asset action ordering
+
+- Moved asset deletion to the far-right end of the header actions after Review, reprocessing, and Move.
+- Replaced the Delete text button with a separated, accessible trash icon using a subtle destructive treatment; the confirmation dialog remains unchanged.
+
+## [2026-07-20] ui | metadata-scoped asset editing
+
+- Renamed the asset `Editable Metadata` card to `Metadata` and moved Edit, Save Changes, and Leave Edit Mode controls into the card header.
+- Removed page-level metadata edit controls so edit mode is visually scoped to the fields it affects.
+
+## [2026-07-20] ui | asset review history and deep links
+
+- Added target-specific review history to the bottom of audio/video asset pages.
+- Added asset Review actions that open `/review?targetType=<audio|video>&assetId=<id>` and load the selected asset directly; review capture remains exclusive to the Review route.
+
+## [2026-07-20] ui | tone score dumbbell bars
+
+- Replaced asset tone score fill/delta bars with a single signed dumbbell track: hollow OpenAI marker, solid adjusted marker, and a colored connector showing direction and magnitude.
+- Removed the upper-right numeric score text; exact values remain available through marker tooltips and accessible labels.
+
+## [2026-07-20] behavior | keyword-only curator reviews
+
+- Removed review forms from asset and combo detail pages; review capture now exists only on the dedicated Review route.
+- Removed tone score sliders from audio, video, and combo review flows.
+- Added deterministic mappings from every review-picker keyword to production taxonomy descriptors; the API derives audio/video score vectors from keywords and ignores client-supplied scores.
+- Updated asset score bars to show OpenAI and curator delta as distinct color segments with a line at the original OpenAI endpoint.
+
+## [2026-07-20] fix | tone review transaction permission
+
+- Added the DynamoDB `ConditionCheckItem` permission required by transactional audio/video review writes; missing permission caused production submissions to return `500` before storing a review.
+- Added Lambda exception logging and preserved backend error detail through the web API proxy for future review-submission diagnostics.
+
+## [2026-07-15] feature | curator-adjusted asset tone scores
+
+- Preserved original OpenAI audio/video scores and added versioned materialized adjusted scores using OpenAI weight one plus one vote per taxonomy-compatible curator review.
+- Kept combo reviews isolated from source audio/video assets and rebuilt adjustments after both review submission and OpenAI reanalysis.
+- Added three-marker audio/video score sliders showing OpenAI, curator input, adjusted result, and delta, plus effective-score display on asset details.
+- Added a dry-run-first production review purge command, deleted all 21 existing reviews (all curator combo reviews), and verified zero review records remain.
+- Deployed `MediaManagerApiStack` and `MediaManagerProcessingStack`; public combo health returned `200` afterward. The authenticated web UI build passed locally but remains unpublished because this repo has no web deployment command.
+
+## [2026-07-10] bug | combo player end-state frame jump
+
+- Added playback watchlist item: combo video appears to jump frames when reaching the end. Debug ended/replay state, loop flags, pause-at-end behavior, and final sync/seek signals.
+
+## [2026-07-10] refactor | shared combo review surface
+
+- Added `packages/shared` `ComboToneReviewPlayer`, wrapping `ComboPlayer` with adaptive keyword selection, selected chips, submit, loading overlay, and overlaid Next.
+- Refactored Media Manager combo review mode to use the shared component; audio/video review remains in the web-specific workbench.
+- Kept submission app-owned via callback so Media Manager can submit authenticated curator reviews and `darenkeck.com` can later wire anonymous public reviews through a separate endpoint.
+
+## [2026-07-10] ui | review keyword picker
+
+- Replaced the Review page tone tree interaction with an adaptive five-keyword picker.
+- The initial option set is target-seeded random; each `>` advances using the latest selected keyword as a taxonomy anchor, preferring three adjacent leaf descriptors plus two random exploration descriptors.
+- Selected keyword chips remain removable at the bottom of the media area and review submit still appears after the descriptor threshold is met.
+
+## [2026-07-10] behavior | independent human review capture
+
+- Changed dedicated Review and detail-page review panels so audio, video, and combo review inputs start with empty keywords and neutral zero scores.
+- Stopped UI review submissions from sending `modelScoresSnapshot`; extracted OpenAI tone remains available from asset records and visible on asset detail pages.
+- Preserved combo review `sourceVideoAssetId` and `sourceAudioAssetId` so source media and current source tone analyses can be reloaded when needed without caching source values on review records.
+
+## [2026-07-10] behavior | review listing split
+
+- Added `targetId` support to `GET /tone-reviews` so the API can query reviews for a specific audio/video/combo target partition.
+- Updated `/review` to show only reviews for the currently loaded target at the bottom of the page.
+- Converted `/combos` into the all-combo-review index, resolving source asset titles when available and linking records back into `/review`.
+
+## [2026-07-10] fix | expired auth handling
+
+- Expanded `apps/web` auth middleware coverage to Review, Combos, Combo detail, and same-origin API proxy routes.
+- Middleware now detects expired JWT cookies, clears them, redirects page requests to login with the original path preserved, and returns JSON `401` for API calls instead of allowing server components to throw `Missing auth token`.
+- Set Cognito web client ID/access token validity to 12 hours in `MediaManagerAuthStack`; silent refresh remains future work because the app does not persist refresh tokens.
+
 ## [2026-04-10] bootstrap | wiki initialized
 
 - Created `wiki/` synthesized context layer with cross-linked pages.
@@ -401,3 +505,88 @@
 
 - Tightened move dialog padding, centered folder row controls vertically, and added nested guide indentation for expanded folder levels.
 - Verified with `bun run --cwd apps/web typecheck` and `bun run --cwd apps/web build`.
+
+## [2026-07-10] feature | tone review capture first slice
+
+- Added shared tone review contracts for `audio`, `video`, and `combo` targets with human keywords, signed tone scores, and optional notes.
+- Added authenticated `POST /tone-reviews` API handling in the combos Lambda; it validates target ownership/type and stores target-centered review records in DynamoDB without raw reviewer email.
+- Added a reusable Media Manager tone review panel and wired it into standalone audio/video asset pages and combo detail pages.
+- Combo detail pages can submit reviews for the combo, just the video source, or just the audio source.
+- Added `TONE_REVIEW_PLAN.md` for the layered base mapping, human calibration, and local personalization approach.
+- Verified with `bun run typecheck`, `bun run --cwd infra/cdk test`, `bun run --cwd infra/cdk build:lambda`, and `bun run build`.
+
+## [2026-07-10] web | dedicated review tab
+
+- Added `/review` as a Media Manager tab for combo-first tone review work.
+- The review page loads a saved combo with playback, a sidebar queue of combos, and target switching between combo, video, and audio.
+- Added keyword chip selection while keeping tone score sliders and `POST /tone-reviews` submission wiring available.
+
+## [2026-07-10] web | random review queue and review listing
+
+- Updated `/review` to default to `GET /public/combos/random` when no combo id is selected, matching the public site style of random combo review.
+- The review workbench starts combo playback muted/autoplay and sends source video/audio asset ids with combo review submissions.
+- Added `GET /tone-reviews` contracts, API route, web proxy/helper, and a paginated reviewed-combo sidebar backed by the review-source GSI.
+- Verified with `bun run typecheck`, `bun run --cwd infra/cdk test`, `bun run --cwd infra/cdk build:lambda`, and `bun run build`.
+
+## [2026-07-10] deploy | api tone review routes
+
+- Deployed `MediaManagerApiStack` with tone review route updates.
+- CloudFormation created `GET /tone-reviews` and `POST /tone-reviews` API Gateway routes and updated the API Lambda functions.
+- API output remains `https://adenvmeabg.execute-api.us-west-2.amazonaws.com`.
+
+## [2026-07-10] web | review keyword tree and slider guidance
+
+- Updated the Review workbench keyword input from flat extracted chips to a 3-level broad-to-specific emotion tree covering joy, calm, intimacy, sadness, fear, anger, power, mystery, beauty, strangeness, and menace regions.
+- Added hover/focus descriptions to keyword tree nodes and tone score slider info icons so reviewers can understand exactly what each descriptor applies to.
+- Model-extracted keywords remain available as optional suggestions, while human-selected keywords start empty for each target.
+
+## [2026-07-10] web | review media target switching
+
+- Refactored `/review` around one active review target at a time: random combo by default, or a fresh random ready audio/video asset when switching target type.
+- Moved the Combo/Audio/Video switch into the reviewer card header next to the target title.
+- Added a large framed review media surface: combos reuse shared `ComboPlayer` background mode, videos use the same cover/center/scale treatment, and audio gets a focused visual panel.
+- Muted-first playback remains the default; combo mode uses the shared darenkeck-style overlay mute button, and single audio/video modes use a matching overlay toggle.
+
+## [2026-07-10] web/api | review header switch and full asset random pool
+
+- Moved the Review Combo/Audio/Video switch into the page header, aligned right of the `Review` title.
+- Added `scope=all` support to `GET /assets` so authenticated review asset selection can draw from all owned media, including assets nested inside folders.
+- Updated random audio/video review selection to use the full owned asset pool and avoid the misleading `No ready video assets` state when reviewable nested videos exist.
+- Verified with `bun run typecheck`, `bun run --cwd infra/cdk test`, `bun run --cwd infra/cdk build:lambda`, and `bun run build`.
+
+## [2026-07-10] web | review single asset playback
+
+- Updated Review audio/video modes to render the existing asset detail `AssetPlayer` instead of the custom review media surface.
+- Combo mode still uses shared `ComboPlayer` background mode with the darenkeck-style overlay mute control.
+- Tightened random video review selection to choose videos that the normal asset detail player can render (`status=ready` with HLS stream metadata).
+
+## [2026-07-10] deploy | api asset scope all
+
+- Deployed `MediaManagerApiStack` with the `GET /assets?scope=all` Lambda update for review audio/video random selection.
+- CloudFormation updated `AssetsFunction`; API output remains `https://adenvmeabg.execute-api.us-west-2.amazonaws.com`.
+
+## [2026-07-10] web | review full-width player layout
+
+- Updated the Review workbench to use a full-width media player/reviewer flow instead of a two-column layout.
+- Moved Review Queue and Reviewed Combos into below-player sections.
+- Raised the shared combo background mute toggle z-index to match the darenkeck overlay behavior so it remains visible in the Review page.
+
+## [2026-07-10] web | review next target control
+
+- Added a `Next` button to the Review header that reloads the current target type and fetches a fresh random combo, audio asset, or video asset.
+
+## [2026-07-10] shared | combo mute control anchored to player
+
+- Updated the shared background `ComboPlayer` built-in mute control to use the darenkeck visual treatment while anchoring it absolutely inside the player instead of fixing it to the viewport.
+
+## [2026-07-10] shared | combo pause and replay overlay
+
+- Added background `ComboPlayer` click-to-pause behavior while playing.
+- When paused or ended, the player dims the video and shows a centered play button; clicking play resumes from the current position when paused or restarts from the beginning after timeline end.
+
+## [2026-07-10] web | compact tone selection overlay
+
+- Reduced the Review tone roots from eleven regions to six compact roots: Positive, Calm/Tender, Sad/Longing, Fear/Suspense, Anger/Tension, and Power/Strange/Dark.
+- Moved tone keyword selection onto the media surface as a transparent overlay with rows of buttons.
+- Root buttons switch active branches; child nodes with children navigate deeper; final leaf keywords toggle selection without showing separate back, clear, selected-chip, or model-suggestion sections.
+- Removed the tone overlay background container; tone buttons now stand alone, default to no root selected, and sit alongside the combo mute/unmute control.

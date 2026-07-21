@@ -12,7 +12,6 @@ type PageProps = {
     id: string;
   }>;
 };
-
 export default async function ComboDetailPage({ params }: PageProps) {
   const { id } = await params;
   if (!id) {
@@ -43,12 +42,14 @@ export default async function ComboDetailPage({ params }: PageProps) {
   ]);
 
   return (
-    <ComboPlayer
-      audioSrc={audioPlayback.playbackUrl}
-      audioTitle={audioAsset.title}
-      comboId={combo.id}
-      videoSrc={videoPlayback.playbackUrl}
-      videoTitle={videoAsset.title}
-    />
+    <div className="space-y-6">
+      <ComboPlayer
+        audioSrc={audioPlayback.playbackUrl}
+        audioTitle={audioAsset.title}
+        comboId={combo.id}
+        videoSrc={videoPlayback.playbackUrl}
+        videoTitle={videoAsset.title}
+      />
+    </div>
   );
 }

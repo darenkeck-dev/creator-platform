@@ -8,6 +8,7 @@ import {
   PutCommand,
   QueryCommand,
   ScanCommand,
+  TransactWriteCommand,
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 
@@ -83,7 +84,14 @@ function comboItem(id: string, overrides?: Record<string, unknown>) {
 
 function stubSend(
   impl: (
-    command: GetCommand | PutCommand | QueryCommand | UpdateCommand | DeleteCommand | ScanCommand
+    command:
+      | GetCommand
+      | PutCommand
+      | QueryCommand
+      | UpdateCommand
+      | DeleteCommand
+      | ScanCommand
+      | TransactWriteCommand
   ) => Promise<Record<string, unknown>>
 ) {
   DynamoDBDocumentClient.prototype.send = async function (command: unknown) {
@@ -93,7 +101,8 @@ function stubSend(
       !(command instanceof QueryCommand) &&
       !(command instanceof UpdateCommand) &&
       !(command instanceof DeleteCommand) &&
-      !(command instanceof ScanCommand)
+      !(command instanceof ScanCommand) &&
+      !(command instanceof TransactWriteCommand)
     ) {
       throw new Error("Unexpected command");
     }
@@ -189,6 +198,209 @@ describe("api-combos lambda", () => {
 
     expect(result.statusCode).toBe(200);
     expect(result.body).toContain('"userVote":"up"');
+  });
+
+  it("stores tone reviews for owned combos", async () => {
+    stubSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return { Item: comboItem("combo-1") };
+      }
+
+      if (command instanceof PutCommand) {
+        const item = command.input.Item as Record<string, unknown>;
+        expect(item.pk).toBe("TONE_REVIEW#combo#combo-1");
+        expect(String(item.sk)).toStartWith("REVIEW#");
+        expect(item.ownerEmail).toBeUndefined();
+        expect(item.targetType).toBe("combo");
+        expect(item.targetId).toBe("combo-1");
+        expect(item.reviewSource).toBe("curator");
+        expect(item.scores).toBeUndefined();
+        expect(item.taxonomyVersion).toBe("tone-taxonomy/v2");
+        expect(item.keywords).toEqual(["warm", "calm"]);
+        return {};
+      }
+
+      throw new Error("Unexpected command sequence");
+    });
+
+    const result = await handler(
+      withOwner({
+        requestContext: { http: { method: "POST" }, routeKey: "POST /tone-reviews" },
+        body: JSON.stringify({
+          targetType: "combo",
+          targetId: "combo-1",
+          reviewSource: "curator",
+          taxonomyVersion: "tone-taxonomy/v2",
+          keywords: ["warm", "calm"],
+          scores: { valence: 0.5 },
+        }),
+      })
+    );
+
+    expect(result.statusCode).toBe(201);
+    expect(result.body).toContain('"targetType":"combo"');
+  });
+
+  it("materializes owned audio reviews and enforces curator provenance", async () => {
+    const asset = {
+      ...audioAsset("audio-1"),
+      toneAnalysis: {
+        status: "ready",
+        profile: "openai-primary-v1",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        toneTaxonomyVersion: "tone-taxonomy/v2",
+        scores: { valence: 0.6 },
+      },
+    };
+    let storedReview: Record<string, unknown> | undefined;
+    let adjustmentUpdate: UpdateCommand | undefined;
+
+    stubSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return { Item: asset };
+      }
+      if (command instanceof TransactWriteCommand) {
+        storedReview = command.input.TransactItems?.find((item) => item.Put)?.Put?.Item as Record<
+          string,
+          unknown
+        >;
+        expect(
+          command.input.TransactItems?.[0]?.ConditionCheck?.ExpressionAttributeValues
+        ).toMatchObject({
+          ":ready": "ready",
+          ":scores": { valence: 0.6 },
+          ":taxonomyVersion": "tone-taxonomy/v2",
+        });
+        return {};
+      }
+      if (command instanceof QueryCommand) {
+        return { Items: storedReview ? [storedReview] : [] };
+      }
+      if (command instanceof UpdateCommand) {
+        adjustmentUpdate = command;
+        return {};
+      }
+      throw new Error("Unexpected command sequence");
+    });
+
+    const result = await handler(
+      withOwner({
+        requestContext: { http: { method: "POST" }, routeKey: "POST /tone-reviews" },
+        body: JSON.stringify({
+          targetType: "audio",
+          targetId: "audio-1",
+          reviewSource: "anonymous",
+          taxonomyVersion: "tone-taxonomy/v1",
+          keywords: ["calm"],
+          scores: { valence: 0 },
+        }),
+      })
+    );
+
+    expect(result.statusCode).toBe(201);
+    expect(storedReview?.reviewSource).toBe("curator");
+    expect(storedReview?.taxonomyVersion).toBe("tone-taxonomy/v2");
+    expect(storedReview?.scores).toEqual({ valence: 0.65, arousal: -0.75, tension: -0.7 });
+    expect(adjustmentUpdate?.input.ExpressionAttributeValues?.[":adjustedScores"]).toEqual({
+      valence: 0.625,
+    });
+  });
+
+  it("rejects audio reviews without completed OpenAI scores", async () => {
+    stubSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return { Item: audioAsset("audio-1") };
+      }
+      throw new Error("Should not store a review without an OpenAI baseline");
+    });
+
+    const result = await handler(
+      withOwner({
+        requestContext: { http: { method: "POST" }, routeKey: "POST /tone-reviews" },
+        body: JSON.stringify({
+          targetType: "audio",
+          targetId: "audio-1",
+          keywords: ["calm"],
+          scores: { valence: 0 },
+        }),
+      })
+    );
+
+    expect(result.statusCode).toBe(409);
+  });
+
+  it("lists combo tone reviews", async () => {
+    stubSend(async (command) => {
+      if (command instanceof QueryCommand) {
+        expect(command.input.IndexName).toBe("AssetByCreatedAt");
+        expect(command.input.ExpressionAttributeValues?.[":pk"]).toBe("TONE_REVIEW#curator");
+        expect(command.input.ExpressionAttributeValues?.[":targetType"]).toBe("combo");
+        return {
+          Items: [
+            {
+              id: "tone_review_1",
+              schemaVersion: 1,
+              targetType: "combo",
+              targetId: "combo-1",
+              sourceVideoAssetId: "video-1",
+              sourceAudioAssetId: "audio-1",
+              reviewSource: "curator",
+              keywords: ["warm"],
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+        };
+      }
+
+      throw new Error("Unexpected command sequence");
+    });
+
+    const result = await handler(
+      withOwner({
+        requestContext: { http: { method: "GET" }, routeKey: "GET /tone-reviews" },
+        queryStringParameters: { targetType: "combo", limit: "10" },
+      })
+    );
+
+    expect(result.statusCode).toBe(200);
+    expect(result.body).toContain('"targetId":"combo-1"');
+  });
+
+  it("lists tone reviews for a specific target", async () => {
+    stubSend(async (command) => {
+      if (command instanceof QueryCommand) {
+        expect(command.input.IndexName).toBeUndefined();
+        expect(command.input.KeyConditionExpression).toBe("pk = :pk");
+        expect(command.input.ExpressionAttributeValues?.[":pk"]).toBe("TONE_REVIEW#video#video-1");
+        return {
+          Items: [
+            {
+              id: "tone_review_1",
+              schemaVersion: 1,
+              targetType: "video",
+              targetId: "video-1",
+              reviewSource: "curator",
+              keywords: ["tense"],
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+        };
+      }
+
+      throw new Error("Unexpected command sequence");
+    });
+
+    const result = await handler(
+      withOwner({
+        requestContext: { http: { method: "GET" }, routeKey: "GET /tone-reviews" },
+        queryStringParameters: { targetType: "video", targetId: "video-1", limit: "10" },
+      })
+    );
+
+    expect(result.statusCode).toBe(200);
+    expect(result.body).toContain('"targetId":"video-1"');
   });
 
   it("keeps vote idempotent for repeated same action", async () => {

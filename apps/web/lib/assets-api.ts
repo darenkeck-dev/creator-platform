@@ -18,6 +18,8 @@ import {
   JobDetailResponseSchema,
   JobPreviewInputSchema,
   JobPreviewResponseSchema,
+  ToneReviewInputSchema,
+  ToneReviewResponseSchema,
   AssetPlaybackUrlResponseSchema,
   MultipartAbortInputSchema,
   MultipartAbortResponseSchema,
@@ -26,8 +28,11 @@ import {
   MultipartInitResponseSchema,
   MultipartSignInputSchema,
   MultipartSignResponseSchema,
+  PublicRandomComboResponseSchema,
   AssetUploadUrlInputSchema,
   AssetUploadUrlResponseSchema,
+  ToneReviewListQuerySchema,
+  ToneReviewListResponseSchema,
   UpdateAssetInputSchema,
   type MultipartAbortInput,
   type MultipartAbortResponse,
@@ -58,6 +63,11 @@ import {
   type JobDetailResponse,
   type JobPreviewInput,
   type JobPreviewResponse,
+  type PublicRandomComboResponse,
+  type ToneReviewListQuery,
+  type ToneReviewListResponse,
+  type ToneReviewInput,
+  type ToneReviewResponse,
   type UpdateAssetInput,
 } from "@media-manager/contracts";
 import { cookies } from "next/headers";
@@ -92,6 +102,7 @@ type AssetListFilters = {
   origin?: "uploaded" | "generated" | "derived" | "manual";
   facet?: string;
   containerId?: string;
+  scope?: "container" | "all";
   sort?: "newest" | "oldest";
 };
 
@@ -110,6 +121,9 @@ export async function fetchAssetsFromApi(
   }
   if (filters.containerId) {
     query.set("containerId", filters.containerId);
+  }
+  if (filters.scope) {
+    query.set("scope", filters.scope);
   }
   if (filters.sort) {
     query.set("sort", filters.sort);
@@ -404,6 +418,68 @@ export async function fetchJobFromApi(id: string): Promise<JobDetailResponse> {
   const parsed = JobDetailResponseSchema.safeParse(json);
   if (!parsed.success) {
     throw new Error("Job detail response failed validation");
+  }
+  return parsed.data;
+}
+
+export async function submitToneReviewInApi(input: ToneReviewInput): Promise<ToneReviewResponse> {
+  const parsedInput = ToneReviewInputSchema.parse(input);
+  const response = await fetch(`${getApiBaseUrl()}/tone-reviews`, {
+    method: "POST",
+    headers: {
+      authorization: await getAuthHeader(),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(parsedInput),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const errorBody = (await response.json().catch(() => null)) as { message?: unknown } | null;
+    const detail = typeof errorBody?.message === "string" ? `: ${errorBody.message}` : "";
+    throw new Error(`Failed to submit tone review: ${response.status}${detail}`);
+  }
+
+  const json = (await response.json()) as unknown;
+  const parsed = ToneReviewResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new Error("Tone review response failed validation");
+  }
+  return parsed.data;
+}
+
+export async function listToneReviewsFromApi(
+  input: Partial<ToneReviewListQuery> = {}
+): Promise<ToneReviewListResponse> {
+  const parsedInput = ToneReviewListQuerySchema.parse(input);
+  const query = new URLSearchParams();
+  if (parsedInput.targetType) {
+    query.set("targetType", parsedInput.targetType);
+  }
+  if (parsedInput.targetId) {
+    query.set("targetId", parsedInput.targetId);
+  }
+  if (parsedInput.cursor) {
+    query.set("cursor", parsedInput.cursor);
+  }
+  query.set("limit", String(parsedInput.limit));
+
+  const response = await fetch(`${getApiBaseUrl()}/tone-reviews?${query.toString()}`, {
+    method: "GET",
+    headers: {
+      authorization: await getAuthHeader(),
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to list tone reviews: ${response.status}`);
+  }
+
+  const json = (await response.json()) as unknown;
+  const parsed = ToneReviewListResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new Error("Tone review list response failed validation");
   }
   return parsed.data;
 }
@@ -790,4 +866,71 @@ export async function deleteComboInApi(id: string): Promise<ComboDeleteResponse>
   }
 
   return parsed.data;
+}
+
+export async function fetchRandomPublicComboFromApi(
+  previousAudioAssetId?: string
+): Promise<PublicRandomComboResponse | null> {
+  const query = previousAudioAssetId
+    ? `?previousAudioAssetId=${encodeURIComponent(previousAudioAssetId)}`
+    : "";
+  const response = await fetch(`${getApiBaseUrl()}/public/combos/random${query}`, {
+    method: "GET",
+    cache: "no-store",
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch random combo: ${response.status}`);
+  }
+
+  const json = (await response.json()) as unknown;
+  const parsed = PublicRandomComboResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new Error("Random combo response failed validation");
+  }
+  return parsed.data;
+}
+
+export async function fetchRandomReviewAssetFromApi(
+  type: "audio" | "video",
+  excludeAssetId?: string
+): Promise<AssetDetailResponse["asset"] | null> {
+  const assets = (await fetchAssetsFromApi({ type, scope: "all" })).filter((asset) => {
+    if (asset.status === "draft" || asset.status === "error") {
+      return false;
+    }
+
+    if (
+      asset.toneAnalysis?.status !== "ready" ||
+      !asset.toneAnalysis.scores ||
+      !asset.toneAnalysis.toneTaxonomyVersion
+    ) {
+      return false;
+    }
+
+    if (type === "video") {
+      return asset.status === "ready" && Boolean(asset.stream?.hlsMasterUrl);
+    }
+
+    return (
+      asset.status === "ready" ||
+      asset.status === "uploaded" ||
+      asset.conversion?.status === "ready" ||
+      asset.conversion?.status === "passthrough_ready"
+    );
+  });
+  if (assets.length === 0) {
+    return null;
+  }
+
+  const candidates =
+    excludeAssetId && assets.length > 1
+      ? assets.filter((asset) => asset.id !== excludeAssetId)
+      : assets;
+
+  return candidates[Math.floor(Math.random() * candidates.length)] ?? null;
 }

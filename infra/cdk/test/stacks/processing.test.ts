@@ -69,6 +69,7 @@ describe("processing stack tone analysis", () => {
 
     expect(actions).toContain("ssm:GetParameter");
     expect(actions).toContain("s3:PutObject");
+    expect(actions?.flat()).toContain("dynamodb:Query");
   });
 
   it("adds a bulk actions worker fed by the API-owned queue", () => {

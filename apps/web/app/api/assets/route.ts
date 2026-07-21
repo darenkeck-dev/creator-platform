@@ -19,6 +19,7 @@ export async function GET(request: Request) {
   const rawOrigin = url.searchParams.get("origin") ?? undefined;
   const rawFacet = url.searchParams.get("facet") ?? undefined;
   const rawContainerId = url.searchParams.get("containerId") ?? undefined;
+  const rawScope = url.searchParams.get("scope") ?? undefined;
   const rawSort = url.searchParams.get("sort") ?? "newest";
 
   const parsedType = rawType ? AssetTypeSchema.safeParse(rawType) : { success: true as const };
@@ -29,8 +30,9 @@ export async function GET(request: Request) {
     ? AssetTagFacetSchema.safeParse(rawFacet)
     : { success: true as const };
   const sort = rawSort === "oldest" ? "oldest" : rawSort === "newest" ? "newest" : null;
+  const scope = rawScope === undefined || rawScope === "container" || rawScope === "all" ? rawScope : null;
 
-  if (!parsedType.success || !parsedOrigin.success || !parsedFacet.success || !sort) {
+  if (!parsedType.success || !parsedOrigin.success || !parsedFacet.success || !sort || scope === null) {
     return NextResponse.json({ message: "Invalid query parameters" }, { status: 400 });
   }
 
@@ -39,6 +41,7 @@ export async function GET(request: Request) {
     origin: rawOrigin as "uploaded" | "generated" | "derived" | "manual" | undefined,
     facet: rawFacet,
     containerId: rawContainerId,
+    scope,
     sort,
   });
   const response: AssetListResponse = AssetListResponseSchema.parse({ assets });

@@ -81,4 +81,5 @@ export type AssetDetailResponse = {
 export * from "./combo-playback";
 export * from "./combo-player-types";
 export * from "./combo-player";
+export * from "./combo-tone-review-player";
 export * from "./browser-env";

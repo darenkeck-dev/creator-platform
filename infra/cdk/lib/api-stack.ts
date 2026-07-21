@@ -125,6 +125,7 @@ export class ApiStack extends Stack {
         "dynamodb:UpdateItem",
         "dynamodb:DeleteItem",
         "dynamodb:Query",
+        "dynamodb:ConditionCheckItem",
       ],
       resources: [assetsTableArn, `${assetsTableArn}/index/*`],
     });
@@ -411,6 +412,22 @@ export class ApiStack extends Stack {
     new apigwv2.CfnRoute(this, "PostCombosVoteByAssetsRoute", {
       apiId: api.ref,
       routeKey: "POST /combos/vote",
+      target: `integrations/${combosIntegration.ref}`,
+      authorizationType: "JWT",
+      authorizerId: authorizer.ref,
+    });
+
+    new apigwv2.CfnRoute(this, "PostToneReviewsRoute", {
+      apiId: api.ref,
+      routeKey: "POST /tone-reviews",
+      target: `integrations/${combosIntegration.ref}`,
+      authorizationType: "JWT",
+      authorizerId: authorizer.ref,
+    });
+
+    new apigwv2.CfnRoute(this, "GetToneReviewsRoute", {
+      apiId: api.ref,
+      routeKey: "GET /tone-reviews",
       target: `integrations/${combosIntegration.ref}`,
       authorizationType: "JWT",
       authorizerId: authorizer.ref,
