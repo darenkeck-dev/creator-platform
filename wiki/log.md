@@ -1,5 +1,57 @@
 # Wiki Log
 
+## [2026-07-20] ui | asset playback placement
+
+- Moved the Playback card directly below Status on asset detail pages.
+
+## [2026-07-20] ui | simplified asset status details
+
+- Removed Depth from the asset Status card.
+- Moved Container, Root, MediaConvert Job, Tone Analysis Artifact, and Original into a collapsed Details disclosure below the primary status fields.
+- Reduced the primary Status grid to Status, Conversion, Tone Analysis, Type, and Visibility; all remaining operational metadata now lives under Details.
+- Renamed the vague Profile label to Conversion Profile.
+- Promoted the overall state into the card title (`Status: Ready`) and compacted Conversion, Tone Analysis, Type, Visibility, and the refresh action into the same responsive row when space allows.
+
+## [2026-07-20] ui | asset action ordering
+
+- Moved asset deletion to the far-right end of the header actions after Review, reprocessing, and Move.
+- Replaced the Delete text button with a separated, accessible trash icon using a subtle destructive treatment; the confirmation dialog remains unchanged.
+
+## [2026-07-20] ui | metadata-scoped asset editing
+
+- Renamed the asset `Editable Metadata` card to `Metadata` and moved Edit, Save Changes, and Leave Edit Mode controls into the card header.
+- Removed page-level metadata edit controls so edit mode is visually scoped to the fields it affects.
+
+## [2026-07-20] ui | asset review history and deep links
+
+- Added target-specific review history to the bottom of audio/video asset pages.
+- Added asset Review actions that open `/review?targetType=<audio|video>&assetId=<id>` and load the selected asset directly; review capture remains exclusive to the Review route.
+
+## [2026-07-20] ui | tone score dumbbell bars
+
+- Replaced asset tone score fill/delta bars with a single signed dumbbell track: hollow OpenAI marker, solid adjusted marker, and a colored connector showing direction and magnitude.
+- Removed the upper-right numeric score text; exact values remain available through marker tooltips and accessible labels.
+
+## [2026-07-20] behavior | keyword-only curator reviews
+
+- Removed review forms from asset and combo detail pages; review capture now exists only on the dedicated Review route.
+- Removed tone score sliders from audio, video, and combo review flows.
+- Added deterministic mappings from every review-picker keyword to production taxonomy descriptors; the API derives audio/video score vectors from keywords and ignores client-supplied scores.
+- Updated asset score bars to show OpenAI and curator delta as distinct color segments with a line at the original OpenAI endpoint.
+
+## [2026-07-20] fix | tone review transaction permission
+
+- Added the DynamoDB `ConditionCheckItem` permission required by transactional audio/video review writes; missing permission caused production submissions to return `500` before storing a review.
+- Added Lambda exception logging and preserved backend error detail through the web API proxy for future review-submission diagnostics.
+
+## [2026-07-15] feature | curator-adjusted asset tone scores
+
+- Preserved original OpenAI audio/video scores and added versioned materialized adjusted scores using OpenAI weight one plus one vote per taxonomy-compatible curator review.
+- Kept combo reviews isolated from source audio/video assets and rebuilt adjustments after both review submission and OpenAI reanalysis.
+- Added three-marker audio/video score sliders showing OpenAI, curator input, adjusted result, and delta, plus effective-score display on asset details.
+- Added a dry-run-first production review purge command, deleted all 21 existing reviews (all curator combo reviews), and verified zero review records remain.
+- Deployed `MediaManagerApiStack` and `MediaManagerProcessingStack`; public combo health returned `200` afterward. The authenticated web UI build passed locally but remains unpublished because this repo has no web deployment command.
+
 ## [2026-07-10] bug | combo player end-state frame jump
 
 - Added playback watchlist item: combo video appears to jump frames when reaching the end. Debug ended/replay state, loop flags, pause-at-end behavior, and final sync/seek signals.

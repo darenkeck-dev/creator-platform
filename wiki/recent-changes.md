@@ -93,5 +93,11 @@
 - Changed human review capture to start blank/neutral for audio, video, and combo targets; UI submissions no longer include `modelScoresSnapshot` from extracted source tone values.
 - Replaced the Review tone tree/fixed pager with an adaptive five-keyword picker: the initial set is random, then `>` generates three taxonomy-adjacent suggestions from the latest selection plus two random exploration suggestions.
 - Extracted combo playback plus tone keyword submission into shared `ComboToneReviewPlayer`; Media Manager combo review now uses it with an overlaid Next button while audio/video review stays app-local.
+- Added curator-adjusted audio/video tone scoring while preserving raw OpenAI scores: OpenAI and each curator review receive weight one, materialized adjustment metadata retains per-dimension sums/counts, and tone reanalysis rebuilds adjustments.
+- Added three-marker audio/video review sliders for OpenAI baseline, curator input, and live adjusted result with delta visualization; combo review scoring remains independent.
+- Reset all 21 existing production tone reviews (all were curator combo reviews) and added a dry-run-first production review purge command.
+- Restricted review capture to the dedicated Review page, removed detail-page review panels and all review score sliders, and made selected keywords the only curator input.
+- Added deterministic review-keyword aliases to production taxonomy descriptors so audio/video reviews derive partial score vectors server-side; client-provided review scores are ignored.
+- Updated asset tone bars to render OpenAI and curator delta as separate color segments with a marker at the OpenAI endpoint.
 
 Related: [Current State](current-state.md), [Open Issues](open-issues.md).

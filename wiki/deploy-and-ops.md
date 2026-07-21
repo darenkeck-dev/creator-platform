@@ -63,6 +63,8 @@ Migration note:
 - Tone analysis JSON is written to the derived bucket under `derived/<assetId>/tone/asset-analysis.json`; bundle artifact generation is deferred until `tone-core` owns bundle creation.
 - New tone analyses emit `tone-taxonomy/v2`; contracts accept both `tone-taxonomy/v1` and `tone-taxonomy/v2` so historical artifacts can still be read.
 - If older ready tone analyses are missing display fields on the asset record, run `bun run --cwd infra/cdk backfill:tone-analysis-display` first, then `bun run --cwd infra/cdk backfill:tone-analysis-display -- --apply` after reviewing the dry run.
+- Audio/video curator adjustment materialization requires the tone worker's DynamoDB `Query` permission, so deploy both API and processing stacks for adjustment changes.
+- To inspect tone reviews before a full reset, run `bun run --cwd infra/cdk purge:tone-reviews`. Permanently delete the reported production records only with `bun run --cwd infra/cdk purge:tone-reviews -- --apply --confirm-production`; the purge also clears materialized audio/video adjustments derived from deleted reviews.
 
 ## Known operational nits
 

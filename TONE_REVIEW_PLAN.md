@@ -16,6 +16,8 @@ Collect human tone feedback without turning review records into user-identity re
    - Used to tune the base mapping and evaluate model-vs-human tone gaps.
    - Reviews should not store raw email or user PII.
    - Store enough context to compare against the active taxonomy/model output at review time.
+   - Audio/video curator keywords are deterministically mapped through the versioned tone taxonomy, then combined with the untouched OpenAI score vector using `model-prior-mean/v1`: OpenAI has weight one and each curator review's derived vector has weight one.
+   - Combo reviews remain combo evaluation data and never adjust either source asset.
 
 3. **Personalization layer**
    - User-specific preference deltas live locally first, likely `localStorage`.
@@ -38,7 +40,7 @@ Reviews are target-centered and append-only:
   reviewerId?: "...", // optional pseudonymous/session hash, never raw email
   taxonomyVersion?: "tone-taxonomy/v2",
   keywords: ["warm", "intimate"],
-  scores: { warmth: 0.7, intimacy: 0.6 },
+  scores: { warmth: 0.7, intimacy: 0.6 }, // derived server-side from keywords
   modelScoresSnapshot?: { ... },
   baseScoresSnapshot?: { ... },
   notes?: "...",
@@ -87,3 +89,14 @@ finalVector = baseKeywordMapping + globalCalibrationDelta + localUserPreferenceD
 ```
 
 Keep server-side review capture focused on improving the shared base mapping until account-level personalization is explicitly needed.
+
+## Materialized Asset Adjustment
+
+- `toneAnalysis.scores` remains the original OpenAI output.
+- `toneAnalysis.adjustedScores` stores the current audio/video OpenAI-plus-curator vector.
+- `toneAnalysis.scoreAdjustment` records the algorithm version, curator sums/counts by dimension, and computation timestamps.
+- Review submission and OpenAI reprocessing rebuild the materialized adjustment from append-only curator reviews.
+- Effective asset scoring reads `adjustedScores ?? scores`.
+- Reviews are submitted only from the dedicated Review page using keywords; detail pages do not contain review controls.
+- The API ignores client score input and derives audio/video review scores from keyword aliases mapped into `tone-taxonomy/v2` descriptors.
+- Asset detail score bars show the OpenAI segment, a contrasting adjustment segment, and a marker at the original OpenAI endpoint.
