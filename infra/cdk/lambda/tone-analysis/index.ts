@@ -10,6 +10,7 @@ import { analyzeAudioFile, analyzeVideoFile, type AssetAnalysis } from "@media-m
 import { z } from "zod";
 import { upgradeAssetItemSchemaVersion } from "../shared/asset-record-versioning";
 import { appendAssetAuditLogEntry } from "../shared/asset-audit-log";
+import { materializeCuratorToneAdjustment } from "../shared/curator-tone-adjustment";
 
 type SqsEvent = {
   Records?: Array<{
@@ -414,6 +415,14 @@ async function handleObjectCreated(event: EventBridgeS3ObjectCreatedEvent): Prom
   try {
     const artifactInfo = await analyzeAsset(asset, bucketName, key);
     await updateToneAnalysis(tableName, asset.id, "ready", artifactInfo);
+    try {
+      await materializeCuratorToneAdjustment({ db, tableName, assetId: asset.id });
+    } catch (error) {
+      logWarn("Failed to materialize curator-adjusted tone scores", {
+        assetId: asset.id,
+        ...errorDetails(error),
+      });
+    }
     await appendAssetAuditLogEntry({
       db,
       tableName,

@@ -8,6 +8,7 @@ import {
   PutCommand,
   QueryCommand,
   ScanCommand,
+  TransactWriteCommand,
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 
@@ -83,7 +84,14 @@ function comboItem(id: string, overrides?: Record<string, unknown>) {
 
 function stubSend(
   impl: (
-    command: GetCommand | PutCommand | QueryCommand | UpdateCommand | DeleteCommand | ScanCommand
+    command:
+      | GetCommand
+      | PutCommand
+      | QueryCommand
+      | UpdateCommand
+      | DeleteCommand
+      | ScanCommand
+      | TransactWriteCommand
   ) => Promise<Record<string, unknown>>
 ) {
   DynamoDBDocumentClient.prototype.send = async function (command: unknown) {
@@ -93,7 +101,8 @@ function stubSend(
       !(command instanceof QueryCommand) &&
       !(command instanceof UpdateCommand) &&
       !(command instanceof DeleteCommand) &&
-      !(command instanceof ScanCommand)
+      !(command instanceof ScanCommand) &&
+      !(command instanceof TransactWriteCommand)
     ) {
       throw new Error("Unexpected command");
     }
@@ -205,6 +214,7 @@ describe("api-combos lambda", () => {
         expect(item.targetType).toBe("combo");
         expect(item.targetId).toBe("combo-1");
         expect(item.reviewSource).toBe("curator");
+        expect(item.scores).toBeUndefined();
         expect(item.taxonomyVersion).toBe("tone-taxonomy/v2");
         expect(item.keywords).toEqual(["warm", "calm"]);
         return {};
@@ -229,6 +239,94 @@ describe("api-combos lambda", () => {
 
     expect(result.statusCode).toBe(201);
     expect(result.body).toContain('"targetType":"combo"');
+  });
+
+  it("materializes owned audio reviews and enforces curator provenance", async () => {
+    const asset = {
+      ...audioAsset("audio-1"),
+      toneAnalysis: {
+        status: "ready",
+        profile: "openai-primary-v1",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        toneTaxonomyVersion: "tone-taxonomy/v2",
+        scores: { valence: 0.6 },
+      },
+    };
+    let storedReview: Record<string, unknown> | undefined;
+    let adjustmentUpdate: UpdateCommand | undefined;
+
+    stubSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return { Item: asset };
+      }
+      if (command instanceof TransactWriteCommand) {
+        storedReview = command.input.TransactItems?.find((item) => item.Put)?.Put?.Item as Record<
+          string,
+          unknown
+        >;
+        expect(
+          command.input.TransactItems?.[0]?.ConditionCheck?.ExpressionAttributeValues
+        ).toMatchObject({
+          ":ready": "ready",
+          ":scores": { valence: 0.6 },
+          ":taxonomyVersion": "tone-taxonomy/v2",
+        });
+        return {};
+      }
+      if (command instanceof QueryCommand) {
+        return { Items: storedReview ? [storedReview] : [] };
+      }
+      if (command instanceof UpdateCommand) {
+        adjustmentUpdate = command;
+        return {};
+      }
+      throw new Error("Unexpected command sequence");
+    });
+
+    const result = await handler(
+      withOwner({
+        requestContext: { http: { method: "POST" }, routeKey: "POST /tone-reviews" },
+        body: JSON.stringify({
+          targetType: "audio",
+          targetId: "audio-1",
+          reviewSource: "anonymous",
+          taxonomyVersion: "tone-taxonomy/v1",
+          keywords: ["calm"],
+          scores: { valence: 0 },
+        }),
+      })
+    );
+
+    expect(result.statusCode).toBe(201);
+    expect(storedReview?.reviewSource).toBe("curator");
+    expect(storedReview?.taxonomyVersion).toBe("tone-taxonomy/v2");
+    expect(storedReview?.scores).toEqual({ valence: 0.65, arousal: -0.75, tension: -0.7 });
+    expect(adjustmentUpdate?.input.ExpressionAttributeValues?.[":adjustedScores"]).toEqual({
+      valence: 0.625,
+    });
+  });
+
+  it("rejects audio reviews without completed OpenAI scores", async () => {
+    stubSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return { Item: audioAsset("audio-1") };
+      }
+      throw new Error("Should not store a review without an OpenAI baseline");
+    });
+
+    const result = await handler(
+      withOwner({
+        requestContext: { http: { method: "POST" }, routeKey: "POST /tone-reviews" },
+        body: JSON.stringify({
+          targetType: "audio",
+          targetId: "audio-1",
+          keywords: ["calm"],
+          scores: { valence: 0 },
+        }),
+      })
+    );
+
+    expect(result.statusCode).toBe(409);
   });
 
   it("lists combo tone reviews", async () => {

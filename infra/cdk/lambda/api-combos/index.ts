@@ -1,4 +1,4 @@
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import {
   DeleteCommand,
   DynamoDBDocumentClient,
@@ -6,6 +6,7 @@ import {
   PutCommand,
   QueryCommand,
   ScanCommand,
+  TransactWriteCommand,
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
@@ -30,10 +31,12 @@ import {
 } from "@media-manager/contracts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { reviewKeywordsToToneScores } from "@media-manager/tone-core";
 import {
   readAssetRecordWithUpgrade,
   safeReadAssetRecordWithUpgrade,
 } from "../shared/asset-record-versioning";
+import { materializeCuratorToneAdjustment } from "../shared/curator-tone-adjustment";
 
 type HttpEvent = {
   requestContext?: {
@@ -701,6 +704,7 @@ async function submitToneReview(event: HttpEvent): Promise<{ statusCode: number;
   }
 
   const input = parsedBody.data;
+  let targetAsset: z.infer<typeof AssetRecordSchema> | null = null;
   if (input.targetType === "combo") {
     const combo = await getComboById(tableName, input.targetId);
     if (!combo) {
@@ -732,31 +736,101 @@ async function submitToneReview(event: HttpEvent): Promise<{ statusCode: number;
     if (asset.ownerEmail !== ownerEmail || asset.type !== input.targetType) {
       return response(403, { message: "Forbidden" });
     }
+    if (
+      asset.toneAnalysis?.status !== "ready" ||
+      !asset.toneAnalysis.scores ||
+      !asset.toneAnalysis.toneTaxonomyVersion
+    ) {
+      return response(409, { message: "A completed OpenAI tone analysis is required" });
+    }
+    targetAsset = asset;
   }
 
   const now = new Date().toISOString();
+  const {
+    reviewSource: _submittedReviewSource,
+    taxonomyVersion: submittedTaxonomyVersion,
+    scores: _submittedScores,
+    ...reviewFields
+  } = input;
+  const keywords = [...new Set(input.keywords.map((keyword) => keyword.trim()).filter(Boolean))];
+  const keywordScores = targetAsset ? reviewKeywordsToToneScores(keywords) : undefined;
+  if (targetAsset && Object.keys(keywordScores ?? {}).length === 0) {
+    return response(400, { message: "At least one supported tone keyword is required" });
+  }
   const review = ToneReviewResponseSchema.shape.review.parse({
     id: `tone_review_${randomUUID()}`,
     schemaVersion: ASSET_SCHEMA_VERSION,
-    ...input,
-    keywords: [...new Set(input.keywords.map((keyword) => keyword.trim()).filter(Boolean))],
+    ...reviewFields,
+    reviewSource: "curator",
+    ...(targetAsset?.toneAnalysis?.toneTaxonomyVersion
+      ? { taxonomyVersion: targetAsset.toneAnalysis.toneTaxonomyVersion }
+      : !targetAsset && submittedTaxonomyVersion
+        ? { taxonomyVersion: submittedTaxonomyVersion }
+        : {}),
+    keywords,
+    ...(keywordScores ? { scores: keywordScores } : {}),
     ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
     createdAt: now,
     updatedAt: now,
   });
 
-  await db.send(
-    new PutCommand({
-      TableName: tableName,
-      Item: {
-        pk: `TONE_REVIEW#${review.targetType}#${review.targetId}`,
-        sk: `REVIEW#${review.createdAt}#${review.id}`,
-        gsi1pk: `TONE_REVIEW#${review.reviewSource}`,
-        gsi1sk: `${review.createdAt}#${review.id}`,
-        ...review,
-      },
-    })
-  );
+  const reviewItem = {
+    pk: `TONE_REVIEW#${review.targetType}#${review.targetId}`,
+    sk: `REVIEW#${review.createdAt}#${review.id}`,
+    gsi1pk: `TONE_REVIEW#${review.reviewSource}`,
+    gsi1sk: `${review.createdAt}#${review.id}`,
+    ...review,
+  };
+
+  if (targetAsset) {
+    try {
+      await db.send(
+        new TransactWriteCommand({
+          TransactItems: [
+            {
+              ConditionCheck: {
+                TableName: tableName,
+                Key: { pk: `ASSET#${targetAsset.id}`, sk: "META" },
+                ConditionExpression:
+                  "toneAnalysis.#status = :ready AND toneAnalysis.scores = :scores AND toneAnalysis.toneTaxonomyVersion = :taxonomyVersion",
+                ExpressionAttributeNames: { "#status": "status" },
+                ExpressionAttributeValues: {
+                  ":ready": "ready",
+                  ":scores": targetAsset.toneAnalysis!.scores,
+                  ":taxonomyVersion": targetAsset.toneAnalysis!.toneTaxonomyVersion,
+                },
+              },
+            },
+            { Put: { TableName: tableName, Item: reviewItem } },
+          ],
+        })
+      );
+    } catch (error) {
+      if (error instanceof TransactionCanceledException) {
+        return response(409, { message: "Tone analysis changed; reload and review again" });
+      }
+      throw error;
+    }
+  } else {
+    await db.send(new PutCommand({ TableName: tableName, Item: reviewItem }));
+  }
+
+  if (review.targetType === "audio" || review.targetType === "video") {
+    try {
+      await materializeCuratorToneAdjustment({
+        db,
+        tableName,
+        assetId: review.targetId,
+      });
+    } catch (error) {
+      console.error("Failed to materialize curator-adjusted tone scores", {
+        assetId: review.targetId,
+        reviewId: review.id,
+        error,
+      });
+    }
+  }
 
   return response(201, ToneReviewResponseSchema.parse({ review }));
 }
@@ -1184,6 +1258,11 @@ export async function handler(event: HttpEvent): Promise<{ statusCode: number; b
     return response(405, { message: "Method not allowed" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
+    console.error("API request failed", {
+      method: event.requestContext?.http?.method,
+      routeKey: event.requestContext?.routeKey,
+      error,
+    });
     return response(500, { message });
   }
 }

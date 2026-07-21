@@ -125,6 +125,7 @@ export class ApiStack extends Stack {
         "dynamodb:UpdateItem",
         "dynamodb:DeleteItem",
         "dynamodb:Query",
+        "dynamodb:ConditionCheckItem",
       ],
       resources: [assetsTableArn, `${assetsTableArn}/index/*`],
     });

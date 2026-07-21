@@ -47,6 +47,7 @@
     "allowlist:add-domain": "bunx ts-node src/allowlist-cli.ts add domain",
     "allowlist:remove-domain": "bunx ts-node src/allowlist-cli.ts remove domain",
     "backfill:asset-schema-version": "bunx ts-node src/backfill-asset-schema-version.ts",
-    "backfill:tone-analysis-display": "bunx ts-node src/backfill-tone-analysis-display.ts"
+    "backfill:tone-analysis-display": "bunx ts-node src/backfill-tone-analysis-display.ts",
+    "purge:tone-reviews": "bunx ts-node src/purge-tone-reviews.ts"
   }
 }

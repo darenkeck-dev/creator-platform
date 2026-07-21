@@ -55,5 +55,14 @@ describe("api stack jobs", () => {
       RouteKey: "GET /tone-reviews",
       AuthorizationType: "JWT",
     });
+    template.hasResourceProperties("AWS::IAM::Policy", {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: Match.arrayWith(["dynamodb:ConditionCheckItem"]),
+          }),
+        ]),
+      },
+    });
   });
 });

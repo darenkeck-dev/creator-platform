@@ -47,6 +47,22 @@ describe("asset tone analysis contract", () => {
           warmth: 0.6,
           tension: -0.82,
         },
+        adjustedScores: {
+          valence: 0.26,
+          arousal: -0.4,
+        },
+        scoreAdjustment: {
+          schemaVersion: "tone-score-adjustment/v1",
+          algorithm: "model-prior-mean/v1",
+          modelWeight: 1,
+          curatorReviewCount: 1,
+          dimensions: {
+            valence: { curatorScoreSum: 0, curatorReviewCount: 1 },
+            arousal: { curatorScoreSum: 0, curatorReviewCount: 1 },
+          },
+          computedAt: "2026-07-06T00:02:00.000Z",
+          latestReviewAt: "2026-07-06T00:01:30.000Z",
+        },
         semanticSummary: "Soft pastel clouds drift across a calm sky.",
         caption: "Pastel sky study.",
         mood: "relaxed, subdued, delicate",
@@ -57,6 +73,8 @@ describe("asset tone analysis contract", () => {
     expect(parsed.toneAnalysis?.toneTaxonomyVersion).toBe("tone-taxonomy/v2");
     expect(parsed.toneAnalysis?.summary).toContain("delicate");
     expect(parsed.toneAnalysis?.scores?.arousal).toBe(-0.8);
+    expect(parsed.toneAnalysis?.adjustedScores?.arousal).toBe(-0.4);
+    expect(parsed.toneAnalysis?.scoreAdjustment?.curatorReviewCount).toBe(1);
   });
 
   it("accepts public asset audit log entries", () => {

@@ -55,11 +55,36 @@ export const ProcessingProfileMetadataSchema = z.object({
   mode: z.enum(["mediaconvert", "passthrough"]),
 });
 export const PROCESSING_PROFILE_METADATA = [
-  { id: "video-standard-v1", label: "Video standard", supportedTypes: ["video"], mode: "mediaconvert" },
-  { id: "audio-passthrough-v1", label: "Audio passthrough", supportedTypes: ["audio"], mode: "passthrough" },
-  { id: "audio-transcode-hls-v1", label: "Audio HLS", supportedTypes: ["audio"], mode: "mediaconvert" },
-  { id: "image-passthrough-v1", label: "Image passthrough", supportedTypes: ["image"], mode: "passthrough" },
-  { id: "folder-meta-v1", label: "Folder metadata", supportedTypes: ["folder"], mode: "passthrough" },
+  {
+    id: "video-standard-v1",
+    label: "Video standard",
+    supportedTypes: ["video"],
+    mode: "mediaconvert",
+  },
+  {
+    id: "audio-passthrough-v1",
+    label: "Audio passthrough",
+    supportedTypes: ["audio"],
+    mode: "passthrough",
+  },
+  {
+    id: "audio-transcode-hls-v1",
+    label: "Audio HLS",
+    supportedTypes: ["audio"],
+    mode: "mediaconvert",
+  },
+  {
+    id: "image-passthrough-v1",
+    label: "Image passthrough",
+    supportedTypes: ["image"],
+    mode: "passthrough",
+  },
+  {
+    id: "folder-meta-v1",
+    label: "Folder metadata",
+    supportedTypes: ["folder"],
+    mode: "passthrough",
+  },
 ] as const;
 export const ComboVoteValueSchema = z.enum(COMBO_VOTE_VALUES);
 export const AssetToneAnalysisStatusSchema = z.enum(ASSET_TONE_ANALYSIS_STATUSES);
@@ -142,6 +167,32 @@ export const AssetToneAnalysisScoresSchema = z.object({
   menace: z.number().min(-1).max(1).optional(),
 });
 
+export const AssetToneScoreAdjustmentDimensionSchema = z.object({
+  curatorScoreSum: z.number(),
+  curatorReviewCount: z.number().int().min(0),
+});
+
+export const AssetToneScoreAdjustmentSchema = z.object({
+  schemaVersion: z.literal("tone-score-adjustment/v1"),
+  algorithm: z.literal("model-prior-mean/v1"),
+  modelWeight: z.literal(1),
+  curatorReviewCount: z.number().int().min(1),
+  dimensions: z.object({
+    valence: AssetToneScoreAdjustmentDimensionSchema.optional(),
+    arousal: AssetToneScoreAdjustmentDimensionSchema.optional(),
+    dominance: AssetToneScoreAdjustmentDimensionSchema.optional(),
+    warmth: AssetToneScoreAdjustmentDimensionSchema.optional(),
+    tension: AssetToneScoreAdjustmentDimensionSchema.optional(),
+    intimacy: AssetToneScoreAdjustmentDimensionSchema.optional(),
+    instability: AssetToneScoreAdjustmentDimensionSchema.optional(),
+    nostalgia: AssetToneScoreAdjustmentDimensionSchema.optional(),
+    beauty: AssetToneScoreAdjustmentDimensionSchema.optional(),
+    menace: AssetToneScoreAdjustmentDimensionSchema.optional(),
+  }),
+  computedAt: z.string().datetime(),
+  latestReviewAt: z.string().datetime(),
+});
+
 export const AssetToneAnalysisInfoSchema = z.object({
   status: AssetToneAnalysisStatusSchema,
   profile: AssetToneAnalysisProfileSchema,
@@ -161,6 +212,8 @@ export const AssetToneAnalysisInfoSchema = z.object({
   secondaryWords: z.array(z.string().min(1)).optional(),
   avoidWords: z.array(z.string().min(1)).optional(),
   scores: AssetToneAnalysisScoresSchema.optional(),
+  adjustedScores: AssetToneAnalysisScoresSchema.optional(),
+  scoreAdjustment: AssetToneScoreAdjustmentSchema.optional(),
   semanticSummary: z.string().min(1).optional(),
   caption: z.string().min(1).optional(),
   mood: z.string().min(1).optional(),
@@ -606,6 +659,8 @@ export type AssetGenerationInfo = z.infer<typeof AssetGenerationInfoSchema>;
 export type AssetToneAnalysisStatus = z.infer<typeof AssetToneAnalysisStatusSchema>;
 export type AssetToneAnalysisProfile = z.infer<typeof AssetToneAnalysisProfileSchema>;
 export type AssetToneAnalysisInfo = z.infer<typeof AssetToneAnalysisInfoSchema>;
+export type AssetToneAnalysisScores = z.infer<typeof AssetToneAnalysisScoresSchema>;
+export type AssetToneScoreAdjustment = z.infer<typeof AssetToneScoreAdjustmentSchema>;
 export type AssetRecord = z.infer<typeof AssetRecordSchema>;
 export type AssetDetailResponse = z.infer<typeof AssetDetailResponseSchema>;
 export type AssetListResponse = z.infer<typeof AssetListResponseSchema>;
