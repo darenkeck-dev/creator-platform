@@ -8,9 +8,10 @@ import {
   type AssetDetailResponse,
   type AssetTag,
   type AssetVisibility,
+  type ToneReviewRecord,
   type UpdateAssetInput,
 } from "@media-manager/contracts";
-import { FolderInput, RefreshCw } from "lucide-react";
+import { FolderInput, RefreshCw, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -19,7 +20,6 @@ import { Badge } from "@/components/ui/badge";
 import { AssetPlayer } from "@/components/asset-player";
 import { MoveAssetsDialog } from "@/components/move-assets-dialog";
 import { ReprocessAssetsDialog } from "@/components/reprocess-assets-dialog";
-import { ToneReviewPanel } from "@/components/tone-review-panel";
 import {
   Dialog,
   DialogContent,
@@ -43,6 +43,7 @@ type ToneScores = NonNullable<NonNullable<Asset["toneAnalysis"]>["scores"]>;
 
 type Props = {
   initialAsset: Asset;
+  initialReviews: ToneReviewRecord[];
 };
 
 function tagsEqual(a: AssetTag[], b: AssetTag[]) {
@@ -106,14 +107,23 @@ function ToneWordList({ label, words }: { label: string; words?: string[] }) {
   );
 }
 
-function ToneScoreList({ scores }: { scores?: ToneScores }) {
-  if (!scores) {
+function ToneScoreList({
+  originalScores,
+  adjustedScores,
+}: {
+  originalScores?: ToneScores;
+  adjustedScores?: ToneScores;
+}) {
+  if (!originalScores) {
     return null;
   }
 
   const visibleScores = TONE_SCORE_LABELS.flatMap(([key, label]) => {
-    const value = scores[key];
-    return typeof value === "number" ? [{ key, label, value }] : [];
+    const originalValue = originalScores[key];
+    const adjustedValue = adjustedScores?.[key];
+    return typeof originalValue === "number"
+      ? [{ key, label, originalValue, value: adjustedValue ?? originalValue }]
+      : [];
   });
 
   if (visibleScores.length === 0) {
@@ -121,35 +131,90 @@ function ToneScoreList({ scores }: { scores?: ToneScores }) {
   }
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {visibleScores.map((score) => {
-        const value = Math.max(-1, Math.min(1, score.value));
-        const startPercent = value < 0 ? 50 + value * 50 : 50;
-        const widthPercent = Math.abs(value) * 50;
-        return (
-          <div key={score.key}>
-            <div className="mb-1 flex items-center justify-between text-xs">
-              <span className="font-medium">{score.label}</span>
-              <span className="text-muted-foreground">{score.value.toFixed(2)}</span>
-            </div>
-            <div className="relative h-2 overflow-hidden rounded-full bg-muted">
-              <div className="absolute left-1/2 top-0 h-2 w-px bg-border" />
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-2">
+          <span className="h-3 w-3 rounded-full border border-foreground/60 bg-background" />
+          Extracted
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span className="flex items-center">
+            <span className="h-1.5 w-4 rounded-l-full bg-emerald-500" />
+            <span
+              className="h-3 w-2 bg-emerald-500"
+              style={{ clipPath: "polygon(0 0, 100% 50%, 0 100%)" }}
+            />
+          </span>
+          Adjusted
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span className="h-1.5 w-7 rounded-full bg-gradient-to-r from-amber-500 to-emerald-500" />
+          Adjustment
+        </span>
+      </div>
+      <div className="grid gap-x-5 gap-y-2 sm:grid-cols-2">
+        {visibleScores.map((score) => {
+          const originalValue = Math.max(-1, Math.min(1, score.originalValue));
+          const adjustedValue = Math.max(-1, Math.min(1, score.value));
+          const originalPercent = 50 + originalValue * 50;
+          const adjustedPercent = 50 + adjustedValue * 50;
+          const delta = adjustedValue - originalValue;
+          const deltaStartPercent = Math.min(originalPercent, adjustedPercent);
+          const deltaWidthPercent = Math.abs(adjustedPercent - originalPercent);
+          return (
+            <div
+              className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-2 px-1"
+              key={score.key}
+            >
+              <div className="text-xs font-medium">{score.label}</div>
               <div
-                className="absolute top-0 h-2 rounded-full bg-primary"
-                style={{
-                  left: `${startPercent}%`,
-                  width: `${widthPercent}%`,
-                }}
-              />
+                aria-label={`${score.label}: extracted ${originalValue.toFixed(2)}, adjusted ${adjustedValue.toFixed(2)}, delta ${delta >= 0 ? "+" : ""}${delta.toFixed(2)}`}
+                className="relative mx-3 h-6"
+                role="img"
+              >
+                <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-muted" />
+                <div className="absolute left-1/2 top-1/2 z-10 h-4 w-px -translate-x-1/2 -translate-y-1/2 bg-muted-foreground/50" />
+                {delta !== 0 ? (
+                  <div
+                    className={`absolute top-1/2 z-20 h-1.5 -translate-y-1/2 ${
+                      delta > 0 ? "rounded-l-full bg-emerald-500" : "rounded-r-full bg-amber-500"
+                    }`}
+                    style={{
+                      left:
+                        delta > 0 ? `${deltaStartPercent}%` : `calc(${deltaStartPercent}% + 7px)`,
+                      width: `max(0px, calc(${deltaWidthPercent}% - 7px))`,
+                    }}
+                  />
+                ) : null}
+                <span
+                  className="absolute top-1/2 z-30 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-foreground/60 bg-background"
+                  style={{ left: `${originalPercent}%` }}
+                  title={`Extracted ${originalValue.toFixed(2)}`}
+                />
+                {delta !== 0 ? (
+                  <span
+                    aria-hidden="true"
+                    className={`absolute top-1/2 z-40 h-3 w-2 ${delta > 0 ? "bg-emerald-500" : "bg-amber-500"}`}
+                    style={{
+                      clipPath:
+                        delta > 0
+                          ? "polygon(0 0, 100% 50%, 0 100%)"
+                          : "polygon(100% 0, 0 50%, 100% 100%)",
+                      left: `${adjustedPercent}%`,
+                      transform: delta > 0 ? "translate(-100%, -50%)" : "translate(0, -50%)",
+                    }}
+                  />
+                ) : null}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-export function AssetDetailEditor({ initialAsset }: Props) {
+export function AssetDetailEditor({ initialAsset, initialReviews }: Props) {
   const router = useRouter();
   const [asset, setAsset] = useState<Asset>(initialAsset);
   const [editMode, setEditMode] = useState(false);
@@ -471,179 +536,202 @@ export function AssetDetailEditor({ initialAsset }: Props) {
           <h1 className="text-2xl font-semibold tracking-tight">{asset.title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{asset.description}</p>
         </div>
-        {!editMode ? (
-          <div className="flex items-center gap-2">
-            <Button onClick={() => setDeleteDialogOpen(true)} type="button" variant="destructive">
-              Delete
-            </Button>
-            <ReprocessAssetsDialog
-              assetIds={[asset.id]}
-              onJobCreated={() => {
-                setStatusMessage("Tone reprocessing job started.");
-                router.refresh();
-              }}
-              type="reprocess_tone"
-            />
-            <ReprocessAssetsDialog
-              assetIds={[asset.id]}
-              onJobCreated={() => {
-                setStatusMessage("Conversion reprocessing job started.");
-                router.refresh();
-              }}
-              type="reprocess_conversion"
-            />
+        <div className="flex items-center gap-2">
+          {asset.type === "audio" || asset.type === "video" ? (
             <Button
-              aria-label="Move asset"
-              onClick={() => setMoveDialogOpen(true)}
-              title="Move asset"
+              onClick={() =>
+                router.push(
+                  `/review?targetType=${asset.type}&assetId=${encodeURIComponent(asset.id)}`
+                )
+              }
               type="button"
-              variant="outline"
             >
-              <FolderInput aria-hidden="true" className="h-4 w-4" />
+              Review
             </Button>
-            <Button onClick={() => setEditMode(true)} type="button" variant="outline">
-              Edit
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <Button disabled={!dirty || saving} onClick={() => void saveChanges()} type="button">
-              {saving ? "Saving..." : "Save Changes"}
-            </Button>
-            <Button onClick={() => void leaveEditMode()} type="button" variant="secondary">
-              Leave Edit Mode
-            </Button>
-          </div>
-        )}
+          ) : null}
+          <ReprocessAssetsDialog
+            assetIds={[asset.id]}
+            onJobCreated={() => {
+              setStatusMessage("Tone reprocessing job started.");
+              router.refresh();
+            }}
+            type="reprocess_tone"
+          />
+          <ReprocessAssetsDialog
+            assetIds={[asset.id]}
+            onJobCreated={() => {
+              setStatusMessage("Conversion reprocessing job started.");
+              router.refresh();
+            }}
+            type="reprocess_conversion"
+          />
+          <Button
+            aria-label="Move asset"
+            onClick={() => setMoveDialogOpen(true)}
+            title="Move asset"
+            type="button"
+            variant="outline"
+          >
+            <FolderInput aria-hidden="true" className="h-4 w-4" />
+          </Button>
+          <span aria-hidden="true" className="mx-1 h-6 w-px bg-border" />
+          <Button
+            aria-label="Delete asset"
+            className="h-9 w-9 px-0 text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/40"
+            onClick={() => setDeleteDialogOpen(true)}
+            title="Delete asset"
+            type="button"
+            variant="outline"
+          >
+            <Trash2 aria-hidden="true" className="h-4 w-4" />
+          </Button>
+        </div>
       </header>
 
       {statusMessage ? <p className="text-sm text-muted-foreground">{statusMessage}</p> : null}
 
       <div className="rounded-xl border bg-card p-6 shadow-sm">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold">Status</h2>
-          <Button onClick={() => router.refresh()} size="sm" type="button" variant="outline">
-            <RefreshCw aria-hidden="true" className="mr-2 h-4 w-4" />
-            Refresh Status
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <h2 className="whitespace-nowrap text-base font-semibold capitalize">
+            Status: {asset.status}
+          </h2>
+          <dl className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+            <div className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+              <dt className="text-muted-foreground">Conversion</dt>
+              <dd className="font-medium capitalize">{conversionStatus.replaceAll("_", " ")}</dd>
+            </div>
+            <div className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+              <dt className="text-muted-foreground">Tone Analysis</dt>
+              <dd className="font-medium capitalize">{toneAnalysisStatus.replaceAll("_", " ")}</dd>
+            </div>
+            <div className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+              <dt className="text-muted-foreground">Type</dt>
+              <dd className="font-medium capitalize">{asset.type}</dd>
+            </div>
+            <div className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+              <dt className="text-muted-foreground">Visibility</dt>
+              <dd className="font-medium capitalize">{asset.visibility}</dd>
+            </div>
+          </dl>
+          <Button
+            aria-label="Refresh status"
+            className="ml-auto h-8 w-8 px-0"
+            onClick={() => router.refresh()}
+            size="sm"
+            title="Refresh status"
+            type="button"
+            variant="outline"
+          >
+            <RefreshCw aria-hidden="true" className="h-4 w-4" />
           </Button>
         </div>
-        <dl className="grid gap-4 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="text-muted-foreground">Asset ID</dt>
-            <dd className="font-medium">{asset.id}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Type</dt>
-            <dd className="font-medium capitalize">{asset.type}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Origin</dt>
-            <dd className="font-medium capitalize">{asset.origin ?? "uploaded"}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Container</dt>
-            <dd className="font-medium">{asset.containerId ?? "root"}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Root</dt>
-            <dd className="font-medium">{asset.rootId ?? asset.id}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Depth</dt>
-            <dd className="font-medium">{asset.depth ?? 0}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Status</dt>
-            <dd className="font-medium capitalize">{asset.status}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Visibility</dt>
-            <dd className="font-medium capitalize">{asset.visibility}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Conversion</dt>
-            <dd className="font-medium capitalize">{conversionStatus.replaceAll("_", " ")}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Tone Analysis</dt>
-            <dd className="font-medium capitalize">{toneAnalysisStatus.replaceAll("_", " ")}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Owner</dt>
-            <dd className="font-medium">{asset.ownerEmail}</dd>
-          </div>
-          {asset.conversion?.profile ? (
+        <details className="mt-4 border-t pt-4">
+          <summary className="cursor-pointer text-sm font-medium">Details</summary>
+          <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
             <div>
-              <dt className="text-muted-foreground">Profile</dt>
-              <dd className="font-medium">{asset.conversion.profile}</dd>
+              <dt className="text-muted-foreground">Asset ID</dt>
+              <dd className="break-all font-medium">{asset.id}</dd>
             </div>
-          ) : null}
-          {asset.generation ? (
-            <div className="sm:col-span-2">
-              <dt className="text-muted-foreground">Generation</dt>
-              <dd className="font-medium">
-                {asset.generation.provider} / {asset.generation.model} (
-                {asset.generation.workflowId})
-              </dd>
+            <div>
+              <dt className="text-muted-foreground">Origin</dt>
+              <dd className="font-medium capitalize">{asset.origin ?? "uploaded"}</dd>
             </div>
-          ) : null}
-          {asset.conversion?.jobId ? (
-            <div className="sm:col-span-2">
-              <dt className="text-muted-foreground">MediaConvert Job</dt>
-              <dd className="font-medium">{asset.conversion.jobId}</dd>
+            <div>
+              <dt className="text-muted-foreground">Owner</dt>
+              <dd className="break-all font-medium">{asset.ownerEmail}</dd>
             </div>
-          ) : null}
-          {asset.conversion?.errorMessage ? (
-            <div className="sm:col-span-2">
-              <dt className="text-muted-foreground">Conversion Error</dt>
-              <dd className="font-medium text-red-700 dark:text-red-300">
-                {asset.conversion.errorMessage}
-              </dd>
+            <div>
+              <dt className="text-muted-foreground">Conversion Profile</dt>
+              <dd className="font-medium">{asset.conversion?.profile ?? "N/A"}</dd>
             </div>
-          ) : null}
-          {asset.toneAnalysis?.profile ? (
+            {asset.generation ? (
+              <div className="sm:col-span-2">
+                <dt className="text-muted-foreground">Generation</dt>
+                <dd className="font-medium">
+                  {asset.generation.provider} / {asset.generation.model} (
+                  {asset.generation.workflowId})
+                </dd>
+              </div>
+            ) : null}
+            {asset.conversion?.errorMessage ? (
+              <div className="sm:col-span-2">
+                <dt className="text-muted-foreground">Conversion Error</dt>
+                <dd className="font-medium text-red-700 dark:text-red-300">
+                  {asset.conversion.errorMessage}
+                </dd>
+              </div>
+            ) : null}
             <div>
               <dt className="text-muted-foreground">Tone Profile</dt>
-              <dd className="font-medium">{asset.toneAnalysis.profile}</dd>
+              <dd className="font-medium">{asset.toneAnalysis?.profile ?? "N/A"}</dd>
             </div>
-          ) : null}
-          {asset.toneAnalysis?.updatedAt ? (
             <div>
               <dt className="text-muted-foreground">Tone Updated</dt>
-              <dd className="font-medium">{asset.toneAnalysis.updatedAt}</dd>
+              <dd className="font-medium">{asset.toneAnalysis?.updatedAt ?? "N/A"}</dd>
             </div>
-          ) : null}
-          {asset.toneAnalysis?.analysisBucket && asset.toneAnalysis.analysisKey ? (
+            {asset.toneAnalysis?.errorMessage ? (
+              <div className="sm:col-span-2">
+                <dt className="text-muted-foreground">Tone Analysis Error</dt>
+                <dd className="font-medium text-red-700 dark:text-red-300">
+                  {asset.toneAnalysis.errorMessage}
+                </dd>
+              </div>
+            ) : null}
+            <div>
+              <dt className="text-muted-foreground">Container</dt>
+              <dd className="font-medium">{asset.containerId ?? "root"}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Root</dt>
+              <dd className="font-medium">{asset.rootId ?? asset.id}</dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-muted-foreground">MediaConvert Job</dt>
+              <dd className="break-all font-medium">{asset.conversion?.jobId ?? "N/A"}</dd>
+            </div>
             <div className="sm:col-span-2">
               <dt className="text-muted-foreground">Tone Analysis Artifact</dt>
-              <dd className="font-medium">
-                s3://{asset.toneAnalysis.analysisBucket}/{asset.toneAnalysis.analysisKey}
+              <dd className="break-all font-medium">
+                {asset.toneAnalysis?.analysisBucket && asset.toneAnalysis.analysisKey
+                  ? `s3://${asset.toneAnalysis.analysisBucket}/${asset.toneAnalysis.analysisKey}`
+                  : "N/A"}
               </dd>
             </div>
-          ) : null}
-          {asset.toneAnalysis?.bundleBucket && asset.toneAnalysis.bundleKey ? (
             <div className="sm:col-span-2">
               <dt className="text-muted-foreground">Tone Bundle Artifact</dt>
-              <dd className="font-medium">
-                s3://{asset.toneAnalysis.bundleBucket}/{asset.toneAnalysis.bundleKey}
+              <dd className="break-all font-medium">
+                {asset.toneAnalysis?.bundleBucket && asset.toneAnalysis.bundleKey
+                  ? `s3://${asset.toneAnalysis.bundleBucket}/${asset.toneAnalysis.bundleKey}`
+                  : "N/A"}
               </dd>
             </div>
-          ) : null}
-          {asset.toneAnalysis?.errorMessage ? (
             <div className="sm:col-span-2">
-              <dt className="text-muted-foreground">Tone Analysis Error</dt>
-              <dd className="font-medium text-red-700 dark:text-red-300">
-                {asset.toneAnalysis.errorMessage}
+              <dt className="text-muted-foreground">Original</dt>
+              <dd className="break-all font-medium">
+                s3://{asset.original.bucket}/{asset.original.key}
               </dd>
             </div>
-          ) : null}
-          <div className="sm:col-span-2">
-            <dt className="text-muted-foreground">Original</dt>
-            <dd className="font-medium">
-              s3://{asset.original.bucket}/{asset.original.key}
-            </dd>
-          </div>
-        </dl>
+          </dl>
+        </details>
+      </div>
+
+      <div className="rounded-xl border bg-card p-6 shadow-sm">
+        <h2 className="text-base font-semibold">Playback</h2>
+        <div className="mt-3">
+          <AssetPlayer asset={asset} />
+        </div>
+        {streamReady ? (
+          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <dt className="text-muted-foreground">HLS Master</dt>
+              <dd className="font-medium break-all">{asset.stream?.hlsMasterUrl}</dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-muted-foreground">Poster</dt>
+              <dd className="font-medium break-all">{asset.stream?.posterUrl ?? "N/A"}</dd>
+            </div>
+          </dl>
+        ) : null}
       </div>
 
       <div className="rounded-xl border bg-card p-6 shadow-sm">
@@ -661,7 +749,10 @@ export function AssetDetailEditor({ initialAsset }: Props) {
               <ToneWordList label="Secondary" words={asset.toneAnalysis.secondaryWords} />
               <ToneWordList label="Avoid" words={asset.toneAnalysis.avoidWords} />
             </div>
-            <ToneScoreList scores={asset.toneAnalysis.scores} />
+            <ToneScoreList
+              adjustedScores={asset.toneAnalysis.adjustedScores}
+              originalScores={asset.toneAnalysis.scores}
+            />
             <dl className="grid gap-3 text-sm sm:grid-cols-2">
               {asset.toneAnalysis.caption ? (
                 <div>
@@ -690,22 +781,24 @@ export function AssetDetailEditor({ initialAsset }: Props) {
         )}
       </div>
 
-      {asset.type === "audio" || asset.type === "video" ? (
-        <ToneReviewPanel
-          description="Review the extracted keywords and adjust scores for this asset."
-          targets={[
-            {
-              targetType: asset.type,
-              targetId: asset.id,
-              label: asset.type === "audio" ? "Audio" : "Video",
-              taxonomyVersion: asset.toneAnalysis?.toneTaxonomyVersion,
-            },
-          ]}
-        />
-      ) : null}
-
       <div className="rounded-xl border bg-card p-6 shadow-sm">
-        <h2 className="text-base font-semibold">Editable Metadata</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-base font-semibold">Metadata</h2>
+          {editMode ? (
+            <div className="flex items-center gap-2">
+              <Button disabled={!dirty || saving} onClick={() => void saveChanges()} type="button">
+                {saving ? "Saving..." : "Save Changes"}
+              </Button>
+              <Button onClick={() => void leaveEditMode()} type="button" variant="secondary">
+                Leave Edit Mode
+              </Button>
+            </div>
+          ) : (
+            <Button onClick={() => setEditMode(true)} type="button" variant="outline">
+              Edit
+            </Button>
+          )}
+        </div>
         <div className="mt-4 space-y-5">
           <div>
             <label className="mb-1 block text-sm font-medium" htmlFor="asset-title">
@@ -1000,24 +1093,51 @@ export function AssetDetailEditor({ initialAsset }: Props) {
         </div>
       </div>
 
-      <div className="rounded-xl border bg-card p-6 shadow-sm">
-        <h2 className="text-base font-semibold">Playback</h2>
-        <div className="mt-3">
-          <AssetPlayer asset={asset} />
+      {asset.type === "audio" || asset.type === "video" ? (
+        <div className="rounded-xl border bg-card p-6 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-base font-semibold">Reviews</h2>
+            <Button
+              onClick={() =>
+                router.push(
+                  `/review?targetType=${asset.type}&assetId=${encodeURIComponent(asset.id)}`
+                )
+              }
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              Review This Asset
+            </Button>
+          </div>
+          {initialReviews.length === 0 ? (
+            <p className="mt-3 text-sm text-muted-foreground">No reviews for this asset yet.</p>
+          ) : (
+            <div className="mt-4 space-y-3">
+              {initialReviews.map((review) => (
+                <article className="rounded-lg border bg-background p-3" key={review.id}>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <span className="font-medium capitalize">{review.reviewSource}</span>
+                    <time className="text-xs text-muted-foreground" dateTime={review.createdAt}>
+                      {new Date(review.createdAt).toLocaleString()}
+                    </time>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {review.keywords.map((keyword) => (
+                      <Badge key={`${review.id}-${keyword}`} variant="secondary">
+                        {keyword}
+                      </Badge>
+                    ))}
+                  </div>
+                  {review.notes ? (
+                    <p className="mt-2 text-sm text-muted-foreground">{review.notes}</p>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          )}
         </div>
-        {streamReady ? (
-          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <dt className="text-muted-foreground">HLS Master</dt>
-              <dd className="font-medium break-all">{asset.stream?.hlsMasterUrl}</dd>
-            </div>
-            <div className="sm:col-span-2">
-              <dt className="text-muted-foreground">Poster</dt>
-              <dd className="font-medium break-all">{asset.stream?.posterUrl ?? "N/A"}</dd>
-            </div>
-          </dl>
-        ) : null}
-      </div>
+      ) : null}
 
       <Dialog onOpenChange={setLeaveDialogOpen} open={leaveDialogOpen}>
         <DialogContent>

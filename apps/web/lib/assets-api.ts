@@ -422,9 +422,7 @@ export async function fetchJobFromApi(id: string): Promise<JobDetailResponse> {
   return parsed.data;
 }
 
-export async function submitToneReviewInApi(
-  input: ToneReviewInput
-): Promise<ToneReviewResponse> {
+export async function submitToneReviewInApi(input: ToneReviewInput): Promise<ToneReviewResponse> {
   const parsedInput = ToneReviewInputSchema.parse(input);
   const response = await fetch(`${getApiBaseUrl()}/tone-reviews`, {
     method: "POST",
@@ -437,7 +435,9 @@ export async function submitToneReviewInApi(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to submit tone review: ${response.status}`);
+    const errorBody = (await response.json().catch(() => null)) as { message?: unknown } | null;
+    const detail = typeof errorBody?.message === "string" ? `: ${errorBody.message}` : "";
+    throw new Error(`Failed to submit tone review: ${response.status}${detail}`);
   }
 
   const json = (await response.json()) as unknown;
@@ -904,6 +904,14 @@ export async function fetchRandomReviewAssetFromApi(
       return false;
     }
 
+    if (
+      asset.toneAnalysis?.status !== "ready" ||
+      !asset.toneAnalysis.scores ||
+      !asset.toneAnalysis.toneTaxonomyVersion
+    ) {
+      return false;
+    }
+
     if (type === "video") {
       return asset.status === "ready" && Boolean(asset.stream?.hlsMasterUrl);
     }
@@ -919,9 +927,10 @@ export async function fetchRandomReviewAssetFromApi(
     return null;
   }
 
-  const candidates = excludeAssetId && assets.length > 1
-    ? assets.filter((asset) => asset.id !== excludeAssetId)
-    : assets;
+  const candidates =
+    excludeAssetId && assets.length > 1
+      ? assets.filter((asset) => asset.id !== excludeAssetId)
+      : assets;
 
   return candidates[Math.floor(Math.random() * candidates.length)] ?? null;
 }

@@ -24,6 +24,7 @@ type ReviewPageProps = {
     reviewsCursor?: string;
     videoAssetId?: string;
     audioAssetId?: string;
+    assetId?: string;
     previousTargetId?: string;
     previousAudioAssetId?: string;
   }>;
@@ -36,6 +37,7 @@ export default async function ReviewPage({ searchParams }: ReviewPageProps) {
     reviewsCursor,
     videoAssetId,
     audioAssetId,
+    assetId,
     previousTargetId,
     previousAudioAssetId,
   } = await searchParams;
@@ -45,7 +47,12 @@ export default async function ReviewPage({ searchParams }: ReviewPageProps) {
   const randomCombo = targetType === "combo" && !comboId ? await fetchRandomPublicComboFromApi(previousAudioAssetId) : null;
 
   if (targetType === "audio" || targetType === "video") {
-    const asset = await fetchRandomReviewAssetFromApi(targetType, previousTargetId);
+    const requestedAsset = assetId ? await safeFetchAssetById(assetId) : null;
+    const asset = assetId
+      ? requestedAsset?.type === targetType
+        ? requestedAsset
+        : null
+      : await fetchRandomReviewAssetFromApi(targetType, previousTargetId);
     if (!asset) {
       return (
         <section className="space-y-3">

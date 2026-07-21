@@ -1,17 +1,18 @@
 "use client";
 
-import type { AssetDetailResponse, ToneReviewRecord, ToneReviewTargetType } from "@media-manager/contracts";
+import type {
+  AssetDetailResponse,
+  ToneReviewRecord,
+  ToneReviewTargetType,
+} from "@media-manager/contracts";
 import { ComboToneReviewPlayer } from "@media-manager/shared";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { ReviewMediaPlayer } from "@/components/review-media-player";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type Asset = AssetDetailResponse["asset"];
-type ToneScores = NonNullable<NonNullable<Asset["toneAnalysis"]>["scores"]>;
-type ToneScoreKey = keyof ToneScores;
 
 type ReviewTarget = {
   targetType: ToneReviewTargetType;
@@ -55,45 +56,16 @@ type Props = {
   }>;
 };
 
-const SCORE_KEYS: Array<[ToneScoreKey, string]> = [
-  ["valence", "Valence"],
-  ["arousal", "Arousal"],
-  ["dominance", "Dominance"],
-  ["warmth", "Warmth"],
-  ["tension", "Tension"],
-  ["intimacy", "Intimacy"],
-  ["instability", "Instability"],
-  ["nostalgia", "Nostalgia"],
-  ["beauty", "Beauty"],
-  ["menace", "Menace"],
-];
-
 const MAX_KEYWORDS = 24;
 const MIN_KEYWORDS_TO_SUBMIT = 3;
 const KEYWORDS_PER_PAGE = 5;
 const ADJACENT_KEYWORDS_PER_PAGE = 3;
 
-const SCORE_DESCRIPTIONS: Record<ToneScoreKey, string> = {
-  valence:
-    "How pleasant or unpleasant the selected target feels overall. Negative means unpleasant; positive means pleasant.",
-  arousal:
-    "How activated, energetic, or intense the selected target feels. Low means calm or still; high means energized or urgent.",
-  dominance:
-    "How powerful, forceful, large, or controlling the selected target feels. Low means fragile or submissive; high means potent or commanding.",
-  warmth: "How emotionally warm, kind, safe, or human the selected target feels.",
-  tension: "How strained, suspenseful, pressured, or unresolved the selected target feels.",
-  intimacy: "How close, private, personal, or emotionally near the selected target feels.",
-  instability:
-    "How unpredictable, chaotic, volatile, or mentally unsettled the selected target feels.",
-  nostalgia: "How memory-like, wistful, past-oriented, or longing the selected target feels.",
-  beauty: "How aesthetically graceful, moving, elegant, or sublime the selected target feels.",
-  menace: "How threatening, dangerous, predatory, or ominous the selected target feels.",
-};
-
 const KEYWORD_TREE: KeywordNode[] = [
   {
     label: "Joy / Pleasure",
-    description: "Positive, pleasurable emotional tone, from light delight to high-energy celebration.",
+    description:
+      "Positive, pleasurable emotional tone, from light delight to high-energy celebration.",
     children: [
       {
         label: "Bright",
@@ -192,15 +164,22 @@ const KEYWORD_TREE: KeywordNode[] = [
   },
   {
     label: "Sadness / Longing",
-    description: "Negative or bittersweet low-to-mid arousal tone: loss, loneliness, memory, or yearning.",
+    description:
+      "Negative or bittersweet low-to-mid arousal tone: loss, loneliness, memory, or yearning.",
     children: [
       {
         label: "Melancholy",
         description: "Reflective sadness with softness or beauty rather than acute pain.",
         children: [
-          { label: "wistful", description: "Gently sad, reflective, and longing for something absent." },
+          {
+            label: "wistful",
+            description: "Gently sad, reflective, and longing for something absent.",
+          },
           { label: "blue", description: "Plainly sad, subdued, or emotionally low." },
-          { label: "reflective", description: "Inward-looking and thoughtful with emotional weight." },
+          {
+            label: "reflective",
+            description: "Inward-looking and thoughtful with emotional weight.",
+          },
         ],
       },
       {
@@ -208,7 +187,10 @@ const KEYWORD_TREE: KeywordNode[] = [
         description: "More direct sadness connected to loss, pain, or grief.",
         children: [
           { label: "grief", description: "Deep sadness tied to loss." },
-          { label: "heartbreak", description: "Painful sadness around love, separation, or disappointment." },
+          {
+            label: "heartbreak",
+            description: "Painful sadness around love, separation, or disappointment.",
+          },
           { label: "mourning", description: "Ritualized or sustained sadness after loss." },
         ],
       },
@@ -414,7 +396,10 @@ const KEYWORD_TREE: KeywordNode[] = [
         label: "Disoriented",
         description: "Loss of bearings, warped perception, or confused direction.",
         children: [
-          { label: "dizzying", description: "Overwhelming or hard to track spatially or emotionally." },
+          {
+            label: "dizzying",
+            description: "Overwhelming or hard to track spatially or emotionally.",
+          },
           { label: "warped", description: "Bent, distorted, or perceptually altered." },
           { label: "unmoored", description: "Untethered, drifting, or lacking stable reference." },
         ],
@@ -533,7 +518,10 @@ const REVIEW_KEYWORD_TREE: KeywordNode[] = [
         children: [
           { label: "wistful", description: "Gently sad and longing for something absent." },
           { label: "blue", description: "Plainly sad, subdued, or emotionally low." },
-          { label: "reflective", description: "Inward-looking and thoughtful with emotional weight." },
+          {
+            label: "reflective",
+            description: "Inward-looking and thoughtful with emotional weight.",
+          },
         ],
       },
       {
@@ -661,12 +649,6 @@ function unique(values: string[]) {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
-function initialScoreState(): Record<ToneScoreKey, number> {
-  return Object.fromEntries(
-    SCORE_KEYS.map(([key]) => [key, 0])
-  ) as Record<ToneScoreKey, number>;
-}
-
 type KeywordLeaf = KeywordNode & {
   rootLabel: string;
   branchLabel: string;
@@ -789,28 +771,25 @@ function initialKeywordOptions(seed: string) {
   return pickKeywords(keywordLeaves(), new Set(), KEYWORDS_PER_PAGE, random);
 }
 
-export function ToneReviewWorkbench({
-  target,
-  media,
-  targetReviews,
-}: Props) {
+export function ToneReviewWorkbench({ target, media, targetReviews }: Props) {
   const router = useRouter();
   const targetIndex = 0;
   const targetKey = String(targetIndex);
   const keywordSeed = `${target.targetType}:${target.targetId}`;
-  const [selectedKeywordsByTarget, setSelectedKeywordsByTarget] = useState<Record<string, string[]>>(
-    () => ({ "0": [] })
-  );
-  const [scoresByTarget, setScoresByTarget] = useState<Record<string, Record<ToneScoreKey, number>>>(
-    () => ({ "0": initialScoreState() })
-  );
-  const [keywordOptionsByTarget, setKeywordOptionsByTarget] = useState<Record<string, KeywordLeaf[]>>(
-    () => ({ [targetKey]: initialKeywordOptions(keywordSeed) })
-  );
+  const [selectedKeywordsByTarget, setSelectedKeywordsByTarget] = useState<
+    Record<string, string[]>
+  >(() => ({ "0": [] }));
+  const [keywordOptionsByTarget, setKeywordOptionsByTarget] = useState<
+    Record<string, KeywordLeaf[]>
+  >(() => ({ [targetKey]: initialKeywordOptions(keywordSeed) }));
   const [shownKeywordsByTarget, setShownKeywordsByTarget] = useState<Record<string, string[]>>(
-    () => ({ [targetKey]: keywordOptionsByTarget[targetKey]?.map((keyword) => keyword.label) ?? [] })
+    () => ({
+      [targetKey]: keywordOptionsByTarget[targetKey]?.map((keyword) => keyword.label) ?? [],
+    })
   );
-  const [lastSelectedKeywordByTarget, setLastSelectedKeywordByTarget] = useState<Record<string, string | undefined>>({});
+  const [lastSelectedKeywordByTarget, setLastSelectedKeywordByTarget] = useState<
+    Record<string, string | undefined>
+  >({});
   const [keywordRoundByTarget, setKeywordRoundByTarget] = useState<Record<string, number>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitSucceeded, setSubmitSucceeded] = useState(false);
@@ -818,7 +797,6 @@ export function ToneReviewWorkbench({
   const [message, setMessage] = useState<string | null>(null);
 
   const selectedKeywords = selectedKeywordsByTarget[targetKey] ?? [];
-  const scores = scoresByTarget[targetKey] ?? initialScoreState();
   const currentKeywordOptions = keywordOptionsByTarget[targetKey] ?? [];
   const selectedKeywordSet = new Set(selectedKeywords);
 
@@ -846,7 +824,11 @@ export function ToneReviewWorkbench({
     });
     setLastSelectedKeywordByTarget((previous) => ({
       ...previous,
-      [targetKey]: selecting ? keyword : previous[targetKey] === keyword ? undefined : previous[targetKey],
+      [targetKey]: selecting
+        ? keyword
+        : previous[targetKey] === keyword
+          ? undefined
+          : previous[targetKey],
     }));
   }
 
@@ -874,7 +856,6 @@ export function ToneReviewWorkbench({
     setSubmitting(true);
     setSubmitSucceeded(false);
     setMessage(null);
-
     try {
       const response = await fetch("/api/tone-reviews", {
         method: "POST",
@@ -891,7 +872,6 @@ export function ToneReviewWorkbench({
               }
             : {}),
           keywords: selectedKeywords,
-          scores,
         }),
       });
 
@@ -901,6 +881,7 @@ export function ToneReviewWorkbench({
 
       setMessage(`Saved ${target.label.toLowerCase()} review.`);
       setSubmitSucceeded(true);
+      router.refresh();
     } catch {
       setSubmitSucceeded(false);
       setMessage("Could not save review. Please try again.");
@@ -909,10 +890,7 @@ export function ToneReviewWorkbench({
     }
   }
 
-  async function submitComboReview(payload: {
-    keywords: string[];
-    scores: Record<ToneScoreKey, number>;
-  }) {
+  async function submitComboReview(payload: { keywords: string[] }) {
     setSubmitSucceeded(false);
     setMessage(null);
 
@@ -931,7 +909,6 @@ export function ToneReviewWorkbench({
             }
           : {}),
         keywords: payload.keywords,
-        scores: payload.scores,
       }),
     });
 
@@ -968,9 +945,15 @@ export function ToneReviewWorkbench({
         }
       `}</style>
       {currentKeywordOptions.length > 0 ? (
-        <div className="space-y-1.5" key={`${target.targetType}:${target.targetId}:${keywordRoundByTarget[targetKey] ?? 0}`}>
+        <div
+          className="space-y-1.5"
+          key={`${target.targetType}:${target.targetId}:${keywordRoundByTarget[targetKey] ?? 0}`}
+        >
           <div className="flex items-center justify-center gap-2">
-            <div className="flex min-w-0 flex-wrap justify-center gap-2" style={{ animation: "tone-review-button-in 140ms ease-out both" }}>
+            <div
+              className="flex min-w-0 flex-wrap justify-center gap-2"
+              style={{ animation: "tone-review-button-in 140ms ease-out both" }}
+            >
               {currentKeywordOptions.map((node) => {
                 const selected = selectedKeywordSet.has(node.label);
                 return (
@@ -1005,66 +988,70 @@ export function ToneReviewWorkbench({
     </div>
   );
 
-  const submitIconButton = selectedKeywords.length >= MIN_KEYWORDS_TO_SUBMIT ? (
-    <button
-      className="inline-flex items-center gap-2 rounded-full border border-primary bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:opacity-70"
-      disabled={submitting}
-      onClick={() => void submitReview()}
-      title="Submit review"
-      type="button"
-    >
-      {submitting ? (
-        <svg
-          aria-hidden="true"
-          className="h-4 w-4 animate-spin"
-          fill="none"
-          viewBox="0 0 24 24"
-        >
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path
-            className="opacity-75"
-            d="M4 12a8 8 0 018-8"
+  const submitIconButton =
+    selectedKeywords.length >= MIN_KEYWORDS_TO_SUBMIT ? (
+      <button
+        className="inline-flex items-center gap-2 rounded-full border border-primary bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:opacity-70"
+        disabled={submitting}
+        onClick={() => void submitReview()}
+        title="Submit review"
+        type="button"
+      >
+        {submitting ? (
+          <svg aria-hidden="true" className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              d="M4 12a8 8 0 018-8"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeWidth="4"
+            />
+          </svg>
+        ) : submitSucceeded ? (
+          <svg
+            aria-hidden="true"
+            className="h-4 w-4"
+            fill="none"
             stroke="currentColor"
             strokeLinecap="round"
-            strokeWidth="4"
-          />
-        </svg>
-      ) : submitSucceeded ? (
-        <svg
-          aria-hidden="true"
-          className="h-4 w-4"
-          fill="none"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="2"
-          viewBox="0 0 24 24"
-        >
-          <path d="M20 6L9 17l-5-5" />
-        </svg>
-      ) : null}
-      {submitSucceeded ? "Saved" : "Submit"}
-    </button>
-  ) : null;
-
-  const selectedKeywordRow = selectedKeywords.length > 0 ? (
-    <div className="pointer-events-auto flex w-full min-w-0 max-w-full items-end justify-between gap-2 overflow-hidden">
-      <div className="flex min-w-0 flex-1 gap-2" style={{ flexWrap: "wrap-reverse" }}>
-        {selectedKeywords.map((keyword) => (
-          <button
-            className="rounded-full border border-white/80 bg-white/85 px-3 py-1.5 text-sm text-black shadow-sm transition hover:bg-white"
-            key={keyword}
-            onClick={() => toggleKeyword(keyword)}
-            title={`Remove ${keyword} from this review.`}
-            type="button"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            viewBox="0 0 24 24"
           >
-            {keyword}
-          </button>
-        ))}
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+        ) : null}
+        {submitSucceeded ? "Saved" : "Submit"}
+      </button>
+    ) : null;
+
+  const selectedKeywordRow =
+    selectedKeywords.length > 0 ? (
+      <div className="pointer-events-auto flex w-full min-w-0 max-w-full items-end justify-between gap-2 overflow-hidden">
+        <div className="flex min-w-0 flex-1 gap-2" style={{ flexWrap: "wrap-reverse" }}>
+          {selectedKeywords.map((keyword) => (
+            <button
+              className="rounded-full border border-white/80 bg-white/85 px-3 py-1.5 text-sm text-black shadow-sm transition hover:bg-white"
+              key={keyword}
+              onClick={() => toggleKeyword(keyword)}
+              title={`Remove ${keyword} from this review.`}
+              type="button"
+            >
+              {keyword}
+            </button>
+          ))}
+        </div>
+        {submitIconButton}
       </div>
-      {submitIconButton}
-    </div>
-  ) : null;
+    ) : null;
 
   const isAudioReview = media.targetType === "audio";
 
@@ -1086,7 +1073,6 @@ export function ToneReviewWorkbench({
               loadingNext={loadingNext}
               onNext={loadNextCombo}
               onSubmit={(payload) => submitComboReview(payload)}
-              scores={scores}
             />
           ) : isAudioReview ? (
             <div className="space-y-4">
@@ -1116,69 +1102,16 @@ export function ToneReviewWorkbench({
           ) : null}
         </div>
 
-        <div className="rounded-xl border bg-card p-6 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Reviewing
-              </p>
-              <h2 className="mt-1 text-lg font-semibold">{target.title}</h2>
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            {SCORE_KEYS.map(([key, label]) => (
-              <label className="block text-sm" key={key}>
-                <div className="mb-1 flex items-center justify-between gap-3">
-                  <span className="inline-flex items-center gap-1.5 font-medium">
-                    {label}
-                    <span
-                      aria-label={`${label}: ${SCORE_DESCRIPTIONS[key]}`}
-                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-semibold text-muted-foreground"
-                      role="img"
-                      tabIndex={0}
-                      title={SCORE_DESCRIPTIONS[key]}
-                    >
-                      i
-                    </span>
-                  </span>
-                  <span className="tabular-nums text-muted-foreground">{scores[key].toFixed(2)}</span>
-                </div>
-                <input
-                  className="w-full accent-primary"
-                  max="1"
-                  min="-1"
-                  onChange={(event) => {
-                    const value = Number(event.target.value);
-                    setScoresByTarget((previous) => ({
-                      ...previous,
-                      [targetKey]: { ...scores, [key]: value },
-                    }));
-                  }}
-                  step="0.05"
-                  type="range"
-                  value={scores[key]}
-                />
-              </label>
-            ))}
-          </div>
-
-          <div className="mt-6 flex items-center gap-3">
-            {media.targetType !== "combo" ? (
-              <Button disabled={submitting} onClick={() => void submitReview()} type="button">
-                {submitting ? "Saving..." : "Save Review"}
-              </Button>
-            ) : null}
-            {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
-          </div>
-        </div>
+        {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
       </div>
 
       <section className="rounded-xl border bg-card p-4 shadow-sm">
         <h2 className="text-sm font-semibold">Reviews For This {target.label}</h2>
         <div className="mt-3 space-y-2">
           {targetReviews.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No reviews for this {target.label.toLowerCase()} yet.</p>
+            <p className="text-sm text-muted-foreground">
+              No reviews for this {target.label.toLowerCase()} yet.
+            </p>
           ) : null}
           {targetReviews.map(({ review }) => (
             <div className="rounded-lg border px-3 py-2 text-sm" key={review.id}>

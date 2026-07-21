@@ -3,7 +3,11 @@ import { notFound } from "next/navigation";
 
 import { AssetDetailEditor } from "@/components/asset-detail-editor";
 import { FolderDetailView } from "@/components/folder-detail-view";
-import { fetchAssetByIdFromApi, fetchAssetChildrenFromApi } from "@/lib/assets-api";
+import {
+  fetchAssetByIdFromApi,
+  fetchAssetChildrenFromApi,
+  listToneReviewsFromApi,
+} from "@/lib/assets-api";
 
 type AssetPageProps = {
   params: Promise<{ id: string }>;
@@ -31,5 +35,14 @@ export default async function AssetDetailPage({ params }: AssetPageProps) {
     return <FolderDetailView children={children} folder={asset} />;
   }
 
-  return <AssetDetailEditor initialAsset={asset} />;
+  const reviews =
+    asset.type === "audio" || asset.type === "video"
+      ? await listToneReviewsFromApi({
+          targetType: asset.type,
+          targetId: asset.id,
+          limit: 50,
+        }).catch(() => ({ reviews: [] }))
+      : { reviews: [] };
+
+  return <AssetDetailEditor initialAsset={asset} initialReviews={reviews.reviews} />;
 }

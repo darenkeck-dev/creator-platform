@@ -4,26 +4,12 @@ import { useEffect, useState } from "react";
 
 import { ComboPlayer } from "./combo-player";
 
-export type ToneReviewScores = {
-  valence: number;
-  arousal: number;
-  dominance: number;
-  warmth: number;
-  tension: number;
-  intimacy: number;
-  instability: number;
-  nostalgia: number;
-  beauty: number;
-  menace: number;
-};
-
 export type ComboToneReviewPayload = {
   targetType: "combo";
   targetId: string;
   sourceVideoAssetId: string;
   sourceAudioAssetId: string;
   keywords: string[];
-  scores: ToneReviewScores;
 };
 
 export type ComboToneReviewPlayerProps = {
@@ -36,7 +22,6 @@ export type ComboToneReviewPlayerProps = {
     videoSrc: string;
     audioSrc: string;
   };
-  scores: ToneReviewScores;
   className?: string;
   loadingNext?: boolean;
   minKeywordsToSubmit?: number;
@@ -139,7 +124,10 @@ const REVIEW_KEYWORD_TREE: KeywordNode[] = [
         children: [
           { label: "wistful", description: "Gently sad and longing for something absent." },
           { label: "blue", description: "Plainly sad, subdued, or emotionally low." },
-          { label: "reflective", description: "Inward-looking and thoughtful with emotional weight." },
+          {
+            label: "reflective",
+            description: "Inward-looking and thoughtful with emotional weight.",
+          },
         ],
       },
       {
@@ -335,10 +323,7 @@ function pickKeywordsFromDistinctRoots(
   count: number,
   random: () => number
 ) {
-  const roots = shuffled(
-    [...new Set(candidates.map((candidate) => candidate.rootIndex))],
-    random
-  );
+  const roots = shuffled([...new Set(candidates.map((candidate) => candidate.rootIndex))], random);
   const picked: KeywordLeaf[] = [];
 
   for (const rootIndex of roots) {
@@ -417,14 +402,21 @@ function keywordPilePlacements(keywords: string[]) {
     const existingColumns = heights.map((height, index) => ({ height, index }));
     const allExistingColumnsEven = heights.every((height) => height === heights[0]);
 
-    if (allExistingColumnsEven && (heights[0] ?? 0) >= 2 && heights.length < MAX_KEYWORD_PILE_COLUMNS) {
+    if (
+      allExistingColumnsEven &&
+      (heights[0] ?? 0) >= 2 &&
+      heights.length < MAX_KEYWORD_PILE_COLUMNS
+    ) {
       column = heights.length;
       heights.push(0);
     } else {
       const eligibleColumns = existingColumns.filter(({ index }) => {
         return index === 0 || (heights[index - 1] ?? 0) > (heights[index] ?? 0);
       });
-      column = eligibleColumns.sort((left, right) => left.height - right.height || left.index - right.index)[0]?.index ?? 0;
+      column =
+        eligibleColumns.sort(
+          (left, right) => left.height - right.height || left.index - right.index
+        )[0]?.index ?? 0;
     }
 
     const rowFromBottom = heights[column] ?? 0;
@@ -433,24 +425,8 @@ function keywordPilePlacements(keywords: string[]) {
   });
 }
 
-export function neutralToneReviewScores(): ToneReviewScores {
-  return {
-    valence: 0,
-    arousal: 0,
-    dominance: 0,
-    warmth: 0,
-    tension: 0,
-    intimacy: 0,
-    instability: 0,
-    nostalgia: 0,
-    beauty: 0,
-    menace: 0,
-  };
-}
-
 export function ComboToneReviewPlayer({
   combo,
-  scores,
   className,
   loadingNext = false,
   minKeywordsToSubmit = DEFAULT_MIN_KEYWORDS_TO_SUBMIT,
@@ -459,15 +435,22 @@ export function ComboToneReviewPlayer({
 }: ComboToneReviewPlayerProps) {
   const keywordSeed = `combo:${combo.comboId}`;
   const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]);
-  const [keywordOptions, setKeywordOptions] = useState<KeywordLeaf[]>(() => initialKeywordOptions(keywordSeed));
-  const [shownKeywords, setShownKeywords] = useState<string[]>(() => keywordOptions.map((keyword) => keyword.label));
+  const [keywordOptions, setKeywordOptions] = useState<KeywordLeaf[]>(() =>
+    initialKeywordOptions(keywordSeed)
+  );
+  const [shownKeywords, setShownKeywords] = useState<string[]>(() =>
+    keywordOptions.map((keyword) => keyword.label)
+  );
   const [lastSelectedKeyword, setLastSelectedKeyword] = useState<string | undefined>();
   const [keywordRound, setKeywordRound] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitSucceeded, setSubmitSucceeded] = useState(false);
   const selectedKeywordSet = new Set(selectedKeywords);
   const keywordPlacements = keywordPilePlacements(selectedKeywords);
-  const pileRows = Math.max(1, ...keywordPlacements.map((placement) => placement.rowFromBottom + 1));
+  const pileRows = Math.max(
+    1,
+    ...keywordPlacements.map((placement) => placement.rowFromBottom + 1)
+  );
   const pileGridRows = pileRows + 1;
 
   useEffect(() => {
@@ -505,7 +488,9 @@ export function ComboToneReviewPlayer({
     });
     setKeywordRound(nextRound);
     setKeywordOptions(nextOptions);
-    setShownKeywords((previous) => unique([...previous, ...nextOptions.map((keyword) => keyword.label)]));
+    setShownKeywords((previous) =>
+      unique([...previous, ...nextOptions.map((keyword) => keyword.label)])
+    );
   }
 
   async function submitReview() {
@@ -518,7 +503,6 @@ export function ComboToneReviewPlayer({
         sourceVideoAssetId: combo.videoAssetId,
         sourceAudioAssetId: combo.audioAssetId,
         keywords: selectedKeywords,
-        scores,
       });
       setSubmitSucceeded(true);
     } finally {
@@ -526,48 +510,51 @@ export function ComboToneReviewPlayer({
     }
   }
 
-  const submitButton = selectedKeywords.length > 0 ? (
-    <button
-      className="inline-flex w-28 items-center justify-center rounded-full border border-sky-200/90 bg-sky-400 px-5 py-2 text-sm font-semibold text-black shadow-[0_0_24px_rgba(56,189,248,0.55)] transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:border-white/35 disabled:bg-black/55 disabled:text-white/60 disabled:shadow-none"
-      disabled={submitting || selectedKeywords.length < minKeywordsToSubmit}
-      onClick={() => void submitReview()}
-      title="Submit review"
-      type="button"
-    >
-      {submitting ? (
-        <svg
-          aria-hidden="true"
-          className="h-4 w-4 animate-spin"
-          fill="none"
-          viewBox="0 0 24 24"
-        >
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path
-            className="opacity-75"
-            d="M4 12a8 8 0 018-8"
+  const submitButton =
+    selectedKeywords.length > 0 ? (
+      <button
+        className="inline-flex w-28 items-center justify-center rounded-full border border-sky-200/90 bg-sky-400 px-5 py-2 text-sm font-semibold text-black shadow-[0_0_24px_rgba(56,189,248,0.55)] transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:border-white/35 disabled:bg-black/55 disabled:text-white/60 disabled:shadow-none"
+        disabled={submitting || selectedKeywords.length < minKeywordsToSubmit}
+        onClick={() => void submitReview()}
+        title="Submit review"
+        type="button"
+      >
+        {submitting ? (
+          <svg aria-hidden="true" className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              d="M4 12a8 8 0 018-8"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeWidth="4"
+            />
+          </svg>
+        ) : submitSucceeded ? (
+          <svg
+            aria-hidden="true"
+            className="h-4 w-4"
+            fill="none"
             stroke="currentColor"
             strokeLinecap="round"
-            strokeWidth="4"
-          />
-        </svg>
-      ) : submitSucceeded ? (
-        <svg
-          aria-hidden="true"
-          className="h-4 w-4"
-          fill="none"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="2.5"
-          viewBox="0 0 24 24"
-        >
-          <path d="M20 6L9 17l-5-5" />
-        </svg>
-      ) : (
-        "Submit"
-      )}
-    </button>
-  ) : null;
+            strokeLinejoin="round"
+            strokeWidth="2.5"
+            viewBox="0 0 24 24"
+          >
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+        ) : (
+          "Submit"
+        )}
+      </button>
+    ) : null;
 
   return (
     <div
@@ -592,7 +579,9 @@ export function ComboToneReviewPlayer({
         <button
           className={cx(
             "pointer-events-auto rounded-full border bg-black/45 px-4 py-2 text-sm font-medium text-white shadow-lg backdrop-blur-sm transition hover:bg-black/65 disabled:opacity-70",
-            submitSucceeded ? "border-sky-400 shadow-[0_0_20px_rgba(56,189,248,0.45)]" : "border-white/50"
+            submitSucceeded
+              ? "border-sky-400 shadow-[0_0_20px_rgba(56,189,248,0.45)]"
+              : "border-white/50"
           )}
           disabled={loadingNext}
           onClick={onNext}
@@ -603,7 +592,10 @@ export function ComboToneReviewPlayer({
         </button>
       ) : null}
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 px-4 py-4 sm:px-6 sm:py-6" style={{ zIndex: 120 }}>
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 px-4 py-4 sm:px-6 sm:py-6"
+        style={{ zIndex: 120 }}
+      >
         <div className="pointer-events-auto grid grid-cols-[1fr_auto] items-center gap-2 text-white sm:grid-cols-[1fr_minmax(0,auto)_1fr] sm:gap-8">
           <div className="hidden sm:block" />
           <div className="flex min-w-0 flex-wrap justify-center gap-2 sm:max-w-[min(72vw,48rem)]">
@@ -641,7 +633,13 @@ export function ComboToneReviewPlayer({
       {selectedKeywords.length > 0 ? (
         <div
           className="pointer-events-none"
-          style={{ bottom: 24, left: 24, maxWidth: "calc(100% - 9rem)", position: "absolute", zIndex: 120 }}
+          style={{
+            bottom: 24,
+            left: 24,
+            maxWidth: "calc(100% - 9rem)",
+            position: "absolute",
+            zIndex: 120,
+          }}
         >
           <div
             className="pointer-events-auto grid items-end gap-2 overflow-visible"
