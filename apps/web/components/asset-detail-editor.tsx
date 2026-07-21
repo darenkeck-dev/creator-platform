@@ -134,7 +134,7 @@ function ToneScoreList({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-2">
-          <span className="h-3 w-3 rounded-full border border-foreground/60 bg-background" />
+          <span className="h-3 w-3 rounded-full border-2 border-foreground bg-background shadow-sm" />
           Extracted
         </span>
         <span className="inline-flex items-center gap-2">
@@ -187,7 +187,7 @@ function ToneScoreList({
                   />
                 ) : null}
                 <span
-                  className="absolute top-1/2 z-30 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-foreground/60 bg-background"
+                  className="absolute top-1/2 z-30 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-foreground bg-background shadow-sm"
                   style={{ left: `${originalPercent}%` }}
                   title={`Extracted ${originalValue.toFixed(2)}`}
                 />
@@ -712,6 +712,61 @@ export function AssetDetailEditor({ initialAsset, initialReviews }: Props) {
               </dd>
             </div>
           </dl>
+          <div className="mt-5 border-t pt-4">
+            <h3 className="text-sm font-medium">Activity Log</h3>
+            <div className="mt-3 overflow-x-auto rounded-md border">
+              <table className="min-w-[760px] w-full border-collapse text-left text-xs">
+                <thead className="bg-muted/60 text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Time</th>
+                    <th className="px-3 py-2 font-medium">Level</th>
+                    <th className="px-3 py-2 font-medium">Activity</th>
+                    <th className="px-3 py-2 font-medium">Source</th>
+                    <th className="px-3 py-2 font-medium">Details</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {auditLog.length === 0 ? (
+                    <tr>
+                      <td className="px-3 py-3 text-muted-foreground" colSpan={5}>
+                        No activity recorded yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    auditLog.map((entry) => {
+                      const details = formatAuditDetails(entry.details);
+                      return (
+                        <tr className="align-top" key={entry.id}>
+                          <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
+                            <time dateTime={entry.at}>
+                              {entry.at.replace("T", " ").replace("Z", " UTC")}
+                            </time>
+                          </td>
+                          <td
+                            className={`whitespace-nowrap px-3 py-2 font-medium uppercase ${
+                              entry.level === "error"
+                                ? "text-red-700 dark:text-red-300"
+                                : "text-muted-foreground"
+                            }`}
+                          >
+                            {entry.level}
+                          </td>
+                          <td className="px-3 py-2 font-medium">{entry.message}</td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            {entry.source}
+                            {entry.code ? ` · ${entry.code}` : ""}
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            {details ?? entry.category.replaceAll("_", " ")}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </details>
       </div>
 
@@ -1050,46 +1105,6 @@ export function AssetDetailEditor({ initialAsset, initialReviews }: Props) {
               </div>
             )}
           </div>
-        </div>
-      </div>
-
-      <div className="rounded-xl border bg-card p-6 shadow-sm">
-        <h2 className="text-base font-semibold">Activity Log</h2>
-        <div className="mt-4 space-y-3">
-          {auditLog.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No activity recorded yet.</p>
-          ) : (
-            auditLog.map((entry) => {
-              const details = formatAuditDetails(entry.details);
-              return (
-                <div className="rounded-lg border bg-background p-3 text-sm" key={entry.id}>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge
-                        className={
-                          entry.level === "error"
-                            ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200"
-                            : undefined
-                        }
-                        variant="secondary"
-                      >
-                        {entry.level}
-                      </Badge>
-                      <span className="font-medium">{entry.message}</span>
-                    </div>
-                    <time className="text-xs text-muted-foreground" dateTime={entry.at}>
-                      {entry.at}
-                    </time>
-                  </div>
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    {entry.category.replaceAll("_", " ")} · {entry.source}
-                    {entry.code ? ` · ${entry.code}` : ""}
-                  </div>
-                  {details ? <p className="mt-2 text-xs text-muted-foreground">{details}</p> : null}
-                </div>
-              );
-            })
-          )}
         </div>
       </div>
 
