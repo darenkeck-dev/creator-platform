@@ -1,5 +1,47 @@
 # Wiki Log
 
+## [2026-07-28] fix | resume PDF dev URL
+
+- Fixed `/daren-keck-resume.pdf` returning the SPA HTML fallback during local development because the generated file existed only under `dist`.
+- Changed PDF generation to use a temporary Vite development server and write the artifact under gitignored `public/`, then build it into `dist`.
+- Added `content:darenkeck:prepare` and reordered deployment to fetch content, generate PDF, build, and sync.
+
+## [2026-07-28] refactor | resume print styling
+
+- Moved natural element-level print styling from global CSS into Tailwind `print:` utilities on the Markdown component mappings.
+- Retained only paper setup, the document-wide print canvas, and sibling-aware pagination logic in `index.css`.
+- Regenerated the same two-page, extractable-text resume PDF after the refactor.
+
+## [2026-07-28] build | print-friendly resume PDF
+
+- Added a Playwright generator that prints the built `/dev` route as a US Letter PDF after the Vite build and before static-site upload.
+- Added print-only white-paper styling, compact pagination, a `/dev` Download PDF action, and a one-time Chromium setup command.
+- Generated and inspected a two-page PDF with extractable text; deployment remains pending.
+
+## [2026-07-28] app | Markdown resume at /dev
+
+- Replaced the `/dev` planning stub with a lazy-loaded viewer for fetched `content/resume.md`.
+- Added `react-markdown`, GFM, and YAML frontmatter handling plus responsive styled Markdown elements and resume-specific page metadata.
+- Verified darenkeck typecheck, lint, and production build; deployment remains pending.
+
+## [2026-07-28] build | darenkeck content fetch
+
+- Added a standalone shallow fetch command for private `darenkeck-content` Markdown and media with repository/ref overrides, required-path validation, and resolved commit recording.
+- Added gitignored generated content/media destinations and wired fetching before both staging and production darenkeck builds.
+- Kept Markdown parsing and resume route rendering for the next implementation slice.
+
+## [2026-07-27] planning | external public content pipeline
+
+- Chose a separate `darenkeck-content` repository as the Pages CMS-managed source for resume, news/blog, and project/profile Markdown.
+- Planned build-time content fetching and Markdown-to-React rendering for routes including `/news`, `/dev/news`, and `/dev/resume`.
+- Selected an SPA-first approach using plain Markdown and `react-markdown`; MDX and SEO-oriented prerendering remain optional later phases.
+
+## [2026-07-27] refactor | public site routing
+
+- Added React Router to `apps/darenkeck` with explicit `/`, `/dev`, and not-found routes in preparation for blog and public review pages.
+- Kept `/dev` as a minimal planning stub and linked it from the homepage and public sitemap.
+- Relies on the existing CloudFront SPA fallback for direct route requests; deployment remains pending.
+
 ## [2026-07-21] foundation | S3 Vectors asset index
 
 - Selected S3 Vectors for the MVP and fixed the initial `combo-selection/v1` behavior: controlled-route rollout, five recent combo exclusions, three recent audio exclusions, and distance-weighted top-five sampling.

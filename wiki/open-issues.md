@@ -11,6 +11,11 @@
 - Tone extraction output needs simplification: reassess whether `.tonebundle.tar.gz` is needed now that display-ready tone summary/scores are stored directly on the asset record.
 - Decide whether existing `tone-taxonomy/v1` asset analyses should be reanalyzed or left historical now that new analyses emit `tone-taxonomy/v2`.
 - Deploy `MediaManagerVectorStack`, then add queue-backed asset vector upsert/delete synchronization and a dry-run-first reconciliation command before enabling public tone selection.
+- Define deterministic file-to-route mapping and frontmatter metadata extraction for `/news`, `/dev/news`, and project/profile content; `/dev` already renders the fetched resume Markdown.
+- Add collection indexing for fetched `apps/darenkeck/.generated-content/content/`; defer MDX unless embedded React components become necessary.
+- Decide how content-repository commits trigger site deployment and how a private repository, if used, supplies read-only credentials.
+- Ensure future CI/deployment runners install Playwright Chromium with `bun run setup:darenkeck:pdf` before darenkeck deployment.
+- Revisit prerendering, sitemap generation from content, metadata, and other SEO work after the SPA content routes are working.
 
 ## Playback and UX watchlist
 

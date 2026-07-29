@@ -6,6 +6,8 @@
 - Workspace/package manifests are now versioned at `1.0.1` for upcoming release tracking.
 - Primary runtime flows are working: upload -> processing -> ready -> combo playback.
 - `darenkeck` static site is deployed on S3 + CloudFront with security headers and crawl metadata.
+- `apps/darenkeck` now uses React Router for public routes. `/dev` lazy-loads and renders the fetched `content/resume.md` with styled Markdown components and links to a generated print-friendly PDF; the routing and resume changes are not yet deployed.
+- Public-site content lives as Pages CMS-managed Markdown in the private `darenkeck-dev/darenkeck-content` repository. Darenkeck deploys fetch and validate that content before building; news/blog collection routes remain pending.
 
 See also: [Architecture Map](architecture-map.md), [Deploy and Ops](deploy-and-ops.md).
 

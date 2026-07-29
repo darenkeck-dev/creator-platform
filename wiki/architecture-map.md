@@ -4,7 +4,7 @@
 
 - **Frontend apps**
   - `apps/web`: authenticated media manager UI (upload/library/asset/combo admin).
-  - `apps/darenkeck`: public combo-consumer site (random combo playback).
+  - `apps/darenkeck`: public personal site using React Router, with random combo playback at `/`, a Markdown-backed resume at `/dev`, and an explicit not-found route.
 - **Shared packages**
   - `packages/contracts`: shared schemas/types for API payloads and records.
 - `packages/shared`: shared playback/review components (`ComboPlayer`, `ComboToneReviewPlayer`) and playback utilities.
@@ -48,6 +48,27 @@ See also: [Current State](current-state.md), [Recent Changes](recent-changes.md)
 - Behavior:
   - avoids returning same audio track as previous when possible
   - same video track is acceptable
+
+## Public developer profile
+
+- Route: `/dev`
+- `apps/darenkeck/src/main.tsx` defines the public route table with React Router. Current routes are `/`, `/dev`, and `*`.
+- CloudFront's existing `403/404 -> /index.html` fallback supports direct requests to the static SPA route.
+- The route lazy-loads `DevPage`, which imports fetched `content/resume.md` as a Vite raw asset and renders it with `react-markdown`, `remark-gfm`, and `remark-frontmatter`.
+- YAML frontmatter is recognized and omitted from the document output. Resume headings, lists, links, and typography are mapped to styled React components.
+- A print media stylesheet converts the dark web presentation to a compact white, black-text US Letter layout. Playwright prints `/dev` through a temporary Vite development server to `public/daren-keck-resume.pdf`; Vite then copies it into `dist`, and the page exposes it through a Download PDF action.
+- The homepage links to the developer profile, and the route is included in `public/sitemap.xml`.
+
+## Planned public content pipeline
+
+- Content source: a separate `darenkeck-content` repository containing Markdown files edited through Pages CMS.
+- Initial content includes general news plus developer news, resume, and project/profile material.
+- `/dev` currently serves the resume. Intended collection routes include `/news`, `/news/:slug`, `/dev/news`, and `/dev/news/:slug`; final file-to-route conventions remain to be defined.
+- `scripts/fetch-darenkeck-content.sh` shallow-fetches `main` by default before darenkeck staging/prod builds, validates `content/`, `media/`, and non-empty `content/resume.md`, and records the resolved commit in `apps/darenkeck/.generated-content/REVISION`.
+- Fetched Markdown is stored under the gitignored `apps/darenkeck/.generated-content/content/`; media is copied to the gitignored `apps/darenkeck/public/media/` for Vite deployment.
+- `DARENKECK_CONTENT_REPO` and `DARENKECK_CONTENT_REF` override the private SSH repository and `main` defaults. Local access uses existing Git credentials; future CI requires read-only repository credentials.
+- Collection indexing and frontmatter metadata extraction remain pending. Use MDX only if content later needs embedded interactive React components.
+- The first version remains a client-rendered SPA. Static generation/prerendering and broader SEO work are deferred.
 
 ## Deployment model
 

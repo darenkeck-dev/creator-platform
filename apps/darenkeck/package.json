@@ -11,6 +11,7 @@
     "build": "bunx --bun vite build",
     "build:staging": "bunx --bun vite build --mode staging",
     "build:prod": "bunx --bun vite build --mode production",
+    "resume:pdf": "bun run scripts/generate-resume-pdf.ts",
     "preview": "bunx --bun vite preview --host 0.0.0.0 --port 3002",
     "lint": "bunx --bun eslint .",
     "typecheck": "bunx tsc --noEmit"
@@ -20,7 +21,11 @@
     "@media-manager/shared": "workspace:*",
     "hls.js": "^1.6.10",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.18.1",
+    "remark-frontmatter": "^5.0.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4",
@@ -28,6 +33,7 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5.1.0",
     "eslint": "^9",
+    "playwright": "^1.62.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "^7.1.11"

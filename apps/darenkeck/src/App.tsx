@@ -11,6 +11,7 @@ import {
   type SlotPlaybackState,
   type SlotPlaybackAssignment,
 } from "./lib/slot-manager";
+import { setPageMetadata } from "./lib/page-metadata";
 
 const SingleComboSlot = lazy(async () => {
   const module = await import("./components/SingleComboSlot");
@@ -133,6 +134,14 @@ export function App() {
   const managerRef = useRef<SlotManager | null>(null);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    setPageMetadata({
+      title: "darenkeck",
+      description: "Personal page for Daren Keck with music, links, and live combo visuals.",
+      url: "https://darenkeck.com/",
+    });
+  }, []);
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -316,6 +325,7 @@ export function App() {
   const videoDebugSnapshot = formatMediaSnapshot(videoElementRef.current);
 
   const linkItems = [
+    { label: "Developer profile", href: "/dev", external: false },
     { label: "Github", href: "https://github.com/darenkeck-dev" },
     { label: "Soundcloud", href: "https://soundcloud.com/darenkeck" },
     { label: "Wayfarer Music Group", href: "https://wayfarermusicgroup.com/dir" },

@@ -48,6 +48,9 @@ resolve_export() {
 BUCKET_NAME="$(resolve_export "${BUCKET_EXPORT}")"
 DIST_ID="$(resolve_export "${DIST_EXPORT}")"
 
+echo "Preparing darenkeck content and resume PDF..."
+bun run content:darenkeck:prepare
+
 echo "Building darenkeck for ${STAGE}..."
 bun run "${BUILD_CMD}"
 

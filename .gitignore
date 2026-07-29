@@ -29,5 +29,8 @@ build/
 apps/tone-embedding/examples/media/
 apps/tone-embedding/models/
 apps/tone-embedding/tests/output/
+apps/darenkeck/.generated-content/
+apps/darenkeck/public/media/
+apps/darenkeck/public/daren-keck-resume.pdf
 
 research/tone-taxonomy-v2/sources/
