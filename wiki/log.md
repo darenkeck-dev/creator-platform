@@ -1,5 +1,16 @@
 # Wiki Log
 
+## [2026-07-29] security | content symlink hardening
+
+- Rejected symlinks, submodules, and other non-regular Git entries under fetched `content/` and `media/` before copying.
+- Added staged-tree non-regular-file validation and disabled symlink following during darenkeck S3 sync.
+- Created a local gitignored security audit handoff for remaining medium findings to address on a dedicated branch.
+
+## [2026-07-29] content | simplify homepage profile
+
+- Reduced darenkeck.com homepage links to Dev work and Wayfarer Records.
+- Replaced the DEPT-specific introduction with a general full-stack developer summary reflecting a decade of experience.
+
 ## [2026-07-28] fix | resume PDF dev URL
 
 - Fixed `/daren-keck-resume.pdf` returning the SPA HTML fallback during local development because the generated file existed only under `dist`.

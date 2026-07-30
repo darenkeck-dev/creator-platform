@@ -21,6 +21,31 @@ fail() {
   exit 1
 }
 
+validate_tracked_files() {
+  local entry
+  local metadata
+  local mode
+  local path
+
+  while IFS= read -r -d '' entry; do
+    metadata="${entry%%$'\t'*}"
+    path="${entry#*$'\t'}"
+    mode="${metadata%% *}"
+
+    case "${mode}" in
+      100644|100755) ;;
+      *) fail "Content repository contains unsupported tracked file type at ${path} (mode ${mode})." ;;
+    esac
+  done < <(git -C "${SOURCE_DIR}" ls-files --stage -z -- content media)
+}
+
+validate_staged_tree() {
+  local root="$1"
+  local unsafe_path
+  unsafe_path="$(find "${root}" ! -type d ! -type f -print -quit)"
+  [[ -z "${unsafe_path}" ]] || fail "Staged content contains a non-regular file: ${unsafe_path}"
+}
+
 printf 'Fetching darenkeck content from %s at %s...\n' "${CONTENT_REPO}" "${CONTENT_REF}"
 git clone --quiet --depth 1 --no-checkout "${CONTENT_REPO}" "${WORK_DIR}/repo"
 
@@ -34,7 +59,9 @@ fi
 SOURCE_DIR="${WORK_DIR}/repo"
 [[ -d "${SOURCE_DIR}/content" ]] || fail "Content repository is missing required directory: content/"
 [[ -d "${SOURCE_DIR}/media" ]] || fail "Content repository is missing required directory: media/"
-[[ -s "${SOURCE_DIR}/content/resume.md" ]] || fail "Content repository is missing required non-empty file: content/resume.md"
+validate_tracked_files
+[[ -f "${SOURCE_DIR}/content/resume.md" && ! -L "${SOURCE_DIR}/content/resume.md" ]] || fail "Content repository is missing required regular file: content/resume.md"
+[[ -s "${SOURCE_DIR}/content/resume.md" ]] || fail "Content repository contains an empty file: content/resume.md"
 
 CONTENT_COMMIT="$(git -C "${SOURCE_DIR}" rev-parse HEAD)"
 [[ "${CONTENT_COMMIT}" =~ ^[0-9a-f]{40}$ ]] || fail "Unable to resolve the fetched content commit."
@@ -43,6 +70,8 @@ mkdir -p "${NEXT_GENERATED_DIR}" "${NEXT_PUBLIC_MEDIA_DIR}"
 cp -R "${SOURCE_DIR}/content" "${NEXT_GENERATED_DIR}/content"
 cp -R "${SOURCE_DIR}/media/." "${NEXT_PUBLIC_MEDIA_DIR}/"
 printf '%s\n' "${CONTENT_COMMIT}" > "${NEXT_GENERATED_DIR}/REVISION"
+validate_staged_tree "${NEXT_GENERATED_DIR}"
+validate_staged_tree "${NEXT_PUBLIC_MEDIA_DIR}"
 
 rm -rf "${GENERATED_DIR}" "${PUBLIC_MEDIA_DIR}"
 mv "${NEXT_GENERATED_DIR}" "${GENERATED_DIR}"

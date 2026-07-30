@@ -23,7 +23,7 @@
 
 - Pages CMS edits and commits Markdown in the separate `darenkeck-content` repository.
 - `bun run content:darenkeck:fetch` shallow-fetches `git@github.com:darenkeck-dev/darenkeck-content.git` at `main`; override with `DARENKECK_CONTENT_REPO` or `DARENKECK_CONTENT_REF`.
-- Fetching stages and validates required source paths before replacing generated Markdown and public media. The resolved commit SHA is written to `apps/darenkeck/.generated-content/REVISION`.
+- Fetching accepts only regular Git file modes under `content/` and `media/`, requires a regular non-empty `content/resume.md`, and rechecks staged trees for non-regular files before replacement. The resolved commit SHA is written to `apps/darenkeck/.generated-content/REVISION`.
 - `deploy:darenkeck:staging` and `deploy:darenkeck:prod` run the fetch before Vite builds, and fail instead of building when fetch or validation fails.
 - Local deployment uses existing Git SSH credentials. Future CI should use read-only access through a deploy key, GitHub App token, or fine-grained PAT.
 - `/dev` bundles fetched `content/resume.md` into the SPA and renders it with `react-markdown`; therefore a darenkeck build requires a successful content fetch first.
@@ -36,6 +36,7 @@
 - `bun run content:darenkeck:pdf` starts a temporary Vite development server, opens `/dev` with print media, and writes the two-page US Letter artifact to the gitignored `apps/darenkeck/public/daren-keck-resume.pdf`.
 - `bun run content:darenkeck:prepare` fetches content and regenerates the PDF for local development. Run it before `bun run dev:darenkeck` whenever resume content changes.
 - The darenkeck staging and production deploy commands run content fetch -> PDF generation -> Vite build -> S3 sync. Vite copies the public PDF into `dist`, so the local and deployed `/daren-keck-resume.pdf` URL serves the same artifact.
+- Static S3 sync uses `--no-follow-symlinks` as a final safeguard against publishing files outside the build output tree.
 - PDF generation uses white paper, black text, compact print spacing, hidden web actions, controlled page breaks, and no printed background graphics.
 
 ## Darenkeck custom domain wiring (optional)

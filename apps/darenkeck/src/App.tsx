@@ -325,10 +325,8 @@ export function App() {
   const videoDebugSnapshot = formatMediaSnapshot(videoElementRef.current);
 
   const linkItems = [
-    { label: "Developer profile", href: "/dev", external: false },
-    { label: "Github", href: "https://github.com/darenkeck-dev" },
-    { label: "Soundcloud", href: "https://soundcloud.com/darenkeck" },
-    { label: "Wayfarer Music Group", href: "https://wayfarermusicgroup.com/dir" },
+    { label: "Dev work", href: "/dev", external: false },
+    { label: "Wayfarer Records", href: "https://wayfarermusicgroup.com/dir" },
   ];
 
   const bulletinItems = [
@@ -505,7 +503,8 @@ export function App() {
                 <header className="space-y-2">
                   <h1 className="text-3xl font-bold text-white">Hey!</h1>
                   <p className="text-sm leading-relaxed text-white/85">
-                    This is my personal page. I program at DEPT and write music at Wayfarer Records!
+                    This is my personal page. I'm a full-stack developer with a decade of experience, and I write music
+                    at Wayfarer Records!
                   </p>
                   <p className="text-sm leading-relaxed text-white/80">
                     I'll occasionally link up fun projects here as well.
