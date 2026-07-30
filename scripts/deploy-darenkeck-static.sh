@@ -48,11 +48,14 @@ resolve_export() {
 BUCKET_NAME="$(resolve_export "${BUCKET_EXPORT}")"
 DIST_ID="$(resolve_export "${DIST_EXPORT}")"
 
+echo "Preparing darenkeck content and resume PDF..."
+bun run content:darenkeck:prepare
+
 echo "Building darenkeck for ${STAGE}..."
 bun run "${BUILD_CMD}"
 
 echo "Syncing dist to s3://${BUCKET_NAME} ..."
-aws s3 sync "apps/darenkeck/dist" "s3://${BUCKET_NAME}" --delete --exclude ".DS_Store" --exclude "*/.DS_Store"
+aws s3 sync "apps/darenkeck/dist" "s3://${BUCKET_NAME}" --delete --no-follow-symlinks --exclude ".DS_Store" --exclude "*/.DS_Store"
 
 echo "Removing any existing .DS_Store objects from s3://${BUCKET_NAME} ..."
 aws s3 rm "s3://${BUCKET_NAME}" --recursive --exclude "*" --include ".DS_Store" --include "*/.DS_Store"
