@@ -1,4 +1,5 @@
 export * from "./combo.js";
+export * from "./combo-tone.js";
 export * from "./curator-adjustment.js";
 export * from "./asset-vector.js";
 export * from "./asset-vector-index.js";

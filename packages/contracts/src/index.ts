@@ -657,6 +657,67 @@ export const PublicRandomComboResponseSchema = z.object({
   audioSrc: z.string().url(),
 });
 
+export const PublicComboSelectionRequestSchema = z
+  .object({
+    schemaVersion: z.literal("public-combo-selection-request/v1"),
+    mode: z.literal("walk"),
+    current: z
+      .object({
+        audioAssetId: z.string().min(1),
+        videoAssetId: z.string().min(1),
+      })
+      .strict(),
+    history: z
+      .object({
+        recentComboIds: z.array(z.string().min(1)).max(5).default([]),
+        recentAudioAssetIds: z.array(z.string().min(1)).max(3).default([]),
+      })
+      .strict()
+      .default({}),
+  })
+  .strict();
+
+export const PublicComboSelectionFallbackReasonSchema = z.enum([
+  "vector_query_failed",
+  "no_walk_candidates",
+  "selected_candidate_unavailable",
+]);
+
+const PublicComboSelectionMetadataSchema = z.discriminatedUnion("resolvedMode", [
+  z
+    .object({
+      schemaVersion: z.literal("combo-selection/v1"),
+      requestedMode: z.literal("walk"),
+      resolvedMode: z.literal("walk"),
+      predictorVersion: z.literal("combo-tone-predictor/v0"),
+      distance: z.number().finite().nonnegative(),
+    })
+    .strict(),
+  z
+    .object({
+      schemaVersion: z.literal("combo-selection/v1"),
+      requestedMode: z.literal("walk"),
+      resolvedMode: z.literal("random"),
+      predictorVersion: z.literal("combo-tone-predictor/v0"),
+      fallbackReason: PublicComboSelectionFallbackReasonSchema,
+    })
+    .strict(),
+]);
+
+export const PublicComboSelectionResponseSchema = z
+  .object({
+    schemaVersion: z.literal("public-combo-selection-response/v1"),
+    comboId: z.string().min(1),
+    videoAssetId: z.string().min(1),
+    audioAssetId: z.string().min(1),
+    videoTitle: z.string().min(1),
+    audioTitle: z.string().min(1),
+    videoSrc: z.string().url(),
+    audioSrc: z.string().url(),
+    selection: PublicComboSelectionMetadataSchema,
+  })
+  .strict();
+
 export type AssetType = z.infer<typeof AssetTypeSchema>;
 export type AssetStatus = z.infer<typeof AssetStatusSchema>;
 export type AssetOrigin = z.infer<typeof AssetOriginSchema>;
@@ -729,3 +790,8 @@ export type ToneReviewListQuery = z.infer<typeof ToneReviewListQuerySchema>;
 export type ToneReviewListResponse = z.infer<typeof ToneReviewListResponseSchema>;
 export type ComboDeleteResponse = z.infer<typeof ComboDeleteResponseSchema>;
 export type PublicRandomComboResponse = z.infer<typeof PublicRandomComboResponseSchema>;
+export type PublicComboSelectionRequest = z.infer<typeof PublicComboSelectionRequestSchema>;
+export type PublicComboSelectionFallbackReason = z.infer<
+  typeof PublicComboSelectionFallbackReasonSchema
+>;
+export type PublicComboSelectionResponse = z.infer<typeof PublicComboSelectionResponseSchema>;

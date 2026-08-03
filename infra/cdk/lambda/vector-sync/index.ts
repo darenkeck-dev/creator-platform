@@ -4,11 +4,10 @@ import { AssetRecordSchema, type AssetRecord } from "@media-manager/contracts";
 import {
   ASSET_TONE_VECTOR_SCHEMA_VERSION,
   assetToneVectorSourceFingerprint,
-  buildAssetToneVectorRecord,
   type AssetToneVectorIndex,
-  type AssetToneVectorRecord,
 } from "@media-manager/tone-core";
 import { z } from "zod";
+import { assetToneVectorRecordForAsset } from "../shared/asset-tone-vector";
 import { S3VectorsIndex } from "../shared/s3-vectors-index";
 
 type SqsEvent = {
@@ -64,34 +63,6 @@ function requiredEnv(name: "ASSETS_TABLE_NAME" | "ASSET_TONE_VECTOR_INDEX_ARN"):
 
 function isConditionalCheckFailure(error: unknown): boolean {
   return error instanceof Error && error.name === "ConditionalCheckFailedException";
-}
-
-function vectorRecordForAsset(asset: AssetRecord): AssetToneVectorRecord | null {
-  if (
-    (asset.type !== "audio" && asset.type !== "video") ||
-    asset.visibility !== "public" ||
-    asset.status !== "ready" ||
-    asset.toneAnalysis?.status !== "ready" ||
-    asset.toneAnalysis.toneTaxonomyVersion !== "tone-taxonomy/v2" ||
-    !asset.toneAnalysis.scores
-  ) {
-    return null;
-  }
-
-  try {
-    return buildAssetToneVectorRecord({
-      assetId: asset.id,
-      assetType: asset.type,
-      modelScores: asset.toneAnalysis.scores,
-      adjustedScores: asset.toneAnalysis.adjustedScores,
-      visibility: asset.visibility,
-      assetStatus: asset.status,
-      toneStatus: asset.toneAnalysis.status,
-      updatedAt: asset.updatedAt,
-    });
-  } catch {
-    return null;
-  }
 }
 
 async function readAsset(
@@ -227,7 +198,7 @@ async function convergeAsset(dependencies: VectorSyncDependencies, assetId: stri
       return;
     }
 
-    const record = vectorRecordForAsset(current.asset);
+    const record = assetToneVectorRecordForAsset(current.asset);
     if (record) {
       await dependencies.vectorIndex.upsert(record);
     } else {

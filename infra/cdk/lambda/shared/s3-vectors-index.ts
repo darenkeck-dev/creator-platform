@@ -20,15 +20,22 @@ type VectorIndexMetadata = Omit<AssetToneVectorRecord, "assetId" | "effectiveTon
 export type S3VectorsIndexOptions = {
   indexArn: string;
   client?: S3VectorsClient;
+  queryTimeoutMs?: number;
 };
 
 export class S3VectorsIndex implements AssetToneVectorIndex {
   private readonly client: S3VectorsClient;
   private readonly indexArn: string;
+  private readonly queryTimeoutMs: number | undefined;
 
-  constructor({ indexArn, client = new S3VectorsClient({}) }: S3VectorsIndexOptions) {
+  constructor({
+    indexArn,
+    client = new S3VectorsClient({}),
+    queryTimeoutMs,
+  }: S3VectorsIndexOptions) {
     this.indexArn = indexArn;
     this.client = client;
+    this.queryTimeoutMs = queryTimeoutMs;
   }
 
   async upsert(input: AssetToneVectorRecord): Promise<void> {
@@ -57,61 +64,80 @@ export class S3VectorsIndex implements AssetToneVectorIndex {
     );
   }
 
-  async queryNearest({ vector, limit }: Parameters<AssetToneVectorIndex["queryNearest"]>[0]) {
-    const response = await this.client.send(
-      new QueryVectorsCommand({
-        indexArn: this.indexArn,
-        queryVector: { float32: vector },
-        topK: limit,
-        returnDistance: true,
-      })
-    );
+  async queryNearest({
+    vector,
+    assetType,
+    limit,
+  }: Parameters<AssetToneVectorIndex["queryNearest"]>[0]) {
+    const abortController = this.queryTimeoutMs ? new AbortController() : undefined;
+    const timeout = abortController
+      ? setTimeout(() => abortController.abort(), this.queryTimeoutMs)
+      : undefined;
 
-    const queryVectors = response.vectors ?? [];
-    if (queryVectors.length === 0) {
-      return [];
-    }
+    try {
+      const response = await this.client.send(
+        new QueryVectorsCommand({
+          indexArn: this.indexArn,
+          queryVector: { float32: vector },
+          topK: limit,
+          filter: { assetType },
+          returnDistance: true,
+        }),
+        { abortSignal: abortController?.signal }
+      );
 
-    const stored = await this.client.send(
-      new GetVectorsCommand({
-        indexArn: this.indexArn,
-        keys: queryVectors.map((result) => requiredKey(result.key)),
-        returnData: true,
-        returnMetadata: true,
-      })
-    );
-    const records = new Map(
-      (stored.vectors ?? []).map((result) => {
-        const assetId = requiredKey(result.key);
-        if (!result.data || !("float32" in result.data)) {
-          throw new Error(`S3 Vectors record ${assetId} is missing float32 data`);
-        }
-        return [
-          assetId,
-          AssetToneVectorRecordSchema.parse({
+      const queryVectors = response.vectors ?? [];
+      if (queryVectors.length === 0) {
+        return [];
+      }
+
+      const stored = await this.client.send(
+        new GetVectorsCommand({
+          indexArn: this.indexArn,
+          keys: queryVectors.map((result) => requiredKey(result.key)),
+          returnData: true,
+          returnMetadata: true,
+        }),
+        { abortSignal: abortController?.signal }
+      );
+      const records = new Map(
+        (stored.vectors ?? []).map((result) => {
+          const assetId = requiredKey(result.key);
+          if (!result.data || !("float32" in result.data) || !result.data.float32) {
+            throw new Error(`S3 Vectors record ${assetId} is missing float32 data`);
+          }
+          const float32 = result.data.float32;
+          return [
             assetId,
-            effectiveTone: result.data.float32,
-            ...VectorIndexMetadataSchema.parse(result.metadata),
-          }),
-        ];
-      })
-    );
+            AssetToneVectorRecordSchema.parse({
+              assetId,
+              effectiveTone: float32.map((value, index) =>
+                requiredFiniteNumber(value, `vector value ${index} for ${assetId}`)
+              ),
+              ...VectorIndexMetadataSchema.parse(result.metadata),
+            }),
+          ];
+        })
+      );
 
-    return queryVectors.map((result) => {
-      const assetId = requiredKey(result.key);
-      if (!Number.isFinite(result.distance)) {
-        throw new Error("S3 Vectors query result is missing a key or finite distance");
-      }
-      const record = records.get(assetId);
-      if (!record) {
-        throw new Error(`S3 Vectors record ${assetId} was not returned by GetVectors`);
-      }
+      return queryVectors.map((result) => {
+        const assetId = requiredKey(result.key);
+        const distance = requiredFiniteNumber(result.distance, `distance for ${assetId}`);
+        const record = records.get(assetId);
+        if (!record) {
+          throw new Error(`S3 Vectors record ${assetId} was not returned by GetVectors`);
+        }
 
-      return {
-        record,
-        distance: result.distance as number,
-      };
-    });
+        return {
+          record,
+          distance,
+        };
+      });
+    } finally {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    }
   }
 }
 
@@ -133,4 +159,15 @@ function requiredKey(key: string | undefined): string {
     throw new Error("S3 Vectors result is missing a key");
   }
   return key;
+}
+
+function requiredFiniteNumber(value: unknown, description: string): number {
+  const number =
+    value && typeof value === "object" && "string" in value && typeof value.string === "string"
+      ? Number(value.string)
+      : Number(value);
+  if (!Number.isFinite(number)) {
+    throw new Error(`S3 Vectors result has an invalid ${description}`);
+  }
+  return number;
 }

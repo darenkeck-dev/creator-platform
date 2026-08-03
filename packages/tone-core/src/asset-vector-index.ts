@@ -10,6 +10,7 @@ import type { ToneVector } from "./schemas.js";
 export const AssetToneVectorIndexQuerySchema = z
   .object({
     vector: AssetToneVectorValuesSchema,
+    assetType: z.enum(["audio", "video"]),
     limit: z.number().int().min(1).max(100),
   })
   .strict();
@@ -29,6 +30,7 @@ export interface AssetToneVectorIndex {
 
 export type AssetToneVectorQueryInput = {
   tone: ToneVector;
+  assetType: "audio" | "video";
   limit: number;
 };
 
@@ -39,6 +41,7 @@ export class AssetToneVectorQueryService {
     return this.index.queryNearest(
       AssetToneVectorIndexQuerySchema.parse({
         vector: assetToneVectorValues(input.tone),
+        assetType: input.assetType,
         limit: input.limit,
       })
     );

@@ -87,13 +87,26 @@ describe("S3 Vectors index", () => {
         commands.push(input);
         if (input instanceof QueryVectorsCommand) {
           return {
-            vectors: [{ key: "audio-1", distance: 0.125 }],
+            vectors: [
+              {
+                key: "audio-1",
+                distance: { string: "0.125", type: "bigDecimal" } as unknown as number,
+              },
+            ],
             distanceMetric: "euclidean",
           };
         }
         if (input instanceof GetVectorsCommand) {
+          const runtimeValues = [...record.effectiveTone] as unknown[];
+          runtimeValues[0] = { string: "-0.9", type: "bigDecimal" };
           return {
-            vectors: [{ key: "audio-1", data: { float32: record.effectiveTone }, metadata }],
+            vectors: [
+              {
+                key: "audio-1",
+                data: { float32: runtimeValues },
+                metadata,
+              },
+            ],
           };
         }
         throw new Error("Unexpected command");
@@ -102,6 +115,7 @@ describe("S3 Vectors index", () => {
 
     const results = await index.queryNearest({
       vector: record.effectiveTone,
+      assetType: "audio",
       limit: 5,
     });
 
@@ -109,6 +123,7 @@ describe("S3 Vectors index", () => {
       indexArn: "index-arn",
       queryVector: { float32: record.effectiveTone },
       topK: 5,
+      filter: { assetType: "audio" },
       returnDistance: true,
     });
     expect((commands[1] as GetVectorsCommand).input).toEqual({
@@ -118,6 +133,32 @@ describe("S3 Vectors index", () => {
       returnMetadata: true,
     });
     expect(results).toEqual([{ record, distance: 0.125 }]);
+  });
+
+  it("aborts a query after the configured deadline", async () => {
+    const index = new S3VectorsIndex({
+      indexArn: "index-arn",
+      queryTimeoutMs: 1,
+      client: {
+        send(_command: unknown, options?: { abortSignal?: AbortSignal }) {
+          return new Promise((_resolve, reject) => {
+            options?.abortSignal?.addEventListener("abort", () => {
+              const error = new Error("Request aborted");
+              error.name = "AbortError";
+              reject(error);
+            });
+          });
+        },
+      } as unknown as S3VectorsClient,
+    });
+
+    await expect(
+      index.queryNearest({
+        vector: record.effectiveTone,
+        assetType: "audio",
+        limit: 5,
+      })
+    ).rejects.toMatchObject({ name: "AbortError" });
   });
 });
 

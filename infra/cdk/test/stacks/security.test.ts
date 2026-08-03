@@ -22,6 +22,7 @@ function ensureLambdaArtifacts() {
     "api-assets",
     "api-asset-by-id",
     "api-combos",
+    "api-public-combo-selection",
     "pre-token-allowlist",
     "upload-trigger",
     "mediaconvert-status",
@@ -203,7 +204,10 @@ describe("security posture", () => {
       "POST /combos/{id}/vote",
     ]);
 
-    let foundPublicRandomRoute = false;
+    const requiredPublicRouteKeys = new Set([
+      "GET /public/combos/random",
+      "POST /public/combos/select",
+    ]);
 
     for (const route of routeEntries) {
       const routeKey = route.Properties?.RouteKey;
@@ -211,9 +215,9 @@ describe("security posture", () => {
         continue;
       }
 
-      if (routeKey === "GET /public/combos/random") {
-        foundPublicRandomRoute = true;
+      if (requiredPublicRouteKeys.has(routeKey)) {
         expect(route.Properties?.AuthorizationType).toBe("NONE");
+        requiredPublicRouteKeys.delete(routeKey);
         continue;
       }
 
@@ -225,7 +229,7 @@ describe("security posture", () => {
     }
 
     expect(requiredRouteKeys.size).toBe(0);
-    expect(foundPublicRandomRoute).toBeTrue();
+    expect(requiredPublicRouteKeys.size).toBe(0);
   });
 
   it("enforces email allowlist through pre-token lambda trigger", () => {

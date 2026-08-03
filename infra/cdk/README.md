@@ -139,21 +139,24 @@ Notes:
 
 Responsibility:
 
-- Authenticated HTTP API for asset CRUD, upload lifecycle, and playback URL endpoints.
+- Authenticated HTTP APIs plus read-only public combo selection endpoints.
 
 Creates:
 
 - `api-assets` Lambda (list/create assets).
 - `api-asset-by-id` Lambda (get/update/delete, upload URL, multipart, playback URL, upload-complete).
+- `api-combos` Lambda (authenticated combo/review operations and legacy public random selection).
+- Isolated `api-public-combo-selection` Lambda for versioned predicted-tone walking with random fallback.
 - API Gateway HTTP API + JWT authorizer.
 - API Gateway access log group for the `$default` stage.
-- Route mappings for all `/assets` endpoints.
+- Public `POST /public/combos/select` route with request bounds, route throttling, and embedded selection/error/latency metrics.
 
 Imports:
 
 - `USER-POOL-ID`, `USER-POOL-CLIENT-ID`, `REGION` (from `AuthStack`).
 - `ASSETS-TABLE-NAME`, `ASSETS-CREATED-AT-GSI` (from `DataStack`).
 - `MEDIA-ORIGINALS-BUCKET-NAME`, `MEDIA-DERIVED-BUCKET-NAME` (from `StorageStack`).
+- `ASSET-TONE-VECTOR-INDEX-ARN` (from `VectorStack`).
 
 Exports:
 

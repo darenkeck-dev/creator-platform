@@ -35,6 +35,9 @@ export class ApiStack extends Stack {
       "VectorSyncQueue",
       Fn.importValue(stageExportName("VECTOR-SYNC-QUEUE-ARN", stage))
     );
+    const assetToneVectorIndexArn = Fn.importValue(
+      stageExportName("ASSET-TONE-VECTOR-INDEX-ARN", stage)
+    );
 
     const assetsFunction = new lambda.Function(this, "AssetsFunction", {
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -79,6 +82,19 @@ export class ApiStack extends Stack {
       },
     });
 
+    const publicComboSelectionFunction = new lambda.Function(this, "PublicComboSelectionFunction", {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: "index.handler",
+      code: lambda.Code.fromAsset(".dist/lambda/api-public-combo-selection"),
+      timeout: Duration.seconds(15),
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      environment: {
+        ASSETS_TABLE_NAME: assetsTableName,
+        ASSETS_ORIGINALS_BUCKET_NAME: assetsOriginalsBucketName,
+        ASSET_TONE_VECTOR_INDEX_ARN: assetToneVectorIndexArn,
+      },
+    });
+
     const bulkActionsDlq = new sqs.Queue(this, "BulkActionsDlq", {
       queueName: withStageSuffix("media-manager-bulk-actions-dlq", stage),
       retentionPeriod: Duration.days(14),
@@ -115,6 +131,10 @@ export class ApiStack extends Stack {
 
     const combosFunctionCfn = combosFunction.node.defaultChild as lambda.CfnFunction;
     combosFunctionCfn.addPropertyOverride("Runtime", "nodejs22.x");
+
+    const publicComboSelectionFunctionCfn = publicComboSelectionFunction.node
+      .defaultChild as lambda.CfnFunction;
+    publicComboSelectionFunctionCfn.addPropertyOverride("Runtime", "nodejs22.x");
 
     const jobsFunctionCfn = jobsFunction.node.defaultChild as lambda.CfnFunction;
     jobsFunctionCfn.addPropertyOverride("Runtime", "nodejs22.x");
@@ -184,6 +204,24 @@ export class ApiStack extends Stack {
         resources: [`${originalsBucketArn}/*`],
       })
     );
+    publicComboSelectionFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["dynamodb:GetItem", "dynamodb:Scan"],
+        resources: [assetsTableArn],
+      })
+    );
+    publicComboSelectionFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["s3:GetObject"],
+        resources: [`${originalsBucketArn}/*`],
+      })
+    );
+    publicComboSelectionFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["s3vectors:QueryVectors", "s3vectors:GetVectors"],
+        resources: [assetToneVectorIndexArn],
+      })
+    );
     assetByIdFunction.addToRolePolicy(originalsBucketPutPolicy);
     assetByIdFunction.addToRolePolicy(originalsBucketMultipartListPolicy);
     assetByIdFunction.addToRolePolicy(derivedBucketListPolicy);
@@ -250,6 +288,17 @@ export class ApiStack extends Stack {
       integrationUri: `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/${combosFunction.functionArn}/invocations`,
       payloadFormatVersion: "2.0",
     });
+
+    const publicComboSelectionIntegration = new apigwv2.CfnIntegration(
+      this,
+      "PublicComboSelectionIntegration",
+      {
+        apiId: api.ref,
+        integrationType: "AWS_PROXY",
+        integrationUri: `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/${publicComboSelectionFunction.functionArn}/invocations`,
+        payloadFormatVersion: "2.0",
+      }
+    );
 
     const jobsIntegration = new apigwv2.CfnIntegration(this, "JobsIntegration", {
       apiId: api.ref,
@@ -473,14 +522,31 @@ export class ApiStack extends Stack {
       authorizationType: "NONE",
     });
 
+    const postPublicComboSelectionRoute = new apigwv2.CfnRoute(
+      this,
+      "PostPublicComboSelectionRoute",
+      {
+        apiId: api.ref,
+        routeKey: "POST /public/combos/select",
+        target: `integrations/${publicComboSelectionIntegration.ref}`,
+        authorizationType: "NONE",
+      }
+    );
+
     const apiAccessLogGroup = new logs.LogGroup(this, "ApiAccessLogGroup", {
       retention: logs.RetentionDays.ONE_MONTH,
     });
 
-    new apigwv2.CfnStage(this, "DefaultStage", {
+    const defaultStage = new apigwv2.CfnStage(this, "DefaultStage", {
       apiId: api.ref,
       stageName: "$default",
       autoDeploy: true,
+      routeSettings: {
+        "POST /public/combos/select": {
+          ThrottlingBurstLimit: 20,
+          ThrottlingRateLimit: 10,
+        },
+      },
       accessLogSettings: {
         destinationArn: apiAccessLogGroup.logGroupArn,
         format: JSON.stringify({
@@ -495,6 +561,7 @@ export class ApiStack extends Stack {
         }),
       },
     });
+    defaultStage.addDependency(postPublicComboSelectionRoute);
 
     const executeApiArnPrefix = Stack.of(this).formatArn({
       service: "execute-api",
@@ -521,6 +588,12 @@ export class ApiStack extends Stack {
     });
 
     combosFunction.addPermission("AllowHttpApiInvokeCombos", {
+      principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
+      action: "lambda:InvokeFunction",
+      sourceArn: executeApiArnPrefix,
+    });
+
+    publicComboSelectionFunction.addPermission("AllowHttpApiInvokePublicComboSelection", {
       principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
       action: "lambda:InvokeFunction",
       sourceArn: executeApiArnPrefix,

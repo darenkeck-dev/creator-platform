@@ -51,7 +51,7 @@ Primary exports:
 
 `AssetToneVectorIndex` is the storage-adapter boundary. Implementations upsert canonical `AssetToneVectorRecord` values, delete by asset ID, and return nearest matches as canonical records plus a distance. Provider configuration, index identifiers, and SDK request/response types stay in the adapter.
 
-`AssetToneVectorQueryService` accepts a named `ToneVector` and an integer result limit from 1 through 100, validates both before invoking the adapter, converts the dimensions to `ASSET_TONE_VECTOR_DIMENSIONS` order, and delegates to the index:
+`AssetToneVectorQueryService` accepts a named `ToneVector`, required audio/video asset type, and integer result limit from 1 through 100. It validates them before invoking the adapter, converts dimensions to `ASSET_TONE_VECTOR_DIMENSIONS` order, and delegates typed filtering to the provider adapter:
 
 ```ts
 const service = new AssetToneVectorQueryService(index);
@@ -68,9 +68,14 @@ const matches = await service.queryNearest({
     beauty: 0.7,
     menace: -0.6,
   },
+  assetType: "audio",
   limit: 10,
 });
 ```
+
+## Combo Tone Prediction
+
+`comboTonePredictorV0` computes a transient ten-dimensional combo tone as `clamp(0.60 * audio + 0.40 * video)`. `rankComboToneCandidates()` uses exact squared Euclidean distance, and `sampleNearestComboToneCandidate()` samples from the nearest five with weight `1 / (1 + distance)`. These values are computed on demand and are never persisted as combo vectors.
 
 ## Local Smoke CLI
 

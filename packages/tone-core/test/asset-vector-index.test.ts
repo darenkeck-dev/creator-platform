@@ -66,11 +66,13 @@ describe("asset tone vector index", () => {
         beauty: 0.7,
         menace: 0.9,
       },
+      assetType: "audio",
       limit: 5,
     });
 
     expect(index.lastQuery).toEqual({
       vector: [-0.9, -0.7, -0.5, -0.3, -0.1, 0.1, 0.3, 0.5, 0.7, 0.9],
+      assetType: "audio",
       limit: 5,
     });
     expect(matches).toEqual([{ record, distance: 0.25 }]);
@@ -92,9 +94,10 @@ describe("asset tone vector index", () => {
       menace: 0,
     };
 
-    await service.queryNearest({ tone, limit: 1 });
+    await service.queryNearest({ tone, assetType: "video", limit: 1 });
     expect(index.lastQuery?.limit).toBe(1);
-    await service.queryNearest({ tone, limit: 100 });
+    expect(index.lastQuery?.assetType).toBe("video");
+    await service.queryNearest({ tone, assetType: "audio", limit: 100 });
     expect(index.lastQuery?.limit).toBe(100);
   });
 
@@ -115,7 +118,7 @@ describe("asset tone vector index", () => {
     };
 
     for (const limit of [0, 1.5, 101]) {
-      expect(() => service.queryNearest({ tone, limit })).toThrow();
+      expect(() => service.queryNearest({ tone, assetType: "audio", limit })).toThrow();
       expect(index.lastQuery).toBeUndefined();
     }
   });
