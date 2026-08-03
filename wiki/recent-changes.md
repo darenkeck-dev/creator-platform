@@ -11,6 +11,8 @@
 
 ## Recent operational updates
 
+- Rewrote `TONE_REVIEW_PLAN.md` around deployed keyword-only curator behavior, trusted versus legacy fields, materialized asset/vector effects, review operations, and the agreed deterministic-then-learned on-demand combo-tone predictor direction.
+- Fixed the initial walk architecture: one explicit-mode selection endpoint, typed Euclidean source retrieval from S3 Vectors, exact local predicted-combo-tone ranking, top-five weighted sampling, bounded history, and no persisted combo vectors.
 - Consolidated selected-item library controls under an Action disclosure, added bulk public/private reassignment with partial-failure handling, kept Delete standalone, surfaced visibility in list/grid views, and enforced owner-only asset PATCH mutations.
 - Replaced the single-file upload form with a two-at-a-time batch queue, audio/video/image inference, private/current-folder defaults, per-file progress, safe retry recovery, and completion links without changing backend upload contracts.
 - Deployed the provider-neutral asset vector lifecycle through Data, Vector, API, and Processing stacks. Initial production reconciliation indexed 20 eligible assets and finished with all 94 authoritative records current, zero orphan vectors, and empty sync/DLQ queues.

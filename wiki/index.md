@@ -26,4 +26,4 @@ Raw planning/checklist docs were moved to `raw_sources/` and are treated as sour
 ## Active Plans
 
 - `MVP_RELEASE_PLAN.md` - release milestones for corpus preparation, curator calibration, vector-backed tone selection, nearest-neighbor walking, public reviews, and launch readiness.
-- `TONE_REVIEW_PLAN.md` - review data model, privacy rules, and curator-adjusted asset scoring.
+- `TONE_REVIEW_PLAN.md` - deployed review behavior, trusted data boundaries, curator-adjusted asset scoring, operations, and future on-demand combo-tone prediction.

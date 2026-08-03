@@ -30,6 +30,8 @@
 11. Generic asset jobs use API-created job records plus an SQS-fed processing worker; `delete_assets` recursively expands selected folders via the container GSI and deletes deepest children first, while tone/conversion reprocess jobs queue existing processing workers.
 12. Playback APIs return stream URLs (`hlsMasterUrl` preferred).
 13. The MVP vector foundation uses one retained S3 Vectors bucket and a 10-dimensional Euclidean `asset-tone-v1` index behind the provider-neutral `AssetToneVectorIndex` boundary. Asset, processing, tone-analysis, curator-review, and deletion mutations enqueue only `{assetId}`, while the Assets DynamoDB Stream provides durable mutation/delete capture. The vector worker rereads DynamoDB and converges the index to the current eligibility state. Sparse curator adjustments overlay model scores in canonical `asset-tone-vector/v1` order, sync state is recorded on the asset, DynamoDB remains authoritative, and no combination vectors are persisted.
+14. Planned combo-tone selection uses an on-demand `ComboTonePredictor` over current effective audio/video vectors. The first implementation is deterministic (`0.60 * audio + 0.40 * video`); a future learned residual may use server-derived sparse combo labels and review-time source snapshots without introducing a combo-vector index. Sparse labels are training evidence for reviewed dimensions, not persisted predicted combo vectors.
+15. Planned walking uses `POST /public/combos/select` with explicit `mode="walk"`. S3 Vectors performs filtered Euclidean retrieval of audio/video source candidates; the application forms pairs, predicts transient 10-dimensional combo tones, and ranks them with exact squared Euclidean distance. The initial exact baseline caps retrieval at 100 eligible sources per type and applies no source-distance cutoff.
 
 Eventing note: EventBridge is the common router. Separate SQS queues keep conversion and tone analysis operationally isolated so tone retries/backlogs do not delay playback processing.
 
@@ -48,6 +50,15 @@ See also: [Current State](current-state.md), [Recent Changes](recent-changes.md)
 - Behavior:
   - avoids returning same audio track as previous when possible
   - same video track is acceptable
+
+Planned controlled walk path:
+
+- Endpoint: `POST /public/combos/select`
+- First request mode: explicit `mode="walk"`; tone search is added later through the same boundary.
+- Current audio is always excluded; the current video may remain.
+- Client history retains five recent combo IDs and three recent audio IDs.
+- The endpoint returns versioned selection metadata and may resolve to a random fallback.
+- The legacy random endpoint remains the initialization and operational fallback during rollout.
 
 ## Public developer profile
 

@@ -1,102 +1,243 @@
 # Tone Review Plan
 
-## Goal
+## Purpose And Status
 
-Collect human tone feedback without turning review records into user-identity records. Reviews should help improve the global tone taxonomy now, and support local personalization later.
+Tone reviews capture target-centered human descriptions without making review records user-identity records.
 
-## Layered Model
+The authenticated curator workflow is deployed for `audio`, `video`, and `combo` targets. Reviews are append-only DynamoDB records submitted from the dedicated Media Manager Review page. Anonymous public submission, review export, and learned combo-tone prediction are not implemented.
 
-1. **Base mapping**
-   - Versioned global keyword-to-tone-vector mapping, e.g. `tone-taxonomy/v2`.
-   - Deterministic and shared across all users.
-   - Model-generated keywords use this mapping by default.
+## Invariants
 
-2. **Human calibration reviews**
-   - Append-only reviews attached to a target: `audio`, `video`, or `combo`.
-   - Used to tune the base mapping and evaluate model-vs-human tone gaps.
-   - Reviews should not store raw email or user PII.
-   - Store enough context to compare against the active taxonomy/model output at review time.
-   - Audio/video curator keywords are deterministically mapped through the versioned tone taxonomy, then combined with the untouched OpenAI score vector using `model-prior-mean/v1`: OpenAI has weight one and each curator review's derived vector has weight one.
-   - Combo reviews remain combo evaluation data and never adjust either source asset.
+- Review input is keyword-only and starts blank.
+- Reviews attach to one `audio`, `video`, or `combo` target.
+- The authenticated endpoint persists `reviewSource="curator"` regardless of the submitted value.
+- The authenticated user's raw email is not copied onto the review record or included in its keys.
+- Audio/video review scores are derived server-side; client-provided scores are ignored.
+- Audio/video reviews may adjust only their target asset.
+- Combo reviews never adjust either source asset.
+- DynamoDB remains authoritative for reviews and effective asset tone.
+- Only effective source asset vectors are persisted in the vector index.
+- Combo vectors are not precomputed, persisted, or indexed. Future combo-tone prediction will compute only the candidate outputs needed at request time.
 
-3. **Personalization layer**
-   - User-specific preference deltas live locally first, likely `localStorage`.
-   - Future personalized scoring can combine:
-     - base mapping
-     - global calibration deltas
-     - local user preference deltas
-   - Cookies are only needed if server-side personalization or cross-request access is required.
+## Current Review UI
 
-## Review Record Direction
+The dedicated `/review` route owns review capture. Asset detail pages and the Review/Combos screens show review history but do not contain additional review forms.
 
-Reviews are target-centered and append-only:
+Current capture behavior:
+
+- The page supports Combo, Audio, and Video targets.
+- Combo mode defaults to a random public playable pair.
+- Audio/video modes can select from the authenticated owner's asset pool.
+- Each target starts with no selected keywords.
+- Five keyword options are shown at a time.
+- Initial options are deterministically seeded by the target.
+- After a selection, the latest keyword anchors the next option set.
+- Subsequent sets mix nearby taxonomy terms with exploration terms.
+- Selected keywords remain visible and removable.
+- The current UI requires at least three selected keywords before submission.
+- Combo capture uses the shared `ComboToneReviewPlayer`; audio/video capture remains app-local.
+
+The server does not yet enforce every UI rule. In particular, combo keyword support and minimum keyword count still rely partly on the client and should be enforced before adding a public write endpoint.
+
+## Submission Boundary
+
+Both current review routes require an authenticated JWT.
+
+For audio/video targets, the API verifies:
+
+- The target exists.
+- The authenticated user owns it.
+- Its type matches the submitted target type.
+- Tone analysis is ready and has model scores plus a taxonomy version.
+- At least one submitted keyword maps to a supported tone dimension.
+
+For combo targets, the API verifies ownership of an existing combo or ownership and media types for the source audio/video assets of a synthetic combo. Combo source readiness, stable synthetic target identity, source-ID consistency for saved combos, idempotency, and duplicate-submission protection remain follow-ups.
+
+## Trusted And Legacy Fields
+
+The current shared input contract accepts more fields than the Review UI sends. The persistence boundary behaves as follows:
+
+| Field | Current behavior |
+| --- | --- |
+| `targetType`, `targetId` | Validated and persisted |
+| `sourceVideoAssetId`, `sourceAudioAssetId` | Persisted when supplied; the current UI supplies them for combo reviews |
+| `keywords` | Trimmed, deduplicated, and persisted |
+| `reviewSource` | Ignored from the client; persisted as `curator` |
+| `scores` | Ignored from the client |
+| `taxonomyVersion` | Taken from the target asset for audio/video; accepted from combo input when supplied |
+| `reviewerId` | Legacy optional caller field; current UI does not send it |
+| `modelScoresSnapshot`, `baseScoresSnapshot` | Legacy optional caller fields; current UI does not send them and they are not trusted training snapshots |
+| `notes` | Optional caller text; current UI does not use it |
+
+Future contracts should separate client input from server-derived stored fields rather than exposing legacy persistence fields on the write request.
+
+## Stored Review Record
+
+Reviews use this target-centered shape:
 
 ```ts
-{
-  id: "tone_review_...",
-  targetType: "audio" | "video" | "combo",
-  targetId: "...",
-  reviewSource: "curator" | "anonymous" | "authenticated",
-  reviewerId?: "...", // optional pseudonymous/session hash, never raw email
-  taxonomyVersion?: "tone-taxonomy/v2",
-  keywords: ["warm", "intimate"],
-  scores: { warmth: 0.7, intimacy: 0.6 }, // derived server-side from keywords
-  modelScoresSnapshot?: { ... },
-  baseScoresSnapshot?: { ... },
-  notes?: "...",
-  createdAt: "...",
-  updatedAt: "..."
-}
+type ToneReviewRecord = {
+  id: string;
+  schemaVersion: number;
+  targetType: "audio" | "video" | "combo";
+  targetId: string;
+  sourceVideoAssetId?: string;
+  sourceAudioAssetId?: string;
+  reviewSource: "curator";
+  taxonomyVersion?: "tone-taxonomy/v1" | "tone-taxonomy/v2";
+  keywords: string[];
+  scores?: Partial<ToneVector>; // Server-derived for audio/video only.
+  reviewerId?: string; // Legacy caller field; not trusted provenance.
+  modelScoresSnapshot?: Partial<ToneVector>; // Legacy caller field; not trusted.
+  baseScoresSnapshot?: Partial<ToneVector>; // Legacy caller field; not trusted.
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+};
 ```
 
-DynamoDB key shape:
+DynamoDB keys:
 
-```txt
+```text
 pk = TONE_REVIEW#<targetType>#<targetId>
 sk = REVIEW#<createdAt>#<reviewId>
 ```
 
-This allows many reviews for one asset or combo without putting reviewer identity into keys.
+The curator GSI supports global curator-review listing without putting reviewer identity into keys.
 
-## Privacy Rules
+## Audio And Video Materialization
 
-- Do not store raw email on review records.
-- Do not put reviewer identity in `pk` or `sk`.
-- Use `reviewSource` for coarse provenance.
-- Use optional `reviewerId` only when dedupe, abuse controls, or personalization needs it.
-- If `reviewerId` is derived from an authenticated user, use a salted hash outside DynamoDB item keys.
+`toneAnalysis.scores` remains the untouched OpenAI model output. Curator input is materialized separately:
 
-## Personalization Later
+- Keywords are mapped through the production tone taxonomy into sparse dimension scores.
+- OpenAI contributes one vote to every model dimension.
+- Each taxonomy-compatible curator review contributes one vote only to dimensions produced by its keywords.
+- Per-dimension sums and counts are independent.
+- `toneAnalysis.adjustedScores` stores dimensions with curator input.
+- `toneAnalysis.scoreAdjustment` stores `tone-score-adjustment/v1` provenance and timestamps.
+- Effective asset tone overlays sparse adjustments on model scores: `{ ...scores, ...adjustedScores }`.
 
-Initial local profile shape can be simple:
+The materializer uses `model-prior-mean/v1`. Review submission attempts materialization immediately, and tone reanalysis rebuilds it after replacing model scores. Submission currently returns success even if immediate materialization fails; another review, reanalysis, or repair operation is then required.
+
+New production analysis and vector indexing use `tone-taxonomy/v2`. The contract still accepts v1 history, while keyword derivation uses the current production mapping. Before using historical reviews for training or calibration, derivation must become version-addressable or review capture must be enforced as v2-only.
+
+## Asset Vector Convergence
+
+After an audio/video adjustment changes:
+
+1. The API sends `{ assetId }` to the vector synchronization queue.
+2. The Assets DynamoDB Stream provides a second durable mutation path.
+3. The worker rereads the authoritative asset.
+4. An eligible public, ready, taxonomy-v2 audio/video asset is upserted with its effective tone.
+5. Private, unsupported, incomplete, or non-ready assets have any stale vector deleted.
+
+Combo reviews do not trigger source-vector changes.
+
+## Combo Reviews And Tone Prediction
+
+Current combo reviews store human keywords and source asset IDs. They do not derive a combo score vector, snapshot review-time source vectors, or feed live retrieval.
+
+The intended predictor boundary is:
 
 ```ts
-{
-  taxonomyVersion: "tone-taxonomy/v2",
-  keywordDeltas: {
-    warm: { warmth: 0.1, intimacy: 0.05 }
-  },
-  dimensionOffsets: {
-    arousal: -0.1
-  }
+interface ComboTonePredictor {
+  readonly version: string;
+
+  predict(input: {
+    audioTone: ToneVector;
+    videoTone: ToneVector;
+  }): ToneVector;
 }
 ```
 
-Final scoring direction:
+Initial deterministic predictor:
 
-```txt
-finalVector = baseKeywordMapping + globalCalibrationDelta + localUserPreferenceDelta
+```text
+combo-tone-predictor/v0
+comboTone = clamp(0.60 * audioTone + 0.40 * videoTone)
 ```
 
-Keep server-side review capture focused on improving the shared base mapping until account-level personalization is explicitly needed.
+The predictor always consumes the current effective audio and video vectors and computes output only for candidate pairs under consideration.
 
-## Materialized Asset Adjustment
+Once enough compatible combo review data exists, a learned predictor may replace the deterministic implementation behind the same interface. The preferred first learned form is a regularized residual over `v0`, with derived delta and interaction features computed internally from the two inputs.
 
-- `toneAnalysis.scores` remains the original OpenAI output.
-- `toneAnalysis.adjustedScores` stores the current audio/video OpenAI-plus-curator vector.
-- `toneAnalysis.scoreAdjustment` records the algorithm version, curator sums/counts by dimension, and computation timestamps.
-- Review submission and OpenAI reprocessing rebuild the materialized adjustment from append-only curator reviews.
-- Effective asset scoring overlays sparse curator adjustments on model scores: `{ ...scores, ...adjustedScores }`.
-- Reviews are submitted only from the dedicated Review page using keywords; detail pages do not contain review controls.
-- The API ignores client score input and derives audio/video review scores from keyword aliases mapped into `tone-taxonomy/v2` descriptors.
-- Asset detail score bars show the OpenAI segment, a contrasting adjustment segment, and a marker at the original OpenAI endpoint.
+Reliable training rows will require server-derived data not currently captured:
+
+```ts
+type ComboToneTrainingReview = {
+  reviewId: string;
+  comboId: string;
+  audioAssetId: string;
+  videoAssetId: string;
+  audioToneSnapshot: ToneVector;
+  videoToneSnapshot: ToneVector;
+  audioSourceFingerprint: string;
+  videoSourceFingerprint: string;
+  assetVectorSchemaVersion: "asset-tone-vector/v1";
+  taxonomyVersion: "tone-taxonomy/v2";
+  labelScores: Partial<Record<ToneDimension, number>>;
+  labelDimensions: ToneDimension[];
+  createdAt: string;
+};
+```
+
+Requirements for that future capture path:
+
+- Source snapshots and fingerprints are generated server-side at review time.
+- Combo keywords are mapped through the recorded taxonomy version into sparse tone labels.
+- Sparse label scores are training evidence for explicitly labeled dimensions, not persisted predicted combo vectors.
+- Unlabeled dimensions are excluded from loss rather than interpreted as neutral values.
+- Existing source IDs remain part of every row for audit and replay.
+- Predictor and training schema versions are explicit.
+- Historical keyword-only reviews may be remapped when provenance is sufficient, but they cannot reconstruct exact review-time effective source vectors.
+
+The existing 50-dimensional combo relationship geometry in `tone-core` remains experimental descriptive geometry. It is not the persisted representation or the production combo-tone predictor contract.
+
+## Listing And Navigation
+
+- `GET /tone-reviews?targetType=<type>&targetId=<id>` queries one target partition.
+- Global curator listing uses the curator GSI.
+- `/review` shows reviews for the current target.
+- `/combos` lists combo review records and links back to their review target.
+- Cursor fields exist, but current Review and Combos screens do not provide complete pagination controls.
+- Listing is authenticated, but target/global owner scoping should be tightened before reviews span multiple owners or become publicly writable.
+
+## Privacy
+
+- Do not automatically persist authenticated email on review records.
+- Do not put reviewer identity in DynamoDB keys.
+- Do not trust caller-provided IDs or snapshots as model provenance.
+- Do not place raw identity into `reviewerId`.
+- Free-form text must be treated as potentially containing personal information.
+- A future pseudonymous identifier must be server-derived with a salted one-way transform.
+- Public submission requires separate consent copy, abuse controls, rate limiting, and retention policy.
+- API access logs contain operational request metadata and are governed separately from review-record privacy.
+
+## Operations
+
+The current purge command is dry-run first:
+
+```text
+bun run --cwd infra/cdk purge:tone-reviews
+bun run --cwd infra/cdk purge:tone-reviews -- --apply --confirm-production
+```
+
+It reports aggregate counts, clears materialized audio/video adjustments for affected targets, and deletes review records. DynamoDB point-in-time recovery protects the table generally, but there is no review-specific export, restore, or consistency-repair command.
+
+Required operational follow-ups:
+
+- Add a versioned review export format.
+- Add review-specific backup and restore instructions.
+- Make purge/rebuild behavior safe under partial failure and concurrent submissions.
+- Add adjustment reconciliation from append-only reviews.
+- Audit review/list access policy before public launch.
+
+## Next Steps
+
+1. Separate write-input and stored-review contracts.
+2. Enforce taxonomy-versioned keyword derivation.
+3. Harden combo target/source validation and idempotency.
+4. Add server-derived sparse combo labels and effective source snapshots.
+5. Implement and test `combo-tone-predictor/v0` without persisting combo vectors.
+6. Add review export and adjustment reconciliation.
+7. Add the separate anonymous public submission boundary only after privacy and abuse controls are complete.

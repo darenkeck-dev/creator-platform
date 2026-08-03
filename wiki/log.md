@@ -1,5 +1,12 @@
 # Wiki Log
 
+## [2026-08-02] docs | current tone review and predictor plan
+
+- Replaced the stale review-plan outline with current authenticated keyword capture, server trust boundaries, sparse per-dimension curator materialization, vector convergence, listing, privacy, and purge behavior.
+- Documented on-demand combo-tone prediction from effective source vectors: deterministic `combo-tone-predictor/v0` first, with server-derived sparse labels and source snapshots required before a learned residual model.
+- Kept combination vectors out of DynamoDB and S3 Vectors; the existing relationship geometry remains experimental and transient.
+- Fixed the initial walk boundary as `POST /public/combos/select` with explicit `mode="walk"`: S3 Vectors retrieves typed source candidates using Euclidean distance, while exact squared-Euclidean predicted combo-tone ranking and sampling happen in application code.
+
 ## [2026-08-02] web | bulk visibility actions
 
 - Added Make Public and Make Private for selected non-folder assets using five-at-a-time PATCH requests with deterministic partial-failure reporting.

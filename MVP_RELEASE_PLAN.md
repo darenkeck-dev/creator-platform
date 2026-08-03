@@ -68,6 +68,10 @@ recent combination exclusion count: 5
 recent audio exclusion count: 3
 immediate audio repeat: prohibited
 same video on next step: allowed
+initial source candidate cap per asset type: 100
+source retrieval metric: Euclidean, no initial maximum-distance cutoff
+walk ranking metric: squared Euclidean over predicted combo tone
+initial combo predictor: combo-tone-predictor/v0
 public reviews affecting live retrieval: disabled
 initial rollout: controlled explorer route or gated mode
 ```
@@ -270,28 +274,34 @@ Walk constraints:
 
 ### Candidate Generation
 
-1. Query audio neighbors around the current audio vector, excluding current/recent audio.
-2. Query video neighbors around the current video vector, including the current video.
-3. Include same-video/new-audio candidates.
-4. Include candidates where both audio and video change.
-5. Compute combination relationship features only for this shortlist.
+1. Query S3 Vectors around the current audio vector with an audio metadata filter.
+2. Query S3 Vectors around the current video vector with a video metadata filter.
+3. During the exact-baseline phase, request every eligible source under a hard cap of 100 per type.
+4. Exclude the current audio and three recent audio assets.
+5. Explicitly include the current video as a valid candidate.
+6. Include same-video/new-audio candidates.
+7. Include candidates where both audio and video change.
+8. Exclude the current pair and five recent combinations.
+9. Compute current and candidate combo tones on demand with `combo-tone-predictor/v0`.
 
-Use the existing relationship geometry from `packages/tone-core`:
+S3 Vectors uses the index's Euclidean metric only to retrieve plausible source assets. It does not calculate or store combo tone. Do not apply an initial maximum-distance cutoff to source queries: a farther source can still form a nearby predicted combo with its counterpart.
 
-- Audio tone.
-- Video tone.
-- Signed tone delta.
-- Absolute tone delta.
-- Interaction tone.
+Initial predictor:
+
+```text
+comboTone = clamp(0.60 * audioTone + 0.40 * videoTone)
+```
 
 Walk ranking:
 
 ```text
 walkScore(candidate) = distance(
-  relationshipVector(currentCombo),
-  relationshipVector(candidateCombo)
+  predictedTone(currentCombo),
+  predictedTone(candidateCombo)
 )
 ```
+
+Use exact squared Euclidean distance over all ten predicted combo-tone dimensions. A maximum predicted-combo step may be added after observed distance distributions are calibrated; it belongs after combo prediction, not in source retrieval.
 
 - [ ] Sample among the nearest valid candidates rather than always selecting rank one.
 - [ ] Prevent immediate audio repeats at the API level.
@@ -299,22 +309,29 @@ walkScore(candidate) = distance(
 - [ ] Add an escape path when all local candidates are excluded.
 - [ ] Fall back to a valid random public pair if vector lookup fails.
 
-No combination relationship vector is persisted. It is computed only for current and shortlisted pairs.
+No combo tone is persisted. The existing 50-dimensional relationship geometry in `tone-core` remains experimental and is not part of the initial production walk score.
 
 ## Phase 6: Public Selection API
 
-Add one public selection boundary, for example:
+Add one public selection boundary:
 
 ```text
 POST /public/combos/select
 ```
 
+Use an explicit `mode` discriminator rather than inferring behavior from field presence. The first deployed request mode is `walk`; `search` is added through the same versioned endpoint later.
+
 Tone restart request:
 
 ```json
 {
+  "schemaVersion": "public-combo-selection-request/v1",
+  "mode": "search",
   "keywords": ["serene", "warm", "intimate"],
-  "recentComboIds": []
+  "history": {
+    "recentComboIds": [],
+    "recentAudioAssetIds": []
+  }
 }
 ```
 
@@ -322,22 +339,30 @@ Walk continuation request:
 
 ```json
 {
-  "currentAudioAssetId": "...",
-  "currentVideoAssetId": "...",
-  "recentAudioAssetIds": ["..."],
-  "recentComboIds": ["..."]
+  "schemaVersion": "public-combo-selection-request/v1",
+  "mode": "walk",
+  "current": {
+    "audioAssetId": "...",
+    "videoAssetId": "..."
+  },
+  "history": {
+    "recentAudioAssetIds": ["..."],
+    "recentComboIds": ["..."]
+  }
 }
 ```
 
 Behavior:
 
-- `keywords` present: global tone search.
-- Current asset IDs without keywords: nearest-neighbor walk.
-- Neither present: random public fallback.
+- `mode=search`: global tone search.
+- `mode=walk`: predicted-combo-tone continuation from the current pair.
+- `mode=random`: random public selection when added to this boundary.
+- Initial rollout keeps initialization and operational fallback on `GET /public/combos/random`.
 
 - [ ] Validate all source assets are ready and public.
 - [ ] Use stable synthetic IDs: `public-<videoAssetId>-<audioAssetId>`.
 - [ ] Return selected pair, playback URLs, algorithm version, and selection mode.
+- [ ] Return requested/resolved mode, predictor version, exact distance, and explicit fallback reason.
 - [ ] Return optional matching keywords or concise selection explanation.
 - [ ] Add CORS for the intended public origin.
 - [ ] Add request throttling, payload limits, timeout handling, and metrics.
@@ -362,7 +387,7 @@ MVP rules:
 - Never apply combo reviews to source audio/video scores.
 - Store reviews for analysis only; do not alter live retrieval during MVP.
 - Store taxonomy, query/retrieval algorithm, and combo-analysis versions.
-- Consider storing the base combo tone snapshot for historical comparison.
+- Store server-derived review-time audio/video tone snapshots and source fingerprints for future training provenance; do not store predicted combo tones.
 - Avoid raw reviewer PII.
 - Use a pseudonymous local session/submission ID for idempotency and basic deduplication.
 - Add rate limits and basic abuse controls.
@@ -438,7 +463,7 @@ The mobile focus-loss and native play/pause issues in `wiki/open-issues.md` are 
 
 ### Walk
 
-- [ ] Automatic next selection uses current combo relationship geometry only.
+- [ ] Automatic next selection uses exact distance from the current predicted combo tone.
 - [ ] Every transition changes audio.
 - [ ] Same-video transitions are allowed.
 - [ ] Recent-history exclusions prevent obvious loops.
