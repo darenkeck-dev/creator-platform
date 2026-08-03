@@ -137,7 +137,7 @@ Combo reviews do not trigger source-vector changes.
 
 Current combo reviews store human keywords and source asset IDs. They do not derive a combo score vector, snapshot review-time source vectors, or feed live retrieval.
 
-The intended predictor boundary is:
+The implemented deterministic predictor uses this boundary:
 
 ```ts
 interface ComboTonePredictor {
@@ -238,6 +238,6 @@ Required operational follow-ups:
 2. Enforce taxonomy-versioned keyword derivation.
 3. Harden combo target/source validation and idempotency.
 4. Add server-derived sparse combo labels and effective source snapshots.
-5. Implement and test `combo-tone-predictor/v0` without persisting combo vectors.
+5. Integrate the deployed `combo-tone-predictor/v0` walk endpoint into the public client without persisting combo vectors.
 6. Add review export and adjustment reconciliation.
 7. Add the separate anonymous public submission boundary only after privacy and abuse controls are complete.

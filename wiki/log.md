@@ -1,5 +1,15 @@
 # Wiki Log
 
+## [2026-08-03] backend | predicted combo-tone walk endpoint
+
+- Added strict versioned contracts and an isolated read-only `POST /public/combos/select` Lambda for initial `mode="walk"` requests.
+- Added required audio/video filters to the provider-neutral vector query boundary and S3 Vectors adapter; no index replacement or backfill is required.
+- Implemented `combo-tone-predictor/v0`, exact squared-Euclidean ranking, `1 / (1 + distance)` top-five sampling, current/recent exclusions, controlled history relaxation, and explicit random fallback reasons without persisting combo vectors.
+- Added route throttling, payload bounds, a four-second vector-query abort deadline, public CORS reuse, read-only DynamoDB/S3/S3 Vectors IAM, embedded request/error/latency metrics, and focused package/Lambda/CDK tests.
+- The first API rollout failed because the stage attempted to apply route throttling before CloudFormation created the route; rollback was recovered and an explicit stage-to-route dependency was added.
+- The first live request correctly fell back but exposed Smithy big-decimal objects in returned `float32` data. The adapter now normalizes runtime vector values and distances to finite numbers, with a production-shaped regression test.
+- Redeployed `MediaManagerApiStack` successfully. Random health returned `200`; two walk smokes returned `resolvedMode="walk"` with exact distances, recent-history exclusions changed the selected pair, CORS preflight returned `204`, the Lambda is active on Node 22 with a 15-second timeout, route throttling is 10 requests/second with burst 20, and CloudWatch published walk metrics. Frontend integration remains pending.
+
 ## [2026-08-02] docs | current tone review and predictor plan
 
 - Replaced the stale review-plan outline with current authenticated keyword capture, server trust boundaries, sparse per-dimension curator materialization, vector convergence, listing, privacy, and purge behavior.

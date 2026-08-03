@@ -66,6 +66,7 @@ Migration note:
 ## Post-deploy quick checks
 
 - API health: call `GET /public/combos/random` and verify 200 payload with `videoSrc/audioSrc`.
+- Walk health: call `POST /public/combos/select` with `schemaVersion=public-combo-selection-request/v1`, `mode=walk`, current public audio/video IDs, and bounded history. Verify either exact walk metadata or an explicit random fallback reason.
 - Darenkeck: verify homepage loads + combo playback starts.
 - Crawl basics: check `/robots.txt` and `/sitemap.xml`.
 - Headers: verify CloudFront returns HSTS, CSP, nosniff, referrer, frame options, permissions policy.
@@ -99,6 +100,8 @@ Migration note:
 - Dry run reconciliation with `bun run --cwd infra/cdk reconcile:asset-vectors -- --index-arn <asset-tone-index-arn>`. Review the counts, then queue convergence with `bun run --cwd infra/cdk reconcile:asset-vectors -- --apply --index-arn <asset-tone-index-arn> --queue-url <vector-sync-queue-url>`.
 - Rebuilding uses the same command with `--force` after recreating or clearing the derived index. Repeated and out-of-order messages are safe because the worker converges from a consistent DynamoDB read. Ordinary reconciliation compares authoritative eligibility/fingerprints with indexed keys; use `--force` to repair same-key vector data corruption.
 - Initial production reconciliation completed with 20 eligible vectors, 74 ineligible assets, 94 current authoritative records, and zero orphan keys. Both the sync queue and DLQ were empty afterward.
+- The API stack imports the vector index ARN for the deployed read-only public combo selection Lambda. No vector index replacement or backfill was required for the added `assetType` metadata filter.
+- Production `POST /public/combos/select` uses a 15-second Lambda, a four-second S3 Vectors query deadline, and API Gateway throttling of 10 requests/second with burst 20. Embedded metrics use namespace `MediaManager/PublicComboSelection`.
 
 ## Known operational nits
 

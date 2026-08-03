@@ -72,6 +72,7 @@ initial source candidate cap per asset type: 100
 source retrieval metric: Euclidean, no initial maximum-distance cutoff
 walk ranking metric: squared Euclidean over predicted combo tone
 initial combo predictor: combo-tone-predictor/v0
+top-five sampling weight: 1 / (1 + squared Euclidean distance)
 public reviews affecting live retrieval: disabled
 initial rollout: controlled explorer route or gated mode
 ```
@@ -303,11 +304,13 @@ walkScore(candidate) = distance(
 
 Use exact squared Euclidean distance over all ten predicted combo-tone dimensions. A maximum predicted-combo step may be added after observed distance distributions are calibrated; it belongs after combo prediction, not in source retrieval.
 
-- [ ] Sample among the nearest valid candidates rather than always selecting rank one.
-- [ ] Prevent immediate audio repeats at the API level.
+- [x] Sample among the nearest valid candidates rather than always selecting rank one.
+- [x] Prevent immediate audio repeats at the API level.
 - [ ] Maintain a short client/API recent-history list to prevent loops.
-- [ ] Add an escape path when all local candidates are excluded.
-- [ ] Fall back to a valid random public pair if vector lookup fails.
+- [x] Add an escape path when all local candidates are excluded.
+- [x] Fall back to a valid random public pair if vector lookup fails.
+
+The backend fallback first honors all supplied history, then relaxes recent combo exclusions, then relaxes recent audio history. It never relaxes the immediate current-audio exclusion.
 
 No combo tone is persisted. The existing 50-dimensional relationship geometry in `tone-core` remains experimental and is not part of the initial production walk score.
 
@@ -359,15 +362,15 @@ Behavior:
 - `mode=random`: random public selection when added to this boundary.
 - Initial rollout keeps initialization and operational fallback on `GET /public/combos/random`.
 
-- [ ] Validate all source assets are ready and public.
-- [ ] Use stable synthetic IDs: `public-<videoAssetId>-<audioAssetId>`.
-- [ ] Return selected pair, playback URLs, algorithm version, and selection mode.
-- [ ] Return requested/resolved mode, predictor version, exact distance, and explicit fallback reason.
+- [x] Validate all source assets are ready and public.
+- [x] Use stable synthetic IDs: `public-<videoAssetId>-<audioAssetId>`.
+- [x] Return selected pair, playback URLs, algorithm version, and selection mode.
+- [x] Return requested/resolved mode, predictor version, exact distance, and explicit fallback reason.
 - [ ] Return optional matching keywords or concise selection explanation.
-- [ ] Add CORS for the intended public origin.
-- [ ] Add request throttling, payload limits, timeout handling, and metrics.
+- [x] Add CORS for the intended public origin.
+- [x] Add request throttling, payload limits, timeout handling, and metrics.
 - [ ] Cache the eligible public asset catalog and invalidate it safely.
-- [ ] Keep the current random endpoint as an operational fallback.
+- [x] Keep the current random endpoint as an operational fallback.
 
 ## Phase 7: Public Combination Reviews
 
