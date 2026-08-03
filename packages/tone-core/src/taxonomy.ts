@@ -78,7 +78,11 @@ export function avoidRules(): Record<string, string> {
 export function descriptorMappings(): Record<string, DescriptorMapping[]> {
   const output: Record<string, DescriptorMapping[]> = {};
   for (const descriptor of loadToneTaxonomy().descriptors) {
-    if (descriptor.status !== "active" || !descriptor.mappings || descriptor.mappings.length === 0) {
+    if (
+      descriptor.status !== "active" ||
+      !descriptor.mappings ||
+      descriptor.mappings.length === 0
+    ) {
       continue;
     }
     output[descriptor.slug] = descriptor.mappings.map((mapping) => ({

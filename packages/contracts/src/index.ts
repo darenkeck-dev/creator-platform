@@ -219,6 +219,17 @@ export const AssetToneAnalysisInfoSchema = z.object({
   mood: z.string().min(1).optional(),
 });
 
+export const AssetVectorSyncStateSchema = z
+  .object({
+    schemaVersion: z.literal("asset-vector-sync/v1"),
+    status: z.enum(["indexed", "deleted"]),
+    vectorSchemaVersion: z.literal("asset-tone-vector/v1"),
+    sourceFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    sourceUpdatedAt: z.string().datetime(),
+    syncedAt: z.string().datetime(),
+  })
+  .strict();
+
 export const AssetAuditLogEntrySchema = z.object({
   id: z.string().min(1),
   at: z.string().datetime(),
@@ -255,6 +266,7 @@ export const AssetRecordSchema = z.object({
   processingProfile: ProcessingProfileSchema.optional(),
   conversion: AssetConversionInfoSchema.optional(),
   toneAnalysis: AssetToneAnalysisInfoSchema.optional(),
+  vectorSync: AssetVectorSyncStateSchema.optional(),
   auditLog: z.array(AssetAuditLogEntrySchema).max(100).optional(),
 });
 
@@ -661,6 +673,7 @@ export type AssetToneAnalysisProfile = z.infer<typeof AssetToneAnalysisProfileSc
 export type AssetToneAnalysisInfo = z.infer<typeof AssetToneAnalysisInfoSchema>;
 export type AssetToneAnalysisScores = z.infer<typeof AssetToneAnalysisScoresSchema>;
 export type AssetToneScoreAdjustment = z.infer<typeof AssetToneScoreAdjustmentSchema>;
+export type AssetVectorSyncState = z.infer<typeof AssetVectorSyncStateSchema>;
 export type AssetRecord = z.infer<typeof AssetRecordSchema>;
 export type AssetDetailResponse = z.infer<typeof AssetDetailResponseSchema>;
 export type AssetListResponse = z.infer<typeof AssetListResponseSchema>;

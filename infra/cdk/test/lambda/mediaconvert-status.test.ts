@@ -2,13 +2,16 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 
 import { handler } from "../../lambda/mediaconvert-status";
 
 const originalTableName = process.env.ASSETS_TABLE_NAME;
 const originalDerivedBucketName = process.env.ASSETS_DERIVED_BUCKET_NAME;
 const originalCloudFrontDomain = process.env.CLOUDFRONT_DOMAIN;
+const originalVectorSyncQueueUrl = process.env.VECTOR_SYNC_QUEUE_URL;
 const originalSend = DynamoDBDocumentClient.prototype.send;
+const originalSqsSend = SQSClient.prototype.send;
 
 function stubSend(impl: (command: GetCommand | UpdateCommand) => Promise<Record<string, unknown>>) {
   const calls: Array<GetCommand | UpdateCommand> = [];
@@ -21,6 +24,21 @@ function stubSend(impl: (command: GetCommand | UpdateCommand) => Promise<Record<
     calls.push(command);
     return impl(command);
   } as typeof DynamoDBDocumentClient.prototype.send;
+
+  return { calls };
+}
+
+function stubSqsSend() {
+  const calls: SendMessageCommand[] = [];
+
+  SQSClient.prototype.send = async function (command: unknown) {
+    if (!(command instanceof SendMessageCommand)) {
+      throw new Error("Unexpected SQS command");
+    }
+
+    calls.push(command);
+    return {};
+  } as typeof SQSClient.prototype.send;
 
   return { calls };
 }
@@ -45,10 +63,16 @@ describe("mediaconvert-status lambda", () => {
   beforeEach(() => {
     process.env.ASSETS_TABLE_NAME = "Assets";
     process.env.ASSETS_DERIVED_BUCKET_NAME = "media-derived-test";
+    process.env.VECTOR_SYNC_QUEUE_URL =
+      "https://sqs.us-west-2.amazonaws.com/123456789012/vector-sync";
+    SQSClient.prototype.send = async function () {
+      return {};
+    } as typeof SQSClient.prototype.send;
   });
 
   afterEach(() => {
     DynamoDBDocumentClient.prototype.send = originalSend;
+    SQSClient.prototype.send = originalSqsSend;
 
     if (originalTableName === undefined) {
       delete process.env.ASSETS_TABLE_NAME;
@@ -67,10 +91,17 @@ describe("mediaconvert-status lambda", () => {
     } else {
       process.env.CLOUDFRONT_DOMAIN = originalCloudFrontDomain;
     }
+
+    if (originalVectorSyncQueueUrl === undefined) {
+      delete process.env.VECTOR_SYNC_QUEUE_URL;
+    } else {
+      process.env.VECTOR_SYNC_QUEUE_URL = originalVectorSyncQueueUrl;
+    }
   });
 
   it("maps PROGRESSING to processing status", async () => {
     const { calls } = stubSend(async () => ({}));
+    const sqs = stubSqsSend();
 
     const result = await handler({
       source: "aws.mediaconvert",
@@ -90,10 +121,13 @@ describe("mediaconvert-status lambda", () => {
       profile: "video-standard-v1",
     });
     expect(hasUndefined(calls[0]?.input.ExpressionAttributeValues?.[":conversion"])).toBe(false);
+    expect(sqs.calls).toHaveLength(1);
+    expect(sqs.calls[0]?.input.MessageBody).toBe('{"assetId":"asset-101"}');
   });
 
   it("maps COMPLETE to ready and stores stream metadata", async () => {
     const { calls } = stubSend(async () => ({}));
+    const sqs = stubSqsSend();
 
     const result = await handler({
       source: "aws.mediaconvert",
@@ -140,6 +174,28 @@ describe("mediaconvert-status lambda", () => {
       profile: "video-standard-v1",
     });
     expect(hasUndefined(calls[0]?.input.ExpressionAttributeValues?.[":conversion"])).toBe(false);
+    expect(sqs.calls).toHaveLength(1);
+    expect(sqs.calls[0]?.input.MessageBody).toBe('{"assetId":"asset-202"}');
+  });
+
+  it("maps ERROR to error status and enqueues vector sync", async () => {
+    const { calls } = stubSend(async () => ({}));
+    const sqs = stubSqsSend();
+
+    const result = await handler({
+      source: "aws.mediaconvert",
+      "detail-type": "MediaConvert Job State Change",
+      detail: {
+        status: "ERROR",
+        errorMessage: "Transcode failed",
+        userMetadata: { assetId: "asset-error" },
+      },
+    });
+
+    expect(result).toEqual({ ok: true, status: "error" });
+    expect(calls[0]?.input.ExpressionAttributeValues?.[":status"]).toBe("error");
+    expect(sqs.calls).toHaveLength(1);
+    expect(sqs.calls[0]?.input.MessageBody).toBe('{"assetId":"asset-error"}');
   });
 
   it("uses CloudFront URLs when domain is configured", async () => {

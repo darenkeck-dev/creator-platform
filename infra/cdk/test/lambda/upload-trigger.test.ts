@@ -8,6 +8,7 @@ import {
   MediaConvertClient,
 } from "@aws-sdk/client-mediaconvert";
 import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 
 import { handler } from "../../lambda/upload-trigger";
 
@@ -15,9 +16,11 @@ const originalTableName = process.env.ASSETS_TABLE_NAME;
 const originalOriginalsBucketName = process.env.ASSETS_ORIGINALS_BUCKET_NAME;
 const originalDerivedBucketName = process.env.ASSETS_DERIVED_BUCKET_NAME;
 const originalMediaConvertRole = process.env.MEDIACONVERT_ROLE_ARN;
+const originalVectorSyncQueueUrl = process.env.VECTOR_SYNC_QUEUE_URL;
 const originalDdbSend = DynamoDBDocumentClient.prototype.send;
 const originalMcSend = MediaConvertClient.prototype.send;
 const originalS3Send = S3Client.prototype.send;
+const originalSqsSend = SQSClient.prototype.send;
 
 function stubDdbSend(
   impl: (command: GetCommand | UpdateCommand) => Promise<Record<string, unknown>>
@@ -84,18 +87,39 @@ function stubS3Send(impl: (command: HeadObjectCommand) => Promise<Record<string,
   return { calls };
 }
 
+function stubSqsSend() {
+  const calls: SendMessageCommand[] = [];
+
+  SQSClient.prototype.send = async function (command: unknown) {
+    if (!(command instanceof SendMessageCommand)) {
+      throw new Error("Unexpected SQS command");
+    }
+
+    calls.push(command);
+    return {};
+  } as typeof SQSClient.prototype.send;
+
+  return { calls };
+}
+
 describe("upload-trigger lambda", () => {
   beforeEach(() => {
     process.env.ASSETS_TABLE_NAME = "Assets";
     process.env.ASSETS_ORIGINALS_BUCKET_NAME = "media-originals-test";
     process.env.ASSETS_DERIVED_BUCKET_NAME = "media-derived-test";
     process.env.MEDIACONVERT_ROLE_ARN = "arn:aws:iam::123456789012:role/MediaConvertServiceRole";
+    process.env.VECTOR_SYNC_QUEUE_URL =
+      "https://sqs.us-west-2.amazonaws.com/123456789012/vector-sync";
+    SQSClient.prototype.send = async function () {
+      return {};
+    } as typeof SQSClient.prototype.send;
   });
 
   afterEach(() => {
     DynamoDBDocumentClient.prototype.send = originalDdbSend;
     MediaConvertClient.prototype.send = originalMcSend;
     S3Client.prototype.send = originalS3Send;
+    SQSClient.prototype.send = originalSqsSend;
 
     if (originalTableName === undefined) {
       delete process.env.ASSETS_TABLE_NAME;
@@ -120,9 +144,16 @@ describe("upload-trigger lambda", () => {
     } else {
       process.env.MEDIACONVERT_ROLE_ARN = originalMediaConvertRole;
     }
+
+    if (originalVectorSyncQueueUrl === undefined) {
+      delete process.env.VECTOR_SYNC_QUEUE_URL;
+    } else {
+      process.env.VECTOR_SYNC_QUEUE_URL = originalVectorSyncQueueUrl;
+    }
   });
 
   it("marks video upload as processing and submits MediaConvert job", async () => {
+    const sqs = stubSqsSend();
     const ddb = stubDdbSend(async (command) => {
       if (command instanceof GetCommand) {
         return {
@@ -202,6 +233,11 @@ describe("upload-trigger lambda", () => {
     expect(mc.calls.some((command) => command instanceof DescribeEndpointsCommand)).toBe(true);
     expect(mc.calls.some((command) => command instanceof CreateJobCommand)).toBe(true);
     expect(s3.calls).toHaveLength(1);
+    expect(sqs.calls).toHaveLength(2);
+    expect(sqs.calls.map((call) => call.input.MessageBody)).toEqual([
+      '{"assetId":"asset-123"}',
+      '{"assetId":"asset-123"}',
+    ]);
     const createJobCall = mc.calls.find((command) => command instanceof CreateJobCommand) as
       | CreateJobCommand
       | undefined;
@@ -288,6 +324,7 @@ describe("upload-trigger lambda", () => {
   });
 
   it("marks passthrough audio asset as ready without MediaConvert", async () => {
+    const sqs = stubSqsSend();
     const ddb = stubDdbSend(async (command) => {
       if (command instanceof GetCommand) {
         return {
@@ -338,6 +375,58 @@ describe("upload-trigger lambda", () => {
     });
     expect(hasUndefined(updateCalls[0]?.input.ExpressionAttributeValues)).toBe(false);
     expect(mc.calls).toHaveLength(0);
+    expect(sqs.calls).toHaveLength(1);
+    expect(sqs.calls[0]?.input.MessageBody).toBe('{"assetId":"asset-a1"}');
+  });
+
+  it("enqueues vector sync after marking a failed submission as error", async () => {
+    const sqs = stubSqsSend();
+    stubDdbSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return {
+          Item: {
+            id: "asset-failed",
+            type: "audio",
+            status: "uploaded",
+            original: {
+              bucket: "pending",
+              key: "incoming/asset-failed",
+              size: 0,
+              contentType: "audio/mpeg",
+            },
+            processingProfile: "audio-transcode-hls-v1",
+          },
+        };
+      }
+
+      return {};
+    });
+    stubMediaConvertSend(async () => {
+      throw new Error("MediaConvert unavailable");
+    });
+
+    await expect(
+      handler({
+        Records: [
+          {
+            body: JSON.stringify({
+              source: "aws.s3",
+              "detail-type": "Object Created",
+              detail: {
+                bucket: { name: "media-originals-test" },
+                object: { key: "incoming/asset-failed", size: 1024 },
+              },
+            }),
+          },
+        ],
+      })
+    ).rejects.toThrow("MediaConvert unavailable");
+
+    expect(sqs.calls).toHaveLength(2);
+    expect(sqs.calls.map((call) => call.input.MessageBody)).toEqual([
+      '{"assetId":"asset-failed"}',
+      '{"assetId":"asset-failed"}',
+    ]);
   });
 
   it("submits MediaConvert for audio transcode profile", async () => {

@@ -64,5 +64,34 @@ describe("api stack jobs", () => {
         ]),
       },
     });
+
+    const resources = template.toJSON().Resources as Record<
+      string,
+      {
+        Type?: string;
+        Properties?: {
+          Environment?: { Variables?: Record<string, unknown> };
+          PolicyDocument?: { Statement?: Array<{ Action?: string | string[] }> };
+        };
+      }
+    >;
+
+    for (const functionId of ["AssetByIdFunction", "CombosFunction"]) {
+      const lambdaFunction = Object.entries(resources).find(
+        ([id, resource]) => id.startsWith(functionId) && resource.Type === "AWS::Lambda::Function"
+      )?.[1];
+      const policy = Object.entries(resources).find(
+        ([id, resource]) => id.startsWith(functionId) && resource.Type === "AWS::IAM::Policy"
+      )?.[1];
+
+      expect(
+        JSON.stringify(lambdaFunction?.Properties?.Environment?.Variables?.VECTOR_SYNC_QUEUE_URL)
+      ).toContain("VECTOR-SYNC-QUEUE-ARN-TEST");
+      expect(
+        policy?.Properties?.PolicyDocument?.Statement?.flatMap(
+          (statement) => statement.Action ?? []
+        )
+      ).toContain("sqs:SendMessage");
+    }
   });
 });

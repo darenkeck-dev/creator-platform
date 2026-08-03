@@ -26,6 +26,11 @@ export class ProcessingStack extends Stack {
       stageExportName("MEDIA-ORIGINALS-BUCKET-NAME", stage)
     );
     const cloudFrontDomain = Fn.importValue(stageExportName("CLOUDFRONT-DOMAIN", stage));
+    const vectorSyncQueue = sqs.Queue.fromQueueArn(
+      this,
+      "VectorSyncQueue",
+      Fn.importValue(stageExportName("VECTOR-SYNC-QUEUE-ARN", stage))
+    );
 
     const mediaConvertRole = new iam.Role(this, "MediaConvertServiceRole", {
       assumedBy: new iam.ServicePrincipal("mediaconvert.amazonaws.com"),
@@ -64,6 +69,7 @@ export class ProcessingStack extends Stack {
         ASSETS_TABLE_NAME: assetsTableName,
         ASSETS_DERIVED_BUCKET_NAME: derivedBucketName,
         CLOUDFRONT_DOMAIN: cloudFrontDomain,
+        VECTOR_SYNC_QUEUE_URL: vectorSyncQueue.queueUrl,
       },
     });
 
@@ -118,7 +124,6 @@ export class ProcessingStack extends Stack {
       "BulkActionsQueue",
       Fn.importValue(stageExportName("BULK-ACTIONS-QUEUE-ARN", stage))
     );
-
     const uploadTrigger = new lambda.Function(this, "UploadTriggerFunction", {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: "index.handler",
@@ -130,6 +135,7 @@ export class ProcessingStack extends Stack {
         ASSETS_ORIGINALS_BUCKET_NAME: originalsBucketName,
         ASSETS_DERIVED_BUCKET_NAME: derivedBucketName,
         MEDIACONVERT_ROLE_ARN: mediaConvertRole.roleArn,
+        VECTOR_SYNC_QUEUE_URL: vectorSyncQueue.queueUrl,
       },
     });
 
@@ -198,6 +204,7 @@ export class ProcessingStack extends Stack {
         ASSETS_DERIVED_BUCKET_NAME: derivedBucketName,
         OPENAI_API_KEY_PARAMETER_NAME: openAiApiKeyParameterName,
         FFMPEG_PATH: process.env.FFMPEG_PATH || "/opt/bin/ffmpeg",
+        VECTOR_SYNC_QUEUE_URL: vectorSyncQueue.queueUrl,
       },
     });
 
@@ -215,6 +222,7 @@ export class ProcessingStack extends Stack {
         ASSETS_DERIVED_BUCKET_NAME: derivedBucketName,
         TONE_ANALYSIS_QUEUE_URL: toneAnalysisQueue.queueUrl,
         UPLOAD_EVENTS_QUEUE_URL: uploadEventsQueue.queueUrl,
+        VECTOR_SYNC_QUEUE_URL: vectorSyncQueue.queueUrl,
       },
     });
 
@@ -259,6 +267,10 @@ export class ProcessingStack extends Stack {
     bulkActionsQueue.grantConsumeMessages(jobsWorker);
     toneAnalysisQueue.grantSendMessages(jobsWorker);
     uploadEventsQueue.grantSendMessages(jobsWorker);
+    vectorSyncQueue.grantSendMessages(statusUpdater);
+    vectorSyncQueue.grantSendMessages(uploadTrigger);
+    vectorSyncQueue.grantSendMessages(toneAnalysisWorker);
+    vectorSyncQueue.grantSendMessages(jobsWorker);
 
     toneAnalysisWorker.addToRolePolicy(
       new iam.PolicyStatement({

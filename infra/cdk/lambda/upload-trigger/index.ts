@@ -10,6 +10,7 @@ import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { z } from "zod";
 import { upgradeAssetItemSchemaVersion } from "../shared/asset-record-versioning";
 import { appendAssetAuditLogEntry } from "../shared/asset-audit-log";
+import { enqueueVectorSyncMessage } from "../shared/vector-sync-message";
 
 type SqsEvent = {
   Records?: Array<{
@@ -683,8 +684,8 @@ async function updateAssetStatus(
   key: string,
   size: number,
   status: "processing" | "ready" | "error",
-  conversion: ConversionUpdate
-  , allowTerminalUpdate = false
+  conversion: ConversionUpdate,
+  allowTerminalUpdate = false
 ): Promise<void> {
   const now = new Date().toISOString();
   await db.send(
@@ -720,6 +721,7 @@ async function updateAssetStatus(
       },
     })
   );
+  await enqueueVectorSyncMessage(assetId, `upload-trigger:${conversion.status}`);
 }
 
 async function submitMediaConvertJob(

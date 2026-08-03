@@ -1,6 +1,7 @@
 export * from "./combo.js";
 export * from "./curator-adjustment.js";
 export * from "./asset-vector.js";
+export * from "./asset-vector-index.js";
 export * from "./audio-normalization.js";
 export * from "./frame-extraction.js";
 export * from "./nearest-neighbor.js";

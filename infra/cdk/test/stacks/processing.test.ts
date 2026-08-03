@@ -56,7 +56,10 @@ describe("processing stack tone analysis", () => {
       string,
       {
         Type?: string;
-        Properties?: { PolicyDocument?: { Statement?: Array<{ Action?: string }> } };
+        Properties?: {
+          Environment?: { Variables?: Record<string, unknown> };
+          PolicyDocument?: { Statement?: Array<{ Action?: string }> };
+        };
       }
     >;
     const tonePolicy = Object.entries(resources).find(
@@ -70,6 +73,15 @@ describe("processing stack tone analysis", () => {
     expect(actions).toContain("ssm:GetParameter");
     expect(actions).toContain("s3:PutObject");
     expect(actions?.flat()).toContain("dynamodb:Query");
+    expect(actions?.flat()).toContain("sqs:SendMessage");
+
+    const toneFunction = Object.entries(resources).find(
+      ([id, resource]) =>
+        id.startsWith("ToneAnalysisWorkerFunction") && resource.Type === "AWS::Lambda::Function"
+    )?.[1];
+    expect(
+      JSON.stringify(toneFunction?.Properties?.Environment?.Variables?.VECTOR_SYNC_QUEUE_URL)
+    ).toContain("VECTOR-SYNC-QUEUE-ARN-TEST");
   });
 
   it("adds a bulk actions worker fed by the API-owned queue", () => {
@@ -97,5 +109,70 @@ describe("processing stack tone analysis", () => {
     template.hasResourceProperties("AWS::Lambda::EventSourceMapping", {
       BatchSize: 1,
     });
+
+    const resources = template.toJSON().Resources as Record<
+      string,
+      {
+        Type?: string;
+        Properties?: {
+          Environment?: { Variables?: Record<string, unknown> };
+          PolicyDocument?: { Statement?: Array<{ Action?: string | string[] }> };
+        };
+      }
+    >;
+    const jobsFunction = Object.entries(resources).find(
+      ([id, resource]) =>
+        id.startsWith("JobsWorkerFunction") && resource.Type === "AWS::Lambda::Function"
+    )?.[1];
+    const jobsPolicy = Object.entries(resources).find(
+      ([id, resource]) =>
+        id.startsWith("JobsWorkerFunction") && resource.Type === "AWS::IAM::Policy"
+    )?.[1];
+
+    expect(
+      JSON.stringify(jobsFunction?.Properties?.Environment?.Variables?.VECTOR_SYNC_QUEUE_URL)
+    ).toContain("VECTOR-SYNC-QUEUE-ARN-TEST");
+    expect(
+      jobsPolicy?.Properties?.PolicyDocument?.Statement?.flatMap(
+        (statement) => statement.Action ?? []
+      )
+    ).toContain("sqs:SendMessage");
+  });
+
+  it("grants status mutation lambdas access to the vector sync queue", () => {
+    const app = new App();
+    const stack = new ProcessingStack(app, "ProcessingStackStatusVectorSyncTest", {
+      stage: "test",
+      env,
+    });
+    const resources = Template.fromStack(stack).toJSON().Resources as Record<
+      string,
+      {
+        Type?: string;
+        Properties?: {
+          Environment?: { Variables?: Record<string, unknown> };
+          PolicyDocument?: { Statement?: Array<{ Action?: string | string[] }> };
+        };
+      }
+    >;
+
+    for (const functionPrefix of ["MediaConvertStatusUpdaterFunction", "UploadTriggerFunction"]) {
+      const lambdaFunction = Object.entries(resources).find(
+        ([id, resource]) =>
+          id.startsWith(functionPrefix) && resource.Type === "AWS::Lambda::Function"
+      )?.[1];
+      const policy = Object.entries(resources).find(
+        ([id, resource]) => id.startsWith(functionPrefix) && resource.Type === "AWS::IAM::Policy"
+      )?.[1];
+
+      expect(
+        JSON.stringify(lambdaFunction?.Properties?.Environment?.Variables?.VECTOR_SYNC_QUEUE_URL)
+      ).toContain("VECTOR-SYNC-QUEUE-ARN-TEST");
+      expect(
+        policy?.Properties?.PolicyDocument?.Statement?.flatMap(
+          (statement) => statement.Action ?? []
+        )
+      ).toContain("sqs:SendMessage");
+    }
   });
 });

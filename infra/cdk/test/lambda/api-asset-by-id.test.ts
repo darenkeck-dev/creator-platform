@@ -18,6 +18,7 @@ import {
   ListObjectsV2Command,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 
 import { handler } from "../../lambda/api-asset-by-id";
 
@@ -42,11 +43,13 @@ const originalCreatedAtIndex = process.env.ASSETS_CREATED_AT_INDEX;
 const originalContainerIndex = process.env.ASSETS_CONTAINER_INDEX;
 const originalOriginalsBucketName = process.env.ASSETS_ORIGINALS_BUCKET_NAME;
 const originalDerivedBucketName = process.env.ASSETS_DERIVED_BUCKET_NAME;
+const originalVectorSyncQueueUrl = process.env.VECTOR_SYNC_QUEUE_URL;
 const originalAwsRegion = process.env.AWS_REGION;
 const originalAwsAccessKeyId = process.env.AWS_ACCESS_KEY_ID;
 const originalAwsSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
 const originalDdbSend = DynamoDBDocumentClient.prototype.send;
 const originalS3Send = S3Client.prototype.send;
+const originalSqsSend = SQSClient.prototype.send;
 
 function parseBody(result: { statusCode: number; body: string }): unknown {
   return JSON.parse(result.body);
@@ -173,14 +176,19 @@ describe("api-asset-by-id lambda", () => {
     process.env.ASSETS_CONTAINER_INDEX = "AssetByContainer";
     process.env.ASSETS_ORIGINALS_BUCKET_NAME = "media-originals-test";
     process.env.ASSETS_DERIVED_BUCKET_NAME = "media-derived-test";
+    process.env.VECTOR_SYNC_QUEUE_URL = "https://sqs.us-west-2.amazonaws.com/123/vector-sync";
     process.env.AWS_REGION = "us-west-2";
     process.env.AWS_ACCESS_KEY_ID = "test-access-key";
     process.env.AWS_SECRET_ACCESS_KEY = "test-secret-key";
+    SQSClient.prototype.send = async function () {
+      return {};
+    } as typeof SQSClient.prototype.send;
   });
 
   afterEach(() => {
     DynamoDBDocumentClient.prototype.send = originalDdbSend;
     S3Client.prototype.send = originalS3Send;
+    SQSClient.prototype.send = originalSqsSend;
 
     if (originalTableName === undefined) {
       delete process.env.ASSETS_TABLE_NAME;
@@ -210,6 +218,12 @@ describe("api-asset-by-id lambda", () => {
       delete process.env.ASSETS_DERIVED_BUCKET_NAME;
     } else {
       process.env.ASSETS_DERIVED_BUCKET_NAME = originalDerivedBucketName;
+    }
+
+    if (originalVectorSyncQueueUrl === undefined) {
+      delete process.env.VECTOR_SYNC_QUEUE_URL;
+    } else {
+      process.env.VECTOR_SYNC_QUEUE_URL = originalVectorSyncQueueUrl;
     }
 
     if (originalAwsRegion === undefined) {
@@ -497,19 +511,85 @@ describe("api-asset-by-id lambda", () => {
       };
     });
 
-    const result = await handler({
-      requestContext: { http: { method: "PATCH" } },
-      pathParameters: { id: "asset-9" },
-      body: JSON.stringify({
-        title: "Updated",
-        tags: [{ facet: "campaign", value: "launch" }],
-      }),
-    });
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: { http: { method: "PATCH" } },
+        pathParameters: { id: "asset-9" },
+        body: JSON.stringify({
+          title: "Updated",
+          tags: [{ facet: "campaign", value: "launch" }],
+        }),
+      })
+    );
 
     expect(result.statusCode).toBe(200);
     const body = parseBody(result) as { asset: { title: string } };
     expect(body.asset.title).toBe("Updated");
     expect(calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("enqueues visibility changes but not metadata-only patches", async () => {
+    const queueCalls: SendMessageCommand[] = [];
+    SQSClient.prototype.send = async function (command: unknown) {
+      queueCalls.push(command as SendMessageCommand);
+      return {};
+    } as typeof SQSClient.prototype.send;
+    stubDdbSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return { Item: { ...validAsset("asset-visible"), visibility: "private" } };
+      }
+      if (!(command instanceof UpdateCommand)) {
+        throw new Error("Expected UpdateCommand");
+      }
+      return {
+        Attributes: { ...validAsset("asset-visible"), visibility: "public" },
+      };
+    });
+
+    const visibilityResult = await handler(
+      withOwnerClaims({
+        requestContext: { http: { method: "PATCH" } },
+        pathParameters: { id: "asset-visible" },
+        body: JSON.stringify({ visibility: "public" }),
+      })
+    );
+
+    expect(visibilityResult.statusCode).toBe(200);
+    expect(queueCalls.map((call) => call.input.MessageBody)).toEqual([
+      '{"assetId":"asset-visible"}',
+    ]);
+
+    queueCalls.length = 0;
+    const metadataResult = await handler(
+      withOwnerClaims({
+        requestContext: { http: { method: "PATCH" } },
+        pathParameters: { id: "asset-visible" },
+        body: JSON.stringify({ title: "Metadata only" }),
+      })
+    );
+
+    expect(metadataResult.statusCode).toBe(200);
+    expect(queueCalls).toHaveLength(0);
+  });
+
+  it("rejects patches for assets owned by another user", async () => {
+    const { calls } = stubDdbSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return { Item: { ...validAsset("asset-other"), ownerEmail: "other@example.com" } };
+      }
+      throw new Error("Update must not run for another owner's asset");
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: { http: { method: "PATCH" } },
+        pathParameters: { id: "asset-other" },
+        body: JSON.stringify({ visibility: "public" }),
+      })
+    );
+
+    expect(result.statusCode).toBe(403);
+    expect(calls).toHaveLength(1);
   });
 
   it("returns pre-signed URL for POST /assets/{id}/upload-url without marking uploaded", async () => {
@@ -938,6 +1018,13 @@ describe("api-asset-by-id lambda", () => {
   });
 
   it("deletes asset metadata and S3 objects for owner", async () => {
+    const operations: string[] = [];
+    const queueCalls: SendMessageCommand[] = [];
+    SQSClient.prototype.send = async function (command: unknown) {
+      operations.push("enqueue");
+      queueCalls.push(command as SendMessageCommand);
+      return {};
+    } as typeof SQSClient.prototype.send;
     const s3 = stubS3Send(async (command) => {
       if (command instanceof DeleteObjectCommand) {
         return {};
@@ -972,6 +1059,7 @@ describe("api-asset-by-id lambda", () => {
       }
 
       if (command instanceof DeleteCommand) {
+        operations.push("delete-record");
         return {};
       }
 
@@ -991,6 +1079,8 @@ describe("api-asset-by-id lambda", () => {
     expect(body.deleted).toBe(true);
     expect(ddb.calls.some((command) => command instanceof DeleteCommand)).toBe(true);
     expect(s3.calls.some((command) => command instanceof DeleteObjectCommand)).toBe(true);
+    expect(queueCalls[0]?.input.MessageBody).toBe('{"assetId":"asset-7"}');
+    expect(operations.at(-1)).toBe("enqueue");
   });
 
   it("returns 403 when deleting non-owner asset", async () => {

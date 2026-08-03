@@ -37,6 +37,7 @@ import {
   safeReadAssetRecordWithUpgrade,
 } from "../shared/asset-record-versioning";
 import { materializeCuratorToneAdjustment } from "../shared/curator-tone-adjustment";
+import { enqueueVectorSyncMessage } from "../shared/vector-sync-message";
 
 type HttpEvent = {
   requestContext?: {
@@ -823,6 +824,7 @@ async function submitToneReview(event: HttpEvent): Promise<{ statusCode: number;
         tableName,
         assetId: review.targetId,
       });
+      await enqueueVectorSyncMessage(review.targetId, "api-combos:curator-adjustment");
     } catch (error) {
       console.error("Failed to materialize curator-adjusted tone scores", {
         assetId: review.targetId,

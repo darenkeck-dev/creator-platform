@@ -11,6 +11,7 @@ import {
   TransactWriteCommand,
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
+import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 
 import { handler } from "../../lambda/api-combos";
 
@@ -28,7 +29,9 @@ type HttpEvent = {
 const originalTableName = process.env.ASSETS_TABLE_NAME;
 const originalCreatedAtIndex = process.env.ASSETS_CREATED_AT_INDEX;
 const originalOriginalsBucketName = process.env.ASSETS_ORIGINALS_BUCKET_NAME;
+const originalVectorSyncQueueUrl = process.env.VECTOR_SYNC_QUEUE_URL;
 const originalSend = DynamoDBDocumentClient.prototype.send;
+const originalSqsSend = SQSClient.prototype.send;
 const originalMathRandom = Math.random;
 
 function withOwner(event: HttpEvent): HttpEvent {
@@ -116,10 +119,15 @@ describe("api-combos lambda", () => {
     process.env.ASSETS_TABLE_NAME = "Assets";
     process.env.ASSETS_CREATED_AT_INDEX = "AssetByCreatedAt";
     process.env.ASSETS_ORIGINALS_BUCKET_NAME = "media-originals";
+    process.env.VECTOR_SYNC_QUEUE_URL = "https://sqs.us-west-2.amazonaws.com/123/vector-sync";
+    SQSClient.prototype.send = async function () {
+      return {};
+    } as typeof SQSClient.prototype.send;
   });
 
   afterEach(() => {
     DynamoDBDocumentClient.prototype.send = originalSend;
+    SQSClient.prototype.send = originalSqsSend;
     Math.random = originalMathRandom;
     if (originalTableName === undefined) {
       delete process.env.ASSETS_TABLE_NAME;
@@ -137,6 +145,12 @@ describe("api-combos lambda", () => {
       delete process.env.ASSETS_ORIGINALS_BUCKET_NAME;
     } else {
       process.env.ASSETS_ORIGINALS_BUCKET_NAME = originalOriginalsBucketName;
+    }
+
+    if (originalVectorSyncQueueUrl === undefined) {
+      delete process.env.VECTOR_SYNC_QUEUE_URL;
+    } else {
+      process.env.VECTOR_SYNC_QUEUE_URL = originalVectorSyncQueueUrl;
     }
   });
 
@@ -254,6 +268,11 @@ describe("api-combos lambda", () => {
     };
     let storedReview: Record<string, unknown> | undefined;
     let adjustmentUpdate: UpdateCommand | undefined;
+    const queueCalls: SendMessageCommand[] = [];
+    SQSClient.prototype.send = async function (command: unknown) {
+      queueCalls.push(command as SendMessageCommand);
+      return {};
+    } as typeof SQSClient.prototype.send;
 
     stubSend(async (command) => {
       if (command instanceof GetCommand) {
@@ -304,6 +323,8 @@ describe("api-combos lambda", () => {
     expect(adjustmentUpdate?.input.ExpressionAttributeValues?.[":adjustedScores"]).toEqual({
       valence: 0.625,
     });
+    expect(queueCalls).toHaveLength(1);
+    expect(queueCalls[0]?.input.MessageBody).toBe('{"assetId":"audio-1"}');
   });
 
   it("rejects audio reviews without completed OpenAI scores", async () => {

@@ -11,7 +11,8 @@
   },
   "scripts": {
     "build": "bunx tsc -p tsconfig.json",
-    "lint": "bunx prettier --check \"src/**/*.ts\"",
+    "lint": "bunx prettier --check \"{src,test}/**/*.ts\"",
+    "test": "bun test test",
     "typecheck": "bunx tsc -p tsconfig.json"
   },
   "dependencies": {

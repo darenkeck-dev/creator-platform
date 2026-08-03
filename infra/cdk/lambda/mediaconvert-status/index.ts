@@ -2,6 +2,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { z } from "zod";
 import { appendAssetAuditLogEntry } from "../shared/asset-audit-log";
+import { enqueueVectorSyncMessage } from "../shared/vector-sync-message";
 
 const MediaConvertEventSchema = z.object({
   source: z.string().optional(),
@@ -386,6 +387,7 @@ export async function handler(event: MediaConvertEvent): Promise<{ ok: boolean; 
         },
       })
     );
+    await enqueueVectorSyncMessage(assetId, "mediaconvert-status:ready");
 
     await appendAssetAuditLogEntry({
       db,
@@ -437,6 +439,7 @@ export async function handler(event: MediaConvertEvent): Promise<{ ok: boolean; 
       },
     })
   );
+  await enqueueVectorSyncMessage(assetId, `mediaconvert-status:${status}`);
 
   await appendAssetAuditLogEntry({
     db,

@@ -11,6 +11,7 @@ import { z } from "zod";
 import { upgradeAssetItemSchemaVersion } from "../shared/asset-record-versioning";
 import { appendAssetAuditLogEntry } from "../shared/asset-audit-log";
 import { materializeCuratorToneAdjustment } from "../shared/curator-tone-adjustment";
+import { enqueueVectorSyncMessage } from "../shared/vector-sync-message";
 
 type SqsEvent = {
   Records?: Array<{
@@ -386,6 +387,7 @@ async function handleObjectCreated(event: EventBridgeS3ObjectCreatedEvent): Prom
     await updateToneAnalysis(tableName, asset.id, "skipped", {
       errorMessage: `Tone analysis is not supported for ${asset.type} assets`,
     });
+    await enqueueVectorSyncMessage(asset.id, "tone-analysis:skipped");
     await appendAssetAuditLogEntry({
       db,
       tableName,
@@ -402,6 +404,7 @@ async function handleObjectCreated(event: EventBridgeS3ObjectCreatedEvent): Prom
   }
 
   await updateToneAnalysis(tableName, asset.id, "processing");
+  await enqueueVectorSyncMessage(asset.id, "tone-analysis:processing");
   await appendAssetAuditLogEntry({
     db,
     tableName,
@@ -423,6 +426,7 @@ async function handleObjectCreated(event: EventBridgeS3ObjectCreatedEvent): Prom
         ...errorDetails(error),
       });
     }
+    await enqueueVectorSyncMessage(asset.id, "tone-analysis:ready");
     await appendAssetAuditLogEntry({
       db,
       tableName,
@@ -437,6 +441,7 @@ async function handleObjectCreated(event: EventBridgeS3ObjectCreatedEvent): Prom
   } catch (error) {
     const message = error instanceof Error ? error.message : "Tone analysis failed";
     await updateToneAnalysis(tableName, asset.id, "error", { errorMessage: message });
+    await enqueueVectorSyncMessage(asset.id, "tone-analysis:error");
     await appendAssetAuditLogEntry({
       db,
       tableName,

@@ -29,6 +29,7 @@ export class DataStack extends Stack {
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       pointInTimeRecovery: true,
+      stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
       removalPolicy: RemovalPolicy.RETAIN,
     });
 
@@ -61,6 +62,11 @@ export class DataStack extends Stack {
     new CfnOutput(this, "AssetsTableNameOutput", {
       value: assetsTable.tableName,
       exportName: stageExportName("ASSETS-TABLE-NAME", stage),
+    });
+
+    new CfnOutput(this, "AssetsTableStreamArnOutput", {
+      value: assetsTable.tableStreamArn!,
+      exportName: stageExportName("ASSETS-TABLE-STREAM-ARN", stage),
     });
 
     new CfnOutput(this, "AssetsCreatedAtIndexOutput", {

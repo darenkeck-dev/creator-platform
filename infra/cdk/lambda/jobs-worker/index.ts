@@ -22,6 +22,7 @@ import {
 } from "@media-manager/contracts";
 import { z } from "zod";
 import { buildJobPreview, expandAssetTree, safeReadAsset } from "../shared/asset-job-tree";
+import { enqueueVectorSyncMessage } from "../shared/vector-sync-message";
 
 type SqsEvent = {
   Records?: Array<{
@@ -209,6 +210,7 @@ async function deleteOneAsset(params: {
   }
 
   await deleteAssetRecords(params.tableName, params.asset.id);
+  await enqueueVectorSyncMessage(params.asset.id, "jobs-worker:deleted");
 }
 
 async function runDeleteAssets(jobId: string): Promise<void> {
@@ -403,6 +405,7 @@ async function updateToneQueued(tableName: string, assetId: string): Promise<voi
       ":updatedAt": now,
     },
   }));
+  await enqueueVectorSyncMessage(assetId, "jobs-worker:tone-queued");
 }
 
 async function runReprocessConversion(jobId: string): Promise<void> {

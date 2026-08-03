@@ -30,6 +30,11 @@ export class ApiStack extends Stack {
     const assetsDerivedBucketName = Fn.importValue(
       stageExportName("MEDIA-DERIVED-BUCKET-NAME", stage)
     );
+    const vectorSyncQueue = sqs.Queue.fromQueueArn(
+      this,
+      "VectorSyncQueue",
+      Fn.importValue(stageExportName("VECTOR-SYNC-QUEUE-ARN", stage))
+    );
 
     const assetsFunction = new lambda.Function(this, "AssetsFunction", {
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -56,6 +61,7 @@ export class ApiStack extends Stack {
         ASSETS_CONTAINER_INDEX: assetsContainerIndex,
         ASSETS_ORIGINALS_BUCKET_NAME: assetsOriginalsBucketName,
         ASSETS_DERIVED_BUCKET_NAME: assetsDerivedBucketName,
+        VECTOR_SYNC_QUEUE_URL: vectorSyncQueue.queueUrl,
       },
     });
 
@@ -69,6 +75,7 @@ export class ApiStack extends Stack {
         ASSETS_TABLE_NAME: assetsTableName,
         ASSETS_CREATED_AT_INDEX: assetsCreatedAtIndex,
         ASSETS_ORIGINALS_BUCKET_NAME: assetsOriginalsBucketName,
+        VECTOR_SYNC_QUEUE_URL: vectorSyncQueue.queueUrl,
       },
     });
 
@@ -168,6 +175,8 @@ export class ApiStack extends Stack {
     combosFunction.addToRolePolicy(tableReadWritePolicy);
     jobsFunction.addToRolePolicy(tableReadWritePolicy);
     bulkActionsQueue.grantSendMessages(jobsFunction);
+    vectorSyncQueue.grantSendMessages(assetByIdFunction);
+    vectorSyncQueue.grantSendMessages(combosFunction);
     combosFunction.addToRolePolicy(tableScanPolicy);
     combosFunction.addToRolePolicy(
       new iam.PolicyStatement({

@@ -48,6 +48,7 @@ import {
   safeReadAssetRecordWithUpgrade,
 } from "../shared/asset-record-versioning";
 import { appendAssetAuditLogEntry } from "../shared/asset-audit-log";
+import { enqueueVectorSyncMessage } from "../shared/vector-sync-message";
 
 type HttpEvent = {
   requestContext?: {
@@ -517,6 +518,7 @@ async function patchAsset(
   }
 
   const updates = parsedBody.data;
+  const ownerEmail = getOwnerEmail(event);
   const now = new Date().toISOString();
 
   const current = await db.send(
@@ -534,12 +536,16 @@ async function patchAsset(
   }
 
   const currentAsset = await readAssetOrThrow(tableName, current.Item);
+  if (currentAsset.ownerEmail !== ownerEmail) {
+    return response(403, { message: "Forbidden" });
+  }
 
   const names: Record<string, string> = {
     "#updatedAt": "updatedAt",
   };
   const values: Record<string, unknown> = {
     ":updatedAt": now,
+    ":ownerEmail": ownerEmail,
   };
   const setExpressions: string[] = ["#updatedAt = :updatedAt"];
 
@@ -598,7 +604,8 @@ async function patchAsset(
         pk: `ASSET#${id}`,
         sk: "META",
       },
-      ConditionExpression: "attribute_exists(pk) AND attribute_exists(sk)",
+      ConditionExpression:
+        "attribute_exists(pk) AND attribute_exists(sk) AND ownerEmail = :ownerEmail",
       UpdateExpression: `SET ${setExpressions.join(", ")}`,
       ExpressionAttributeNames: names,
       ExpressionAttributeValues: values,
@@ -611,6 +618,9 @@ async function patchAsset(
   }
 
   const asset = await readAssetOrThrow(tableName, result.Attributes);
+  if (updates.visibility !== undefined && updates.visibility !== currentAsset.visibility) {
+    await enqueueVectorSyncMessage(id, "api-asset-by-id:visibility");
+  }
   const payload = AssetDetailResponseSchema.parse({ asset });
   return response(200, payload);
 }
@@ -693,6 +703,10 @@ async function createUploadUrl(
 
   if (!updated.Attributes) {
     return response(404, { message: "Asset not found" });
+  }
+
+  if (currentAsset.status !== "draft") {
+    await enqueueVectorSyncMessage(id, "api-asset-by-id:upload-draft");
   }
 
   await appendAssetAuditLogEntry({
@@ -848,6 +862,10 @@ async function initMultipartUpload(
 
   if (!updated.Attributes) {
     return response(404, { message: "Asset not found" });
+  }
+
+  if (currentAsset.status !== "draft") {
+    await enqueueVectorSyncMessage(id, "api-asset-by-id:multipart-draft");
   }
 
   await appendAssetAuditLogEntry({
@@ -1140,6 +1158,10 @@ async function confirmUpload(
     return response(404, { message: "Asset not found" });
   }
 
+  if (nextStatus !== currentAsset.status) {
+    await enqueueVectorSyncMessage(id, "api-asset-by-id:upload-complete");
+  }
+
   await appendAssetAuditLogEntry({
     db,
     tableName,
@@ -1261,6 +1283,8 @@ async function deleteAsset(
 
     lastEvaluatedKey = page.LastEvaluatedKey as Record<string, unknown> | undefined;
   } while (lastEvaluatedKey);
+
+  await enqueueVectorSyncMessage(id, "api-asset-by-id:deleted");
 
   const payload = AssetDeleteResponseSchema.parse({ id, deleted: true as const });
   return response(200, payload);
