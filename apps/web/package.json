@@ -9,6 +9,7 @@
     "dev": "bunx --bun next dev",
     "build": "bunx --bun next build",
     "start": "bunx --bun next start",
+    "test": "bun test test",
     "lint": "bunx --bun eslint .",
     "typecheck": "bunx tsc --noEmit"
   },

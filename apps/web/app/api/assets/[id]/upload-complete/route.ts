@@ -21,7 +21,11 @@ export async function POST(_: Request, context: { params: Promise<Params> }) {
     const asset = await confirmUploadInApi(parsedParams.data.id);
     const response: AssetDetailResponse = AssetDetailResponseSchema.parse({ asset });
     return NextResponse.json(response);
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.endsWith(": 409")) {
+      return NextResponse.json({ message: "Uploaded object not found" }, { status: 409 });
+    }
     return NextResponse.json({ message: "Failed to confirm upload" }, { status: 500 });
   }
 }

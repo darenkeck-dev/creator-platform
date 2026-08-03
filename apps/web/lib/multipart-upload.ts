@@ -159,6 +159,7 @@ export async function uploadFileViaMultipart(
   const totalParts = Math.ceil(file.size / partSize);
   const completed: MultipartPart[] = [];
   let nextPart = 1;
+  let stopped = false;
   let confirmedUploadedBytes = 0;
   const inFlightPartBytes = new Map<number, number>();
 
@@ -173,7 +174,7 @@ export async function uploadFileViaMultipart(
   };
 
   const worker = async () => {
-    while (true) {
+    while (!stopped) {
       const partNumber = nextPart;
       nextPart += 1;
       if (partNumber > totalParts) {
@@ -183,10 +184,17 @@ export async function uploadFileViaMultipart(
       const start = (partNumber - 1) * partSize;
       const end = Math.min(start + partSize, file.size);
       const body = file.slice(start, end);
-      const result = await uploadOnePart(assetId, uploadId, partNumber, body, retries, (loaded) => {
-        inFlightPartBytes.set(partNumber, loaded);
-        emitProgress();
-      });
+      let result: MultipartPart;
+      try {
+        result = await uploadOnePart(assetId, uploadId, partNumber, body, retries, (loaded) => {
+          inFlightPartBytes.set(partNumber, loaded);
+          emitProgress();
+        });
+      } catch (error) {
+        stopped = true;
+        inFlightPartBytes.delete(partNumber);
+        throw error;
+      }
       inFlightPartBytes.delete(partNumber);
       confirmedUploadedBytes += body.size;
       emitProgress();
@@ -195,7 +203,13 @@ export async function uploadFileViaMultipart(
   };
 
   try {
-    await Promise.all(Array.from({ length: Math.min(concurrency, totalParts) }, () => worker()));
+    const results = await Promise.allSettled(
+      Array.from({ length: Math.min(concurrency, totalParts) }, () => worker())
+    );
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed?.status === "rejected") {
+      throw failed.reason;
+    }
 
     const completePayload = MultipartCompleteInputSchema.parse({
       uploadId,
@@ -219,6 +233,7 @@ export async function uploadFileViaMultipart(
 
     onProgress?.(1);
   } catch (error) {
+    stopped = true;
     try {
       const abortResponse = await fetch(
         `/api/assets/${encodeURIComponent(assetId)}/multipart/abort`,

@@ -3,48 +3,25 @@
 import {
   AssetDetailResponseSchema,
   AssetListResponseSchema,
-  AssetTypeSchema,
   AssetUploadUrlResponseSchema,
   type VideoUploadMetadata,
 } from "@media-manager/contracts";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 
-import { Toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
+import { Toast } from "@/components/ui/toast";
+import {
+  aggregateUploadProgress,
+  inferAssetTypeFromFile,
+  runWithConcurrency,
+  titleFromFileName,
+  type UploadAssetType,
+} from "@/lib/upload-files";
 import { uploadFileViaMultipart } from "@/lib/multipart-upload";
 
 const MULTIPART_THRESHOLD_BYTES = 64 * 1024 * 1024;
-const POST_UPLOAD_VISIBLE_MS = 800;
-const COMMON_VIDEO_EXTENSIONS = new Set([
-  "mp4",
-  "m4v",
-  "mov",
-  "webm",
-  "mkv",
-  "avi",
-  "mpeg",
-  "mpg",
-  "ogv",
-  "ts",
-  "m2ts",
-  "3gp",
-  "3g2",
-]);
-const COMMON_AUDIO_EXTENSIONS = new Set([
-  "mp3",
-  "wav",
-  "aac",
-  "m4a",
-  "flac",
-  "ogg",
-  "oga",
-  "opus",
-  "aif",
-  "aiff",
-  "wma",
-  "alac",
-]);
+const FILE_UPLOAD_CONCURRENCY = 2;
 
 type ToastState = {
   open: boolean;
@@ -59,45 +36,35 @@ type FolderOption = {
 };
 
 type AssetVisibility = "private" | "public";
+type UploadStatus = "pending" | "creating" | "uploading" | "confirming" | "complete" | "failed";
 
-function inferAssetTypeFromFile(file: File): "video" | "audio" | null {
-  const mime = file.type.toLowerCase();
-  if (mime.startsWith("video/")) {
-    return "video";
-  }
+type UploadItem = {
+  id: string;
+  file: File;
+  title: string;
+  type: UploadAssetType | null;
+  status: UploadStatus;
+  progress: number;
+  error?: string;
+  assetId?: string;
+};
 
-  if (mime.startsWith("audio/")) {
-    return "audio";
-  }
-
-  const extension = file.name.toLowerCase().split(".").pop();
-  if (!extension) {
-    return null;
-  }
-
-  if (COMMON_VIDEO_EXTENSIONS.has(extension)) {
-    return "video";
-  }
-
-  if (COMMON_AUDIO_EXTENSIONS.has(extension)) {
-    return "audio";
-  }
-
-  return null;
+function uploadItemId(file: File, index: number): string {
+  return `${file.name}-${file.size}-${file.lastModified}-${index}`;
 }
 
-function titleFromFileName(name: string): string {
-  const trimmed = name.trim();
-  if (!trimmed) {
-    return "";
-  }
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
-  const dot = trimmed.lastIndexOf(".");
-  if (dot <= 0) {
-    return trimmed;
-  }
-
-  return trimmed.slice(0, dot);
+function statusLabel(status: UploadStatus): string {
+  if (status === "creating") return "Creating asset";
+  if (status === "uploading") return "Uploading";
+  if (status === "confirming") return "Confirming";
+  if (status === "complete") return "Complete";
+  if (status === "failed") return "Failed";
+  return "Ready";
 }
 
 async function putFileWithProgress(
@@ -112,44 +79,31 @@ async function putFileWithProgress(
     request.setRequestHeader("content-type", contentType);
 
     request.upload.onprogress = (event) => {
-      if (!event.lengthComputable) {
-        return;
+      if (event.lengthComputable) {
+        onProgress(Math.min(1, event.loaded / Math.max(event.total, 1)));
       }
-
-      onProgress(Math.min(1, event.loaded / Math.max(event.total, 1)));
     };
-
-    request.onerror = () => {
-      reject(new Error("File upload failed."));
-    };
-
+    request.onerror = () => reject(new Error("File upload failed."));
     request.onload = () => {
       if (request.status < 200 || request.status >= 300) {
         reject(new Error("File upload failed."));
         return;
       }
-
       onProgress(1);
       resolve();
     };
-
     request.send(file);
   });
 }
 
 async function getVideoUploadMetadata(file: File): Promise<VideoUploadMetadata | undefined> {
-  if (!file.type.startsWith("video/")) {
-    return undefined;
-  }
-
   const objectUrl = URL.createObjectURL(file);
   try {
-    const metadata = await new Promise<VideoUploadMetadata>((resolve, reject) => {
+    return await new Promise<VideoUploadMetadata>((resolve, reject) => {
       const video = document.createElement("video");
       video.preload = "metadata";
       video.muted = true;
       video.playsInline = true;
-
       video.onloadedmetadata = () => {
         const width = Math.trunc(video.videoWidth);
         const height = Math.trunc(video.videoHeight);
@@ -157,18 +111,11 @@ async function getVideoUploadMetadata(file: File): Promise<VideoUploadMetadata |
           reject(new Error("Video dimensions could not be determined."));
           return;
         }
-
         resolve({ width, height });
       };
-
-      video.onerror = () => {
-        reject(new Error("Video metadata could not be read."));
-      };
-
+      video.onerror = () => reject(new Error("Video metadata could not be read."));
       video.src = objectUrl;
     });
-
-    return metadata;
   } catch {
     return undefined;
   } finally {
@@ -180,429 +127,668 @@ function UploadForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeContainerId = searchParams.get("containerId")?.trim() || "";
-  const [assetType, setAssetType] = useState<"video" | "audio" | "image">("video");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [items, setItems] = useState<UploadItem[]>([]);
   const [assetVisibility, setAssetVisibility] = useState<AssetVisibility>("private");
-  const [assetTitle, setAssetTitle] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [targetMode, setTargetMode] = useState<"root" | "existing" | "new">(
     activeContainerId ? "existing" : "root"
   );
   const [folders, setFolders] = useState<FolderOption[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState(activeContainerId);
   const [newFolderTitle, setNewFolderTitle] = useState("");
+  const [completedContainerId, setCompletedContainerId] = useState<string | null | undefined>();
+  const [destinationError, setDestinationError] = useState<string | null>(null);
+  const [isDestinationValidating, setIsDestinationValidating] = useState(
+    Boolean(activeContainerId)
+  );
+  const [destinationCreationUnknown, setDestinationCreationUnknown] = useState(false);
   const [toast, setToast] = useState<ToastState>({
     open: false,
     variant: "success",
     title: "",
   });
 
+  const overallProgress = aggregateUploadProgress(items);
+  const completedCount = items.filter((item) => item.status === "complete").length;
+  const failedCount = items.filter((item) => item.status === "failed").length;
+  const hasCreatedAssets = items.some((item) => item.assetId);
+  const selectedFolder = folders.find((folder) => folder.id === selectedFolderId) ?? null;
+
   function showToast(nextToast: Omit<ToastState, "open">) {
     setToast({ ...nextToast, open: true });
   }
 
+  function updateItem(id: string, update: Partial<UploadItem>) {
+    setItems((current) => current.map((item) => (item.id === id ? { ...item, ...update } : item)));
+  }
+
   useEffect(() => {
-    if (!toast.open) {
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setToast((current) => ({ ...current, open: false }));
-    }, 3000);
-
-    return () => {
-      clearTimeout(timer);
-    };
+    if (!toast.open) return;
+    const timer = setTimeout(() => setToast((current) => ({ ...current, open: false })), 3000);
+    return () => clearTimeout(timer);
   }, [toast.open]);
 
   useEffect(() => {
     let cancelled = false;
-
-    const loadFolders = async () => {
+    void (async () => {
       try {
-        const response = await fetch("/api/assets?type=folder&sort=newest", {
+        const response = await fetch("/api/assets?type=folder&scope=all&sort=newest", {
           method: "GET",
           cache: "no-store",
         });
-
-        if (!response.ok) {
-          return;
-        }
-
-        const json = (await response.json()) as unknown;
-        const parsed = AssetListResponseSchema.safeParse(json);
-        if (!parsed.success || cancelled) {
-          return;
-        }
-
+        if (!response.ok) return;
+        const parsed = AssetListResponseSchema.safeParse((await response.json()) as unknown);
+        if (!parsed.success || cancelled) return;
         setFolders(parsed.data.assets.map((asset) => ({ id: asset.id, title: asset.title })));
       } catch {
-        // best effort
+        // Folder selection remains usable for the active URL destination.
       }
-    };
-
-    void loadFolders();
-
+    })();
     return () => {
       cancelled = true;
     };
   }, []);
 
   useEffect(() => {
-    if (!activeContainerId) {
-      return;
+    if (activeContainerId) {
+      setTargetMode("existing");
+      setSelectedFolderId(activeContainerId);
+      setDestinationError(null);
+      setIsDestinationValidating(true);
+      let cancelled = false;
+      void (async () => {
+        try {
+          const response = await fetch(`/api/assets/${encodeURIComponent(activeContainerId)}`, {
+            cache: "no-store",
+          });
+          if (!response.ok) throw new Error("Current folder could not be loaded.");
+          const parsed = AssetDetailResponseSchema.safeParse((await response.json()) as unknown);
+          if (!parsed.success || parsed.data.asset.type !== "folder") {
+            throw new Error("The upload destination is not a folder.");
+          }
+          if (!cancelled) {
+            const folder = { id: parsed.data.asset.id, title: parsed.data.asset.title };
+            setFolders((current) => [
+              folder,
+              ...current.filter((option) => option.id !== folder.id),
+            ]);
+          }
+        } catch (error) {
+          if (!cancelled) {
+            setDestinationError(
+              error instanceof Error ? error.message : "Current folder could not be loaded."
+            );
+          }
+        } finally {
+          if (!cancelled) setIsDestinationValidating(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    } else {
+      setTargetMode("root");
+      setSelectedFolderId("");
+      setDestinationError(null);
+      setIsDestinationValidating(false);
     }
-
-    setTargetMode("existing");
-    setSelectedFolderId(activeContainerId);
   }, [activeContainerId]);
 
-  const selectedFolder = folders.find((folder) => folder.id === selectedFolderId) ?? null;
+  async function resolveContainerId(): Promise<string | undefined> {
+    if (targetMode === "root") return undefined;
+    if (targetMode === "existing") {
+      const chosen = selectedFolderId.trim();
+      if (!chosen) throw new Error("Select a target folder.");
+      return chosen;
+    }
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setErrorMessage(null);
-    setIsSubmitting(true);
-    setUploadProgress(0);
-
+    const title = newFolderTitle.trim();
+    if (!title) throw new Error("New folder name is required.");
+    let folder: FolderOption;
     try {
-      const formData = new FormData(event.currentTarget);
-      const rawType = String(formData.get("asset-type") ?? assetType);
-      const rawDescription = String(formData.get("asset-description") ?? "");
-      const file = selectedFile;
-
-      const parsedType = AssetTypeSchema.safeParse(rawType);
-      if (!parsedType.success) {
-        throw new Error("Please select a valid asset type.");
-      }
-      if (parsedType.data === "folder") {
-        throw new Error("Use Create Folder in Library to add folders.");
-      }
-
-      const title = assetTitle.trim();
-      if (!title) {
-        throw new Error("Title is required.");
-      }
-
-      if (!(file instanceof File) || file.size === 0) {
-        throw new Error("Please choose a media file to upload.");
-      }
-
-      let containerId: string | undefined;
-      if (targetMode === "existing") {
-        const chosen = selectedFolderId.trim();
-        if (!chosen) {
-          throw new Error("Select a target folder.");
-        }
-        containerId = chosen;
-      }
-
-      if (targetMode === "new") {
-        const newTitle = newFolderTitle.trim();
-        if (!newTitle) {
-          throw new Error("New folder name is required.");
-        }
-
-        const folderCreateResponse = await fetch("/api/assets", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            type: "folder",
-            title: newTitle,
-            description: "",
-            ...(activeContainerId ? { containerId: activeContainerId } : {}),
-          }),
-        });
-
-        if (!folderCreateResponse.ok) {
-          throw new Error("Failed to create destination folder.");
-        }
-
-        const folderJson = (await folderCreateResponse.json()) as unknown;
-        const folderParsed = AssetDetailResponseSchema.safeParse(folderJson);
-        if (!folderParsed.success) {
-          throw new Error("Folder response failed validation.");
-        }
-
-        containerId = folderParsed.data.asset.id;
-      }
-
-      const createResponse = await fetch("/api/assets", {
+      const response = await fetch("/api/assets", {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          type: parsedType.data,
+          type: "folder",
           title,
-          description: rawDescription.trim(),
+          description: "",
+          ...(activeContainerId ? { containerId: activeContainerId } : {}),
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to create destination folder.");
+      const parsed = AssetDetailResponseSchema.safeParse((await response.json()) as unknown);
+      if (!parsed.success) throw new Error("Folder response failed validation.");
+      folder = { id: parsed.data.asset.id, title: parsed.data.asset.title };
+    } catch {
+      setDestinationCreationUnknown(true);
+      throw new Error(
+        "Folder creation outcome is unknown. Check the library, then choose root or an existing folder."
+      );
+    }
+
+    setDestinationCreationUnknown(false);
+    setFolders((current) => [folder, ...current.filter((option) => option.id !== folder.id)]);
+    setSelectedFolderId(folder.id);
+    setTargetMode("existing");
+    setNewFolderTitle("");
+    return folder.id;
+  }
+
+  async function uploadOne(item: UploadItem, containerId: string | undefined): Promise<void> {
+    if (!item.type) throw new Error("Select a supported asset type.");
+    const title = item.title.trim();
+    if (!title) throw new Error("Title is required.");
+    if (item.file.size === 0) throw new Error("The selected file is empty.");
+
+    let assetId = item.assetId;
+    if (assetId) {
+      const currentResponse = await fetch(`/api/assets/${encodeURIComponent(assetId)}`, {
+        cache: "no-store",
+      });
+      if (currentResponse.ok) {
+        const current = AssetDetailResponseSchema.safeParse(
+          (await currentResponse.json()) as unknown
+        );
+        if (current.success && current.data.asset.status !== "draft") {
+          updateItem(item.id, { status: "complete", progress: 1, error: undefined });
+          return;
+        }
+      }
+
+      const confirmResponse = await fetch(
+        `/api/assets/${encodeURIComponent(assetId)}/upload-complete`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({}),
+        }
+      );
+      if (confirmResponse.ok) {
+        updateItem(item.id, { status: "complete", progress: 1, error: undefined });
+        return;
+      }
+      if (confirmResponse.status !== 409) {
+        throw new Error("Could not verify the previous upload. Retry to check again.");
+      }
+    }
+
+    if (!assetId) {
+      updateItem(item.id, { status: "creating", error: undefined, progress: 0 });
+      const response = await fetch("/api/assets", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: item.type,
+          title,
+          description: description.trim(),
           visibility: assetVisibility,
           ...(containerId ? { containerId } : {}),
         }),
       });
+      if (!response.ok) throw new Error("Failed to create asset.");
+      const parsed = AssetDetailResponseSchema.safeParse((await response.json()) as unknown);
+      if (!parsed.success) throw new Error("Create asset response failed validation.");
+      assetId = parsed.data.asset.id;
+      updateItem(item.id, { assetId });
+    }
 
-      if (!createResponse.ok) {
-        throw new Error("Failed to create asset.");
-      }
+    updateItem(item.id, { status: "uploading", error: undefined });
+    const contentType = item.file.type || "application/octet-stream";
+    const videoMetadata =
+      item.type === "video" ? await getVideoUploadMetadata(item.file) : undefined;
+    const onProgress = (progress: number) => updateItem(item.id, { progress });
 
-      const createJson = (await createResponse.json()) as unknown;
-      const createParsed = AssetDetailResponseSchema.safeParse(createJson);
-      if (!createParsed.success) {
-        throw new Error("Create asset response failed validation.");
-      }
+    if (item.type === "video" && item.file.size >= MULTIPART_THRESHOLD_BYTES) {
+      await uploadFileViaMultipart(assetId, item.file, { onProgress, videoMetadata });
+    } else {
+      const uploadUrlResponse = await fetch(
+        `/api/assets/${encodeURIComponent(assetId)}/upload-url`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ contentType, ...(videoMetadata ? { videoMetadata } : {}) }),
+        }
+      );
+      if (!uploadUrlResponse.ok) throw new Error("Failed to create upload URL.");
+      const uploadParsed = AssetUploadUrlResponseSchema.safeParse(
+        (await uploadUrlResponse.json()) as unknown
+      );
+      if (!uploadParsed.success) throw new Error("Upload URL response failed validation.");
+      await putFileWithProgress(uploadParsed.data.uploadUrl, item.file, contentType, onProgress);
 
-      const asset = createParsed.data.asset;
+      updateItem(item.id, { status: "confirming", progress: 1 });
+      const confirmResponse = await fetch(
+        `/api/assets/${encodeURIComponent(assetId)}/upload-complete`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({}),
+        }
+      );
+      if (!confirmResponse.ok) throw new Error("Upload completed but confirmation failed.");
+    }
 
-      const uploadFile = file as File;
-      const contentType = uploadFile.type || "application/octet-stream";
-      const videoMetadata =
-        parsedType.data === "video" ? await getVideoUploadMetadata(uploadFile) : undefined;
-      const shouldUseMultipart =
-        parsedType.data === "video" && uploadFile.size >= MULTIPART_THRESHOLD_BYTES;
+    updateItem(item.id, { status: "complete", progress: 1, error: undefined });
+  }
 
-      if (shouldUseMultipart) {
-        await uploadFileViaMultipart(asset.id, uploadFile, {
-          onProgress: setUploadProgress,
-          videoMetadata,
-        });
+  async function uploadBatch(itemIds?: ReadonlySet<string>) {
+    if (isSubmitting) return;
+    setErrorMessage(null);
+
+    const candidates = items.filter(
+      (item) =>
+        item.status !== "complete" &&
+        (item.status !== "failed" || Boolean(item.assetId)) &&
+        (!itemIds || itemIds.has(item.id))
+    );
+    if (candidates.length === 0) {
+      setErrorMessage(
+        items.some((item) => item.status === "failed" && !item.assetId)
+          ? "Remove uploads with an unknown create result after checking the destination."
+          : "Choose at least one media file."
+      );
+      return;
+    }
+    if (candidates.some((item) => !item.type)) {
+      setErrorMessage("Choose a supported type for every file before uploading.");
+      return;
+    }
+    if (candidates.some((item) => !item.title.trim())) {
+      setErrorMessage("Every file needs a title.");
+      return;
+    }
+    if (destinationError) {
+      setErrorMessage(destinationError);
+      return;
+    }
+    if (isDestinationValidating) {
+      setErrorMessage("Wait for the current folder to finish loading.");
+      return;
+    }
+    if (destinationCreationUnknown) {
+      setErrorMessage(
+        "Check the library for the new folder, then choose root or an existing folder."
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const containerId = await resolveContainerId();
+      setCompletedContainerId(containerId ?? null);
+      const results = await runWithConcurrency(
+        candidates,
+        FILE_UPLOAD_CONCURRENCY,
+        async (item) => {
+          try {
+            await uploadOne(item, containerId);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "Upload failed.";
+            updateItem(item.id, { status: "failed", error: message });
+            throw error;
+          }
+        }
+      );
+      const failures = results.filter((result) => !result.ok).length;
+      if (failures > 0) {
+        const message = `${candidates.length - failures} completed, ${failures} failed.`;
+        setErrorMessage(message);
+        showToast({ variant: "error", title: "Batch upload incomplete", description: message });
       } else {
-        const uploadUrlResponse = await fetch(
-          `/api/assets/${encodeURIComponent(asset.id)}/upload-url`,
-          {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({
-              contentType,
-              ...(videoMetadata ? { videoMetadata } : {}),
-            }),
-          }
-        );
-
-        if (!uploadUrlResponse.ok) {
-          throw new Error("Failed to create upload URL.");
-        }
-
-        const uploadJson = (await uploadUrlResponse.json()) as unknown;
-        const uploadParsed = AssetUploadUrlResponseSchema.safeParse(uploadJson);
-        if (!uploadParsed.success) {
-          throw new Error("Upload URL response failed validation.");
-        }
-
-        await putFileWithProgress(
-          uploadParsed.data.uploadUrl,
-          uploadFile,
-          contentType,
-          setUploadProgress
-        );
-
-        const confirmResponse = await fetch(
-          `/api/assets/${encodeURIComponent(asset.id)}/upload-complete`,
-          {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({}),
-          }
-        );
-
-        if (!confirmResponse.ok) {
-          throw new Error("Upload completed but confirmation failed.");
-        }
+        showToast({
+          variant: "success",
+          title: candidates.length === 1 ? "Upload complete" : "Uploads complete",
+          description: `${candidates.length} ${candidates.length === 1 ? "asset" : "assets"} uploaded successfully.`,
+        });
       }
-
-      showToast({
-        variant: "success",
-        title: "Upload complete",
-        description: "Your asset was uploaded to S3 successfully.",
-      });
-
-      setUploadProgress(1);
-
-      await new Promise((resolve) => {
-        setTimeout(resolve, POST_UPLOAD_VISIBLE_MS);
-      });
-
-      router.push(`/asset/${asset.id}`);
       router.refresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Upload failed.";
       setErrorMessage(message);
-      showToast({
-        variant: "error",
-        title: "Upload failed",
-        description: message,
-      });
+      showToast({ variant: "error", title: "Upload failed", description: message });
     } finally {
       setIsSubmitting(false);
-      setUploadProgress(0);
     }
   }
 
+  function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void uploadBatch();
+  }
+
+  const destinationHref = completedContainerId
+    ? `/library?containerId=${encodeURIComponent(completedContainerId)}`
+    : "/library";
+
   return (
-    <section className="mx-auto max-w-2xl space-y-6">
+    <section className="mx-auto max-w-4xl space-y-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Upload</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Upload media to root, an existing folder, or a new folder.
+          Add multiple media files. Types are inferred and uploads default to private.
         </p>
       </header>
 
-      <form onSubmit={onSubmit} className="space-y-4 rounded-xl border bg-card p-6 shadow-sm">
-        <label className="block text-sm font-medium" htmlFor="asset-file">
-          Media file
-        </label>
-        <input
-          id="asset-file"
-          name="asset-file"
-          type="file"
-          onChange={(event) => {
-            const file = event.currentTarget.files?.[0] ?? null;
-            setSelectedFile(file);
-            if (!file) {
-              return;
-            }
-
-            setAssetTitle(titleFromFileName(file.name));
-            const inferredType = inferAssetTypeFromFile(file);
-            if (inferredType) {
-              setAssetType(inferredType);
-            }
-          }}
-          className="w-full rounded-md border bg-card px-3 py-2 text-sm"
-          required
-        />
-
-        <label className="block text-sm font-medium" htmlFor="asset-type">
-          Asset type
-        </label>
-        <select
-          id="asset-type"
-          name="asset-type"
-          value={assetType}
-          onChange={(event) => {
-            const next = AssetTypeSchema.safeParse(event.target.value);
-            if (next.success && next.data !== "folder") {
-              setAssetType(next.data);
-            }
-          }}
-          className="w-full rounded-md border bg-card px-3 py-2 text-sm"
-        >
-          <option value="video">Video</option>
-          <option value="audio">Audio</option>
-          <option value="image">Image</option>
-        </select>
-
-        <label className="block text-sm font-medium" htmlFor="asset-visibility">
-          Visibility
-        </label>
-        <select
-          id="asset-visibility"
-          name="asset-visibility"
-          value={assetVisibility}
-          onChange={(event) => {
-            if (event.target.value === "public" || event.target.value === "private") {
-              setAssetVisibility(event.target.value);
-            }
-          }}
-          className="w-full rounded-md border bg-card px-3 py-2 text-sm"
-        >
-          <option value="private">Private</option>
-          <option value="public">Public</option>
-        </select>
-
-        <fieldset className="space-y-2 rounded-md border p-3">
-          <legend className="px-1 text-sm font-medium">Destination</legend>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              checked={targetMode === "root"}
-              name="target-mode"
-              onChange={() => setTargetMode("root")}
-              type="radio"
-            />
-            Root
+      <form
+        onSubmit={onSubmit}
+        className="space-y-5 rounded-xl border bg-card p-4 shadow-sm sm:p-6"
+      >
+        <div className="space-y-2">
+          <label className="block text-sm font-medium" htmlFor="asset-files">
+            Media files
           </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              checked={targetMode === "existing"}
-              name="target-mode"
-              onChange={() => setTargetMode("existing")}
-              type="radio"
-            />
-            Existing folder
-          </label>
-          {targetMode === "existing" ? (
+          <input
+            id="asset-files"
+            ref={fileInputRef}
+            name="asset-files"
+            type="file"
+            accept="audio/*,video/*,image/*"
+            multiple
+            disabled={isSubmitting || hasCreatedAssets}
+            onChange={(event) => {
+              const files = Array.from(event.currentTarget.files ?? []);
+              setItems(
+                files.map((file, index) => ({
+                  id: uploadItemId(file, index),
+                  file,
+                  title: titleFromFileName(file.name),
+                  type: inferAssetTypeFromFile(file),
+                  status: "pending",
+                  progress: 0,
+                  ...(inferAssetTypeFromFile(file)
+                    ? {}
+                    : { error: "Type could not be inferred. Select one below." }),
+                }))
+              );
+              setCompletedContainerId(undefined);
+              setErrorMessage(null);
+            }}
+            className="w-full rounded-md border bg-card px-3 py-2 text-sm"
+            required={items.length === 0}
+          />
+        </div>
+
+        {items.length > 0 ? (
+          <div className="space-y-3" aria-label="Selected files">
+            {items.map((item) => (
+              <article key={item.id} className="space-y-3 rounded-lg border bg-background/40 p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{item.file.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatFileSize(item.file.size)} · {statusLabel(item.status)}
+                    </p>
+                  </div>
+                  {item.status === "pending" || (item.status === "failed" && !item.assetId) ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const remaining = items.filter((row) => row.id !== item.id);
+                        setItems(remaining);
+                        if (remaining.length === 0 && fileInputRef.current) {
+                          fileInputRef.current.value = "";
+                        }
+                      }}
+                    >
+                      <span className="sr-only">{item.file.name}: </span>
+                      Remove
+                    </Button>
+                  ) : null}
+                  {item.status === "failed" && item.assetId ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isSubmitting}
+                      onClick={() => void uploadBatch(new Set([item.id]))}
+                    >
+                      <span className="sr-only">{item.file.name}: </span>
+                      Retry
+                    </Button>
+                  ) : null}
+                  {item.status === "complete" && item.assetId ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => router.push(`/asset/${item.assetId}`)}
+                    >
+                      <span className="sr-only">{item.file.name}: </span>
+                      View
+                    </Button>
+                  ) : null}
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
+                  <label className="space-y-1 text-xs font-medium">
+                    <span>Title</span>
+                    <input
+                      className="w-full rounded-md border bg-card px-3 py-2 text-sm"
+                      disabled={isSubmitting || item.status === "complete" || Boolean(item.assetId)}
+                      value={item.title}
+                      onChange={(event) => updateItem(item.id, { title: event.target.value })}
+                    />
+                  </label>
+                  <label className="space-y-1 text-xs font-medium">
+                    <span>Type</span>
+                    <select
+                      className="w-full rounded-md border bg-card px-3 py-2 text-sm"
+                      disabled={isSubmitting || item.status === "complete" || Boolean(item.assetId)}
+                      value={item.type ?? ""}
+                      onChange={(event) => {
+                        const type = event.target.value as UploadAssetType;
+                        updateItem(item.id, {
+                          type,
+                          status: "pending",
+                          error: undefined,
+                        });
+                      }}
+                    >
+                      <option value="">Select type</option>
+                      <option value="video">Video</option>
+                      <option value="audio">Audio</option>
+                      <option value="image">Image</option>
+                    </select>
+                  </label>
+                </div>
+
+                {item.status !== "pending" ? (
+                  <div
+                    className="h-1.5 overflow-hidden rounded-full bg-border"
+                    role="progressbar"
+                    aria-label={`${item.file.name} upload progress`}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(item.progress * 100)}
+                  >
+                    <div
+                      className="h-full bg-primary transition-[width] duration-150"
+                      style={{ width: `${Math.round(item.progress * 100)}%` }}
+                    />
+                  </div>
+                ) : null}
+                {item.error ? (
+                  <p className="text-xs text-destructive" role="alert">
+                    {item.error}
+                    {!item.assetId && item.status === "failed"
+                      ? " Check the destination before selecting this file again."
+                      : ""}
+                  </p>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="space-y-1 text-sm font-medium" htmlFor="asset-visibility">
+            <span>Visibility</span>
             <select
+              id="asset-visibility"
+              value={assetVisibility}
+              disabled={isSubmitting || hasCreatedAssets}
+              onChange={(event) => setAssetVisibility(event.target.value as AssetVisibility)}
               className="w-full rounded-md border bg-card px-3 py-2 text-sm"
-              onChange={(event) => setSelectedFolderId(event.target.value)}
-              value={selectedFolderId}
             >
-              <option value="">Select folder</option>
-              {folders.map((folder) => (
-                <option key={folder.id} value={folder.id}>
-                  {folder.title} - {folder.id}
-                </option>
-              ))}
+              <option value="private">Private</option>
+              <option value="public">Public</option>
             </select>
+          </label>
+
+          <label className="space-y-1 text-sm font-medium" htmlFor="asset-description">
+            <span>Description for all files</span>
+            <input
+              id="asset-description"
+              value={description}
+              disabled={isSubmitting || hasCreatedAssets}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="Optional shared context"
+              className="w-full rounded-md border bg-card px-3 py-2 text-sm"
+            />
+          </label>
+        </div>
+
+        <fieldset
+          className="space-y-2 rounded-md border p-3"
+          disabled={isSubmitting || hasCreatedAssets}
+        >
+          <legend className="px-1 text-sm font-medium">Destination</legend>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                checked={targetMode === "root"}
+                name="target-mode"
+                onChange={() => {
+                  setTargetMode("root");
+                  setDestinationError(null);
+                  setDestinationCreationUnknown(false);
+                }}
+                type="radio"
+              />
+              Root
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                checked={targetMode === "existing"}
+                name="target-mode"
+                onChange={() => {
+                  setTargetMode("existing");
+                  setDestinationCreationUnknown(false);
+                }}
+                type="radio"
+              />
+              Existing folder
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                checked={targetMode === "new"}
+                name="target-mode"
+                onChange={() => {
+                  setTargetMode("new");
+                  setDestinationError(null);
+                }}
+                type="radio"
+              />
+              New folder
+            </label>
+          </div>
+          {targetMode === "existing" ? (
+            <label className="space-y-1 text-xs font-medium">
+              <span>Existing folder</span>
+              <select
+                className="w-full rounded-md border bg-card px-3 py-2 text-sm"
+                onChange={(event) => {
+                  setSelectedFolderId(event.target.value);
+                  setDestinationError(null);
+                  setDestinationCreationUnknown(false);
+                }}
+                value={selectedFolderId}
+              >
+                <option value="">Select folder</option>
+                {!selectedFolder && selectedFolderId ? (
+                  <option value={selectedFolderId}>Current folder · {selectedFolderId}</option>
+                ) : null}
+                {folders.map((folder) => (
+                  <option key={folder.id} value={folder.id}>
+                    {folder.title}
+                  </option>
+                ))}
+              </select>
+            </label>
           ) : null}
           {targetMode === "existing" && selectedFolder ? (
-            <p className="text-xs text-muted-foreground">
-              Selected: {selectedFolder.title}{" "}
-              <span className="text-muted-foreground/70">{selectedFolder.id}</span>
+            <p className="text-xs text-muted-foreground">Selected: {selectedFolder.title}</p>
+          ) : null}
+          {targetMode === "new" ? (
+            <label className="space-y-1 text-xs font-medium">
+              <span>New folder name</span>
+              <input
+                className="w-full rounded-md border bg-card px-3 py-2 text-sm"
+                onChange={(event) => setNewFolderTitle(event.target.value)}
+                placeholder="New folder name"
+                value={newFolderTitle}
+              />
+            </label>
+          ) : null}
+          {destinationError ? (
+            <p className="text-xs text-destructive" role="alert">
+              {destinationError}
             </p>
           ) : null}
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              checked={targetMode === "new"}
-              name="target-mode"
-              onChange={() => setTargetMode("new")}
-              type="radio"
-            />
-            New folder
-          </label>
-          {targetMode === "new" ? (
-            <input
-              className="w-full rounded-md border bg-card px-3 py-2 text-sm"
-              onChange={(event) => setNewFolderTitle(event.target.value)}
-              placeholder="New folder name"
-              value={newFolderTitle}
-            />
-          ) : null}
         </fieldset>
-        <label className="block text-sm font-medium" htmlFor="asset-title">
-          Asset title
-        </label>
-        <input
-          id="asset-title"
-          name="asset-title"
-          type="text"
-          value={assetTitle}
-          onChange={(event) => setAssetTitle(event.target.value)}
-          placeholder="Summer campaign b-roll"
-          className="w-full rounded-md border bg-card px-3 py-2 text-sm"
-          required
-        />
-        <label className="block text-sm font-medium" htmlFor="asset-description">
-          Description
-        </label>
-        <textarea
-          id="asset-description"
-          name="asset-description"
-          rows={3}
-          placeholder="Optional context about this asset"
-          className="w-full rounded-md border bg-card px-3 py-2 text-sm"
-        />
+
         {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Uploading..." : "Create asset and upload"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="submit"
+            disabled={
+              isSubmitting ||
+              isDestinationValidating ||
+              destinationCreationUnknown ||
+              items.length === 0
+            }
+          >
+            {isSubmitting
+              ? `Uploading ${completedCount}/${items.length}`
+              : failedCount > 0
+                ? "Retry failed uploads"
+                : `Upload ${items.length || ""} ${items.length === 1 ? "file" : "files"}`.trim()}
+          </Button>
+          {completedContainerId !== undefined && completedCount > 0 ? (
+            <Button type="button" variant="outline" onClick={() => router.push(destinationHref)}>
+              Return to folder
+            </Button>
+          ) : null}
+          {items.length > 0 &&
+          completedCount + failedCount === items.length &&
+          failedCount === 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setItems([]);
+                setCompletedContainerId(undefined);
+                setErrorMessage(null);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+              }}
+            >
+              Upload another batch
+            </Button>
+          ) : null}
+          {items.length > 0 ? (
+            <span className="text-xs text-muted-foreground">
+              {completedCount} complete{failedCount ? ` · ${failedCount} failed` : ""}
+            </span>
+          ) : null}
+        </div>
       </form>
+
       <Toast
         open={toast.open}
         variant={toast.variant}
@@ -611,14 +797,21 @@ function UploadForm() {
       />
       {isSubmitting ? (
         <>
-          <div className="pointer-events-none fixed bottom-0 left-0 z-50 h-1 w-full bg-border/60">
+          <div
+            className="pointer-events-none fixed bottom-0 left-0 z-50 h-1 w-full bg-border/60"
+            role="progressbar"
+            aria-label="Overall upload progress"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(overallProgress * 100)}
+          >
             <div
               className="h-full bg-primary transition-[width] duration-150 ease-out"
-              style={{ width: `${Math.max(2, Math.round(uploadProgress * 100))}%` }}
+              style={{ width: `${Math.max(2, Math.round(overallProgress * 100))}%` }}
             />
           </div>
           <div className="pointer-events-none fixed bottom-2 right-3 z-50 rounded bg-background/80 px-2 py-1 text-xs font-medium backdrop-blur-sm">
-            {Math.round(uploadProgress * 100)}%
+            {Math.round(overallProgress * 100)}%
           </div>
         </>
       ) : null}
@@ -630,7 +823,7 @@ export default function UploadPage() {
   return (
     <Suspense
       fallback={
-        <section className="mx-auto max-w-2xl space-y-6">
+        <section className="mx-auto max-w-4xl">
           <p className="text-sm text-muted-foreground">Loading upload form...</p>
         </section>
       }

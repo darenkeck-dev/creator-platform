@@ -20,12 +20,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type Props = {
   assetIds: string[];
   type: Extract<JobType, "reprocess_tone" | "reprocess_conversion">;
   onJobCreated?: (job: JobRecord) => void;
+  onTriggered?: () => void;
+  triggerVariant?: "button" | "menu-item";
 };
 
 function labels(type: Props["type"]) {
@@ -33,13 +41,15 @@ function labels(type: Props["type"]) {
     ? {
         button: "Reprocess Tone",
         title: "Reprocess Tone",
-        description: "Queues tone analysis for selected audio and video assets. Folders are scanned for supported assets.",
+        description:
+          "Queues tone analysis for selected audio and video assets. Folders are scanned for supported assets.",
         starting: "Starting tone job...",
       }
     : {
         button: "Reprocess Conversion",
         title: "Reprocess Conversion",
-        description: "Queues media conversion for selected compatible assets. Folders are scanned for supported assets.",
+        description:
+          "Queues media conversion for selected compatible assets. Folders are scanned for supported assets.",
         starting: "Starting conversion job...",
       };
 }
@@ -56,12 +66,19 @@ function queueableCount(preview: JobPreview) {
   return preview.items.filter((item) => item.actionStatus === "processable").length;
 }
 
-export function ReprocessAssetsDialog({ assetIds, type, onJobCreated }: Props) {
+export function ReprocessAssetsDialog({
+  assetIds,
+  type,
+  onJobCreated,
+  onTriggered,
+  triggerVariant = "button",
+}: Props) {
   const copy = labels(type);
   const { trackJob } = useJobStatus();
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<JobPreview | null>(null);
-  const [processingProfile, setProcessingProfile] = useState<ProcessingProfile>("video-standard-v1");
+  const [processingProfile, setProcessingProfile] =
+    useState<ProcessingProfile>("video-standard-v1");
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [creatingJob, setCreatingJob] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -70,6 +87,7 @@ export function ReprocessAssetsDialog({ assetIds, type, onJobCreated }: Props) {
 
   async function loadPreview() {
     if (assetIds.length === 0 || loadingPreview) return;
+    onTriggered?.();
     setOpen(true);
     setLoadingPreview(true);
     setPreview(null);
@@ -119,10 +137,27 @@ export function ReprocessAssetsDialog({ assetIds, type, onJobCreated }: Props) {
 
   return (
     <>
-      <Button disabled={assetIds.length === 0 || loadingPreview} onClick={() => void loadPreview()} type="button" variant="outline">
-        <RefreshCw aria-hidden="true" className="mr-2 h-4 w-4" />
-        {loadingPreview ? "Preparing..." : copy.button}
-      </Button>
+      {triggerVariant === "menu-item" ? (
+        <button
+          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
+          disabled={assetIds.length === 0 || loadingPreview}
+          onClick={() => void loadPreview()}
+          type="button"
+        >
+          <RefreshCw aria-hidden="true" className="h-4 w-4" />
+          {loadingPreview ? "Preparing..." : copy.button}
+        </button>
+      ) : (
+        <Button
+          disabled={assetIds.length === 0 || loadingPreview}
+          onClick={() => void loadPreview()}
+          type="button"
+          variant="outline"
+        >
+          <RefreshCw aria-hidden="true" className="mr-2 h-4 w-4" />
+          {loadingPreview ? "Preparing..." : copy.button}
+        </Button>
+      )}
       <Dialog onOpenChange={setOpen} open={open}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -132,7 +167,9 @@ export function ReprocessAssetsDialog({ assetIds, type, onJobCreated }: Props) {
 
           {type === "reprocess_conversion" ? (
             <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="processing-profile">Processing profile</label>
+              <label className="text-sm font-medium" htmlFor="processing-profile">
+                Processing profile
+              </label>
               <Select
                 onValueChange={(value) => {
                   setProcessingProfile(value as ProcessingProfile);
@@ -144,29 +181,40 @@ export function ReprocessAssetsDialog({ assetIds, type, onJobCreated }: Props) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {PROCESSING_PROFILE_METADATA.filter((profile) => profile.id !== "folder-meta-v1").map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id}>{profile.label}</SelectItem>
+                  {PROCESSING_PROFILE_METADATA.filter(
+                    (profile) => profile.id !== "folder-meta-v1"
+                  ).map((profile) => (
+                    <SelectItem key={profile.id} value={profile.id}>
+                      {profile.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <Button disabled={loadingPreview} onClick={() => void loadPreview()} type="button" variant="secondary">
+              <Button
+                disabled={loadingPreview}
+                onClick={() => void loadPreview()}
+                type="button"
+                variant="secondary"
+              >
                 Refresh preview
               </Button>
             </div>
           ) : null}
 
-          {loadingPreview ? <p className="text-sm text-muted-foreground">Loading preview...</p> : null}
+          {loadingPreview ? (
+            <p className="text-sm text-muted-foreground">Loading preview...</p>
+          ) : null}
           {message ? <p className="text-sm text-destructive">{message}</p> : null}
           {preview ? (
             <div className="space-y-3">
-              <p className="text-sm font-medium">
-                {queueableCount(preview)} assets will be queued
-              </p>
+              <p className="text-sm font-medium">{queueableCount(preview)} assets will be queued</p>
               <div className="max-h-72 overflow-auto rounded-md border bg-muted/30 p-3">
                 <ul className="space-y-2 text-sm">
                   {visiblePreviewItems(preview).map((item) => (
                     <li
-                      className={item.actionStatus === "container" ? "text-muted-foreground" : undefined}
+                      className={
+                        item.actionStatus === "container" ? "text-muted-foreground" : undefined
+                      }
                       key={item.id}
                       style={{ paddingLeft: `${previewDepth(item.path) * 1.25}rem` }}
                     >
@@ -182,8 +230,19 @@ export function ReprocessAssetsDialog({ assetIds, type, onJobCreated }: Props) {
             </div>
           ) : null}
           <DialogFooter>
-            <Button disabled={creatingJob} onClick={() => setOpen(false)} type="button" variant="secondary">Cancel</Button>
-            <Button disabled={!preview || creatingJob || queueableCount(preview) === 0} onClick={() => void createJob()} type="button">
+            <Button
+              disabled={creatingJob}
+              onClick={() => setOpen(false)}
+              type="button"
+              variant="secondary"
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={!preview || creatingJob || queueableCount(preview) === 0}
+              onClick={() => void createJob()}
+              type="button"
+            >
               {creatingJob ? copy.starting : "Start Job"}
             </Button>
           </DialogFooter>
