@@ -140,6 +140,9 @@ Use one vector bucket and one `asset-tone-v1` index with `assetType=audio|video`
 
 ### Indexed Record
 
+- [x] Define the canonical provider-neutral `asset-tone-vector/v1` record and sparse adjustment overlay in `packages/tone-core/src/asset-vector.ts`.
+- [x] Validate the fixed ten-dimension order, score bounds, provenance constants, and strict record shape in tone-core tests.
+
 ```ts
 type AssetToneVectorRecord = {
   assetId: string;
@@ -164,15 +167,15 @@ intimacy, instability, nostalgia, beauty, menace
 
 ### Index Lifecycle
 
-- [ ] Add a provider-neutral vector index interface in Media Manager.
-- [ ] Add a queue-backed worker for vector upsert/delete operations.
-- [ ] Upsert after extracted tone analysis completes.
-- [ ] Upsert after curator-adjusted scores change.
-- [ ] Upsert or remove when asset visibility/readiness changes.
-- [ ] Delete the vector when an asset is deleted.
-- [ ] Track vector index schema/version and latest sync state on the asset or job record.
-- [ ] Add a dry-run/apply reconciliation command.
-- [ ] Backfill the initial public audio/video corpus once.
+- [x] Add a provider-neutral vector index interface in Media Manager.
+- [x] Add a queue-backed worker for vector upsert/delete operations.
+- [x] Upsert after extracted tone analysis completes.
+- [x] Upsert after curator-adjusted scores change.
+- [x] Upsert or remove when asset visibility/readiness changes.
+- [x] Delete the vector when an asset is deleted.
+- [x] Track vector index schema/version and latest sync state on the asset or job record.
+- [x] Add a dry-run/apply reconciliation command.
+- [x] Backfill the initial public audio/video corpus once.
 - [ ] Verify backend search results against an exact local calculation on fixtures.
 
 An asset backfill is required once. No combination-building or combination-indexing step is required.
@@ -410,7 +413,7 @@ The mobile focus-loss and native play/pause issues in `wiki/open-issues.md` are 
 - [ ] Add vector index synchronization and stale-index metrics.
 - [ ] Add alarms for elevated public API errors and queue/DLQ backlog.
 - [ ] Add API and vector backend cost limits or alerts.
-- [ ] Document vector index rebuild and reconciliation commands.
+- [x] Document vector index rebuild and reconciliation commands.
 - [ ] Document review export, backup, and purge procedures.
 - [ ] Add concise privacy copy for anonymous tone feedback.
 - [ ] Confirm logs do not intentionally store raw reviewer PII.
@@ -423,7 +426,7 @@ The mobile focus-loss and native play/pause issues in `wiki/open-issues.md` are 
 
 - [ ] At least 20 audio and 20 video assets are public and playback-ready.
 - [ ] Every release asset has `tone-taxonomy/v2` analysis and curator input.
-- [ ] Every eligible asset has a current vector DB record.
+- [x] Every eligible asset has a current vector DB record.
 
 ### Search
 

@@ -1,5 +1,52 @@
 # Wiki Log
 
+## [2026-08-02] web | bulk visibility actions
+
+- Added Make Public and Make Private for selected non-folder assets using five-at-a-time PATCH requests with deterministic partial-failure reporting.
+- Consolidated visibility and reprocessing controls under one Action disclosure while retaining Delete as a separate destructive button; visibility is now visible in list and grid layouts.
+- Added owner authorization and a conditional owner check to asset PATCH, preserving automatic vector convergence on visibility changes.
+
+## [2026-08-02] web | bulk media upload
+
+- Added multi-file upload with MIME/extension inference for audio, video, and images, editable per-file metadata, shared private/current-folder defaults, and two-file bounded concurrency.
+- Added byte-weighted batch progress, per-file status and retry recovery, multipart worker settling before abort, folder-context validation, and accessible progress/action labels.
+- Reused existing singular create, signed upload, multipart, and confirmation APIs; no infrastructure deployment is required.
+
+## [2026-08-02] deploy | asset vector lifecycle and backfill
+
+- Deployed Data, Vector, API, and Processing in dependency order, enabling the Assets `NEW_AND_OLD_IMAGES` stream and the SQS/stream-backed vector convergence worker.
+- Ran production reconciliation in dry-run and apply modes. The steady-state verification found 20 indexed eligible assets, 74 ineligible assets, all 94 authoritative records current, zero orphan vectors, and empty sync/DLQ queues.
+- Verified `GET /public/combos/random` still returns a playable derived pair; public selection remains on the existing random path.
+
+## [2026-08-02] foundation | asset vector lifecycle
+
+- Added a provider-neutral vector index/query boundary and an AWS S3 Vectors adapter with canonical metadata hydration.
+- Added SQS- and DynamoDB Stream-backed asset convergence, provider-neutral fingerprinted sync state, lifecycle enqueue hooks across API and processing mutations, and queue/DLQ alarms.
+- Added dry-run/apply/force reconciliation with indexed-key and orphan detection. Deployment, initial apply, and backend-vs-local search verification remain pending.
+
+## [2026-07-30] foundation | canonical asset tone vector record
+
+- Tightened the provider-neutral `asset-tone-vector/v1` schema in `tone-core` with shared provenance constants and strict unknown-field rejection.
+- Added a canonical record builder that overlays sparse curator adjustments on complete model scores.
+- Expanded tone-core documentation and tests for ordering, bounds, provenance, eligibility boundaries, and provider independence.
+
+## [2026-07-30] docs | remove stale tone embedding plan
+
+- Removed `TONE_EMBEDDING_APP_PLAN.md` because its standalone Python app, persistent combo-vector, and deferred-review direction was superseded by the MVP release and tone review plans.
+- Kept `MVP_RELEASE_PLAN.md` and `TONE_REVIEW_PLAN.md` as the active planning documents.
+
+## [2026-07-30] deploy | refreshed resume content
+
+- Fetched `darenkeck-content` revision `d9439b2bd277843224af67c99dde1f86375a69eb`, regenerated the resume PDF, and published the updated darenkeck static site.
+- Completed CloudFront invalidation `I1KCVEG9V3SHK0HHUS6UGMMTNB`.
+- Verified `/dev` rendering and confirmed the deployed PDF checksum matches the generated artifact.
+
+## [2026-07-30] deploy | darenkeck developer profile
+
+- Published the React Router homepage and `/dev` Markdown resume using `darenkeck-content` revision `94a63029c6189303991f1cf60f927b277290406d`.
+- Uploaded the matching two-page resume PDF and completed CloudFront invalidation `I1735IYCVYLSTJCZ58Z8TQYAVI`.
+- Verified homepage copy and links, direct `/dev` rendering, PDF MIME and checksum, sitemap inclusion, security headers, and public combo API health.
+
 ## [2026-07-29] security | content symlink hardening
 
 - Rejected symlinks, submodules, and other non-regular Git entries under fetched `content/` and `media/` before copying.

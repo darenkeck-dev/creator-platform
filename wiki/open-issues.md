@@ -10,7 +10,7 @@
 - Darenkeck mobile native play/pause interactions need explicit state-machine handling so UI and media element state stay aligned.
 - Tone extraction output needs simplification: reassess whether `.tonebundle.tar.gz` is needed now that display-ready tone summary/scores are stored directly on the asset record.
 - Decide whether existing `tone-taxonomy/v1` asset analyses should be reanalyzed or left historical now that new analyses emit `tone-taxonomy/v2`.
-- Deploy `MediaManagerVectorStack`, then add queue-backed asset vector upsert/delete synchronization and a dry-run-first reconciliation command before enabling public tone selection.
+- Verify S3 Vectors nearest-neighbor results against exact local distance calculations before enabling public tone selection.
 - Define deterministic file-to-route mapping and frontmatter metadata extraction for `/news`, `/dev/news`, and project/profile content; `/dev` already renders the fetched resume Markdown.
 - Add collection indexing for fetched `apps/darenkeck/.generated-content/content/`; defer MDX unless embedded React components become necessary.
 - Decide how content-repository commits trigger site deployment and how a private repository, if used, supplies read-only credentials.

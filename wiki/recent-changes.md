@@ -11,6 +11,10 @@
 
 ## Recent operational updates
 
+- Consolidated selected-item library controls under an Action disclosure, added bulk public/private reassignment with partial-failure handling, kept Delete standalone, surfaced visibility in list/grid views, and enforced owner-only asset PATCH mutations.
+- Replaced the single-file upload form with a two-at-a-time batch queue, audio/video/image inference, private/current-folder defaults, per-file progress, safe retry recovery, and completion links without changing backend upload contracts.
+- Deployed the provider-neutral asset vector lifecycle through Data, Vector, API, and Processing stacks. Initial production reconciliation indexed 20 eligible assets and finished with all 94 authoritative records current, zero orphan vectors, and empty sync/DLQ queues.
+- Latest darenkeck developer profile deployment: `/dev` renders content revision `d9439b2bd277843224af67c99dde1f86375a69eb`, `/daren-keck-resume.pdf` serves the matching generated PDF, and CloudFront invalidation `I1KCVEG9V3SHK0HHUS6UGMMTNB` completed.
 - Deployed `MediaManagerDarenkeckSiteStack` with custom domain wiring enabled for `darenkeck.com` using existing ACM cert in `us-east-1`.
 - Cut over Route 53 apex alias from old CloudFront distribution to `EUQDAU6DH3BMC` (`d2fmm3qe2rclf2.cloudfront.net`).
 - Completed phase-3 DNS ownership migration: Route 53 apex `A/AAAA` records are now created/managed by `MediaManagerDarenkeckSiteStack`.

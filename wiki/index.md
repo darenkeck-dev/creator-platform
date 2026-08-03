@@ -15,7 +15,6 @@ Quick LLM context hub for the current project state.
 
 Raw planning/checklist docs were moved to `raw_sources/` and are treated as source material.
 
-- `TONE_EMBEDDING_APP_PLAN.md`
 - `raw_sources/PLAN.md`
 - `raw_sources/TODO.md`
 - `raw_sources/apps/darenkeck/PLAN.md`

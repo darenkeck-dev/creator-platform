@@ -6,7 +6,7 @@
 - Workspace/package manifests are now versioned at `1.0.1` for upcoming release tracking.
 - Primary runtime flows are working: upload -> processing -> ready -> combo playback.
 - `darenkeck` static site is deployed on S3 + CloudFront with security headers and crawl metadata.
-- `apps/darenkeck` now uses React Router for public routes. `/dev` lazy-loads and renders the fetched `content/resume.md` with styled Markdown components and links to a generated print-friendly PDF; the routing and resume changes are not yet deployed.
+- `apps/darenkeck` uses React Router for public routes. `/dev` is deployed and lazy-loads the fetched `content/resume.md` with styled Markdown components plus a generated print-friendly PDF download.
 - Public-site content lives as Pages CMS-managed Markdown in the private `darenkeck-dev/darenkeck-content` repository. Darenkeck deploys fetch and validate that content before building; news/blog collection routes remain pending.
 
 See also: [Architecture Map](architecture-map.md), [Deploy and Ops](deploy-and-ops.md).
@@ -25,6 +25,8 @@ See also: [Architecture Map](architecture-map.md), [Deploy and Ops](deploy-and-o
 - New `tone-core` analyses use research-informed `tone-taxonomy/v2`: expanded descriptor keywords and weighted multi-dimension keyword mappings, with dominance defined as perceived potency/force/scale.
 - Asset records now support a bounded public `auditLog` trail for upload, conversion, MediaConvert, and tone-analysis lifecycle events; the asset detail UI renders it as an activity log.
 - Library and folder child views now support grid/list display, multi-select, select-all, and bulk delete using existing per-asset delete APIs.
+- Selected library items now use one Action disclosure for Make Public, Make Private, tone reprocessing, and conversion reprocessing; Delete remains a separate destructive button. Visibility changes use bounded per-asset PATCH requests, skip folders, report partial failures, and automatically trigger vector convergence.
+- Upload supports multi-file batches with MIME/extension type inference for audio, video, and images; each file gets editable title/type, independent status/progress, and bounded-concurrency upload over the existing per-asset APIs. Batches default to private and to the folder from which Upload was opened.
 - Media Manager now has a generic job framework for long-running asset actions; recursive delete and queued tone/conversion reprocessing report progress through a bottom status bar.
 - Tone reviews are submitted only through the dedicated Review page as target-centered human keywords; asset and combo detail pages no longer contain review forms.
 - Media Manager includes a dedicated `Review` route with a top-right Combo/Audio/Video switch; it defaults to a random public combo, switches to fresh random audio/video assets from the full owned asset pool, uses an adaptive five-keyword tone picker biased toward the latest selected descriptor, and shows only reviews for the current asset/combo target.
@@ -35,7 +37,7 @@ See also: [Architecture Map](architecture-map.md), [Deploy and Ops](deploy-and-o
 - Audio/video curator keywords are mapped server-side into taxonomy score vectors; client-provided scores are ignored. Asset detail dumbbell bars compare extracted and adjusted values with a colored delta connector.
 - Audio/video asset pages list their target-specific review history at the bottom and link directly to `/review` with that asset preselected for manual review.
 - Production tone reviews were reset on 2026-07-15 so curator calibration starts clean under the adjusted-score workflow.
-- The MVP vector backend is S3 Vectors. `MediaManagerVectorStack` now defines a retained 10-dimensional Euclidean `asset-tone-v1` index, and `tone-core` owns the canonical `asset-tone-vector/v1` record contract; deployment and asset synchronization are not yet complete.
+- The MVP S3 Vectors foundation is deployed. Production has the provider-neutral vector index/query boundary, AWS adapter, SQS- and DynamoDB Stream-backed convergence worker, lifecycle producers, fingerprinted asset sync state, queue/DLQ alarms, and dry-run/apply/force reconciliation with orphan detection. The initial reconciliation indexed all 20 eligible assets; all 94 authoritative asset records are current with zero orphan vectors. Public combo selection still uses the existing random path.
 - Auth guard middleware covers app and same-origin API routes; missing/expired Cognito JWT cookies redirect page requests to login with the original path preserved and return JSON `401` for API requests. Cognito web client ID/access token validity is configured for 12 hours.
 
 Details: [Recent Changes](recent-changes.md).
@@ -48,6 +50,7 @@ Details: [Recent Changes](recent-changes.md).
 - Darenkeck CloudFront distribution: `EUQDAU6DH3BMC`
 - Darenkeck CloudFront domain: `d2fmm3qe2rclf2.cloudfront.net`
 - Route 53 apex `A/AAAA` records for `darenkeck.com` are now stack-managed in `MediaManagerDarenkeckSiteStack`.
+- Asset tone vector index: `arn:aws:s3vectors:us-west-2:125455294948:bucket/media-manager-asset-tone/index/asset-tone-v1`
 
 ## Working assumptions
 

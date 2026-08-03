@@ -14,7 +14,7 @@
 - `infra/cdk/lambda/upload-trigger`, `mediaconvert-status`, or `tone-analysis` -> deploy processing stack.
 - `infra/cdk/lambda/api-jobs` or job API routes/queue config -> deploy API stack, then processing stack for worker changes.
 - `infra/cdk/lambda/jobs-worker` -> deploy processing stack after the API stack has exported the bulk-actions queue.
-- `infra/cdk/lib/vector-stack.ts` -> deploy vectors stack.
+- Vector lifecycle changes -> deploy data first to enable/export the Assets stream, then vectors, API, and processing.
 - `infra/cdk/lib/darenkeck-site-stack.ts` -> deploy darenkeck site infra stack.
 - `apps/darenkeck/*` runtime/static content -> deploy darenkeck static site.
 - `darenkeck-content` Markdown changes -> run the darenkeck static-site workflow, which fetches the selected content revision before the app build.
@@ -93,8 +93,12 @@ Migration note:
 
 - `bun run deploy:vectors` creates `MediaManagerVectorStack` with one retained S3 vector bucket and the retained `asset-tone-v1` index.
 - The index stores 10-dimensional `float32` vectors in the canonical `asset-tone-vector/v1` order and uses Euclidean distance.
-- Stack outputs export the vector bucket ARN, index ARN, and index name with stage-aware names.
-- DynamoDB remains authoritative. The vector stack is not yet deployed, and asset upsert/delete synchronization and reconciliation are still pending.
+- The stack also owns the vector sync queue, DLQ, convergence Lambda, queue-age alarm, and DLQ alarm. DynamoDB Stream batches that exhaust retries are sent to the same alarmed DLQ. Stack outputs export the bucket/index identifiers and sync queue ARN/URL with stage-aware names.
+- DynamoDB remains authoritative. Lifecycle producers enqueue `{assetId}` and the worker rereads the asset to upsert an eligible public ready audio/video vector or delete any stale vector. Asset `vectorSync` state records source and vector schema versions plus the latest convergence timestamp.
+- Deploy data first, vectors second, then API and processing. The vector stack imports the Assets stream export, while API and processing import the sync queue export. This sequence was deployed to production on 2026-08-02.
+- Dry run reconciliation with `bun run --cwd infra/cdk reconcile:asset-vectors -- --index-arn <asset-tone-index-arn>`. Review the counts, then queue convergence with `bun run --cwd infra/cdk reconcile:asset-vectors -- --apply --index-arn <asset-tone-index-arn> --queue-url <vector-sync-queue-url>`.
+- Rebuilding uses the same command with `--force` after recreating or clearing the derived index. Repeated and out-of-order messages are safe because the worker converges from a consistent DynamoDB read. Ordinary reconciliation compares authoritative eligibility/fingerprints with indexed keys; use `--force` to repair same-key vector data corruption.
+- Initial production reconciliation completed with 20 eligible vectors, 74 ineligible assets, 94 current authoritative records, and zero orphan keys. Both the sync queue and DLQ were empty afterward.
 
 ## Known operational nits
 
