@@ -29,6 +29,8 @@ import {
   MultipartSignInputSchema,
   MultipartSignResponseSchema,
   PublicRandomComboResponseSchema,
+  PublicComboSelectionRequestSchema,
+  PublicComboSelectionResponseSchema,
   AssetUploadUrlInputSchema,
   AssetUploadUrlResponseSchema,
   ToneReviewListQuerySchema,
@@ -64,6 +66,8 @@ import {
   type JobPreviewInput,
   type JobPreviewResponse,
   type PublicRandomComboResponse,
+  type PublicComboSelectionRequest,
+  type PublicComboSelectionResponse,
   type ToneReviewListQuery,
   type ToneReviewListResponse,
   type ToneReviewInput,
@@ -893,6 +897,47 @@ export async function fetchRandomPublicComboFromApi(
     throw new Error("Random combo response failed validation");
   }
   return parsed.data;
+}
+
+export class PublicComboSelectionApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+  }
+}
+
+export async function selectPublicComboFromApi(
+  input: PublicComboSelectionRequest
+): Promise<PublicComboSelectionResponse> {
+  const request = PublicComboSelectionRequestSchema.parse(input);
+  const response = await fetch(`${getApiBaseUrl()}/public/combos/select`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(request),
+    cache: "no-store",
+  });
+
+  const responseText = await response.text();
+  let json: unknown;
+  try {
+    json = responseText ? (JSON.parse(responseText) as unknown) : null;
+  } catch {
+    json = null;
+  }
+  if (!response.ok) {
+    const message =
+      json && typeof json === "object" && "message" in json && typeof json.message === "string"
+        ? json.message
+        : `Public combo selection failed: ${response.status}`;
+    throw new PublicComboSelectionApiError(message, response.status);
+  }
+
+  if (json === null) {
+    throw new Error("Public combo selection response was not JSON");
+  }
+  return PublicComboSelectionResponseSchema.parse(json);
 }
 
 export async function fetchRandomReviewAssetFromApi(

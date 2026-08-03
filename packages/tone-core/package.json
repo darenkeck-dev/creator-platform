@@ -8,7 +8,8 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./cli": "./src/cli.ts"
+    "./cli": "./src/cli.ts",
+    "./review-word-picker": "./src/review-word-picker.ts"
   },
   "scripts": {
     "build": "bunx tsc -p tsconfig.json",

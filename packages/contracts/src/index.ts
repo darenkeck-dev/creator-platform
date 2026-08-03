@@ -657,33 +657,46 @@ export const PublicRandomComboResponseSchema = z.object({
   audioSrc: z.string().url(),
 });
 
-export const PublicComboSelectionRequestSchema = z
+const PublicComboSelectionHistorySchema = z
   .object({
-    schemaVersion: z.literal("public-combo-selection-request/v1"),
-    mode: z.literal("walk"),
-    current: z
-      .object({
-        audioAssetId: z.string().min(1),
-        videoAssetId: z.string().min(1),
-      })
-      .strict(),
-    history: z
-      .object({
-        recentComboIds: z.array(z.string().min(1)).max(5).default([]),
-        recentAudioAssetIds: z.array(z.string().min(1)).max(3).default([]),
-      })
-      .strict()
-      .default({}),
+    recentComboIds: z.array(z.string().min(1)).max(5).default([]),
+    recentAudioAssetIds: z.array(z.string().min(1)).max(3).default([]),
   })
   .strict();
+
+export const PublicComboSelectionRequestSchema = z.discriminatedUnion("mode", [
+  z
+    .object({
+      schemaVersion: z.literal("public-combo-selection-request/v1"),
+      mode: z.literal("walk"),
+      current: z
+        .object({
+          audioAssetId: z.string().min(1),
+          videoAssetId: z.string().min(1),
+        })
+        .strict(),
+      history: PublicComboSelectionHistorySchema.default({}),
+    })
+    .strict(),
+  z
+    .object({
+      schemaVersion: z.literal("public-combo-selection-request/v1"),
+      mode: z.literal("search"),
+      keywords: z.array(z.string().trim().min(1).max(40)).min(1).max(24),
+      history: PublicComboSelectionHistorySchema.default({}),
+    })
+    .strict(),
+]);
 
 export const PublicComboSelectionFallbackReasonSchema = z.enum([
   "vector_query_failed",
   "no_walk_candidates",
+  "no_search_candidates",
   "selected_candidate_unavailable",
 ]);
+const PublicComboToneDimensionSchema = AssetToneAnalysisScoresSchema.keyof();
 
-const PublicComboSelectionMetadataSchema = z.discriminatedUnion("resolvedMode", [
+const PublicComboSelectionMetadataSchema = z.union([
   z
     .object({
       schemaVersion: z.literal("combo-selection/v1"),
@@ -696,7 +709,17 @@ const PublicComboSelectionMetadataSchema = z.discriminatedUnion("resolvedMode", 
   z
     .object({
       schemaVersion: z.literal("combo-selection/v1"),
-      requestedMode: z.literal("walk"),
+      requestedMode: z.literal("search"),
+      resolvedMode: z.literal("search"),
+      predictorVersion: z.literal("combo-tone-predictor/v0"),
+      distance: z.number().finite().nonnegative(),
+      queryDimensions: z.array(PublicComboToneDimensionSchema).min(1).max(10),
+    })
+    .strict(),
+  z
+    .object({
+      schemaVersion: z.literal("combo-selection/v1"),
+      requestedMode: z.enum(["walk", "search"]),
       resolvedMode: z.literal("random"),
       predictorVersion: z.literal("combo-tone-predictor/v0"),
       fallbackReason: PublicComboSelectionFallbackReasonSchema,

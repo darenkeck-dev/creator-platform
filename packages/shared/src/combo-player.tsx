@@ -838,6 +838,7 @@ export function ComboPlayer({
             )
           : null}
         <video
+          aria-label={snapshot.isPlaying ? "Pause combo" : "Play combo"}
           className="h-full w-full object-cover will-change-transform"
           controls={false}
           disablePictureInPicture
@@ -867,8 +868,10 @@ export function ComboPlayer({
           }}
           onPause={() => handlePlaybackPausedSignal(ComboTrackKind.Video)}
           onPlay={handlePlaybackStartedSignal}
-          onClick={() => {
-            if (snapshot.isPlaying) {
+          onClick={() => void togglePlayback()}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
               void togglePlayback();
             }
           }}
@@ -876,12 +879,14 @@ export function ComboPlayer({
             handleTimelineTimeUpdateSignal();
           }}
           ref={assignVideoElement}
+          role="button"
           style={{
             objectFit: "cover",
             objectPosition: "50% 50%",
             transform: "scale(1.08)",
             transformOrigin: "center center",
           }}
+          tabIndex={0}
         />
         <audio
           muted={effectiveAudioMuted}

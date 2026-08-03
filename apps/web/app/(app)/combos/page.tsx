@@ -1,6 +1,11 @@
 import Link from "next/link";
 
-import { fetchAssetByIdFromApi, listToneReviewsFromApi } from "@/lib/assets-api";
+import { ComboExplorer } from "@/components/combo-explorer";
+import {
+  fetchAssetByIdFromApi,
+  fetchRandomPublicComboFromApi,
+  listToneReviewsFromApi,
+} from "@/lib/assets-api";
 
 async function safeAssetTitle(id: string | undefined, fallback: string) {
   if (!id) {
@@ -16,7 +21,10 @@ async function safeAssetTitle(id: string | undefined, fallback: string) {
 }
 
 export default async function CombosPage() {
-  const reviewed = await listToneReviewsFromApi({ targetType: "combo", limit: 50 });
+  const [reviewed, initialCombo] = await Promise.all([
+    listToneReviewsFromApi({ targetType: "combo", limit: 50 }),
+    fetchRandomPublicComboFromApi().catch(() => null),
+  ]);
 
   const reviewItems = await Promise.all(
     reviewed.reviews.map(async (review) => {
@@ -35,13 +43,21 @@ export default async function CombosPage() {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Combo Reviews</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Combos</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Browse human tone reviews captured for video and audio combinations.
+          Explore tone-based video and audio pairings, then browse captured reviews.
         </p>
       </header>
 
+      <ComboExplorer initialCombo={initialCombo} />
+
       <div className="rounded-xl border bg-card p-4 shadow-sm">
+        <div className="mb-4">
+          <h2 className="font-semibold">Combo Reviews</h2>
+          <p className="text-sm text-muted-foreground">
+            Human tone reviews captured for video and audio combinations.
+          </p>
+        </div>
         <div className="space-y-2">
           {reviewItems.length === 0 ? (
             <p className="text-sm text-muted-foreground">No combo reviews yet.</p>

@@ -22,10 +22,17 @@ export type AssetToneVectorMatch = {
   distance: number;
 };
 
+export type AssetToneVectorQueryOptions = {
+  signal?: AbortSignal;
+};
+
 export interface AssetToneVectorIndex {
   upsert(record: AssetToneVectorRecord): Promise<void>;
   delete(assetId: string): Promise<void>;
-  queryNearest(query: AssetToneVectorIndexQuery): Promise<AssetToneVectorMatch[]>;
+  queryNearest(
+    query: AssetToneVectorIndexQuery,
+    options?: AssetToneVectorQueryOptions
+  ): Promise<AssetToneVectorMatch[]>;
 }
 
 export type AssetToneVectorQueryInput = {

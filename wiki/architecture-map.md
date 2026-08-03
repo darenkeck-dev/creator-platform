@@ -7,8 +7,8 @@
   - `apps/darenkeck`: public personal site using React Router, with random combo playback at `/`, a Markdown-backed resume at `/dev`, and an explicit not-found route.
 - **Shared packages**
   - `packages/contracts`: shared schemas/types for API payloads and records.
-- `packages/shared`: shared playback/review components (`ComboPlayer`, `ComboToneReviewPlayer`) and playback utilities.
-  - `packages/tone-core`: TypeScript tone schemas, OpenAI analysis helpers, ffmpeg frame extraction, combo scoring, and nearest-neighbor utilities for Lambda-native tone processing.
+  - `packages/shared`: shared playback/review/explorer React components (`ComboPlayer`, `ComboToneReviewPlayer`, `ToneWordPicker`) and playback utilities.
+  - `packages/tone-core`: TypeScript tone schemas, shared tone-word suggestion/query logic, OpenAI analysis helpers, ffmpeg frame extraction, combo scoring, and nearest-neighbor utilities for Lambda-native tone processing.
 - **Infra**
   - `infra/cdk`: stacks + lambda handlers for auth, api, processing, storage, streaming, vectors, observability, darenkeck site.
 
@@ -32,6 +32,7 @@
 13. The MVP vector foundation uses one retained S3 Vectors bucket and a 10-dimensional Euclidean `asset-tone-v1` index behind the provider-neutral `AssetToneVectorIndex` boundary. Asset, processing, tone-analysis, curator-review, and deletion mutations enqueue only `{assetId}`, while the Assets DynamoDB Stream provides durable mutation/delete capture. The vector worker rereads DynamoDB and converges the index to the current eligibility state. Sparse curator adjustments overlay model scores in canonical `asset-tone-vector/v1` order, sync state is recorded on the asset, DynamoDB remains authoritative, and no combination vectors are persisted.
 14. The implemented `ComboTonePredictor` boundary computes combo tone on demand from current effective audio/video vectors. `combo-tone-predictor/v0` is deterministic (`0.60 * audio + 0.40 * video`); a future learned residual may use server-derived sparse combo labels and review-time source snapshots without introducing a combo-vector index. Sparse labels are training evidence for reviewed dimensions, not persisted predicted combo vectors.
 15. The deployed walking backend uses `POST /public/combos/select` with explicit `mode="walk"`. S3 Vectors performs filtered Euclidean retrieval of audio/video source candidates; the application forms pairs, predicts transient 10-dimensional combo tones, and ranks them with exact squared Euclidean distance. Retrieval is capped at 100 eligible sources per type with no source-distance cutoff; the nearest five are sampled with weight `1 / (1 + distance)`. Vector queries abort after four seconds so the 15-second Lambda retains time for random fallback.
+16. The same endpoint supports `mode="search"`. Shared picker words map to a sparse taxonomy-v2 query; direct typed retrieval is supplemented by target-conditioned queries from three audio and three video anchors, then transient predicted combo tones are reranked by exact squared distance over requested dimensions only. Search establishes a new walk anchor and resets client history.
 
 Eventing note: EventBridge is the common router. Separate SQS queues keep conversion and tone analysis operationally isolated so tone retries/backlogs do not delay playback processing.
 
@@ -54,12 +55,18 @@ See also: [Current State](current-state.md), [Recent Changes](recent-changes.md)
 Deployed controlled walk path:
 
 - Endpoint: `POST /public/combos/select`
-- First request mode: explicit `mode="walk"`; tone search is added later through the same boundary.
+- Request modes: `mode="search"` for a new combined tone-word target and `mode="walk"` for continuation.
 - Current audio is always excluded; the current video may remain.
 - Client history retains five recent combo IDs and three recent audio IDs.
 - The endpoint returns versioned selection metadata and may resolve to a random fallback.
 - Fallback relaxes recent combo history first and recent audio history second, while always prohibiting the current audio.
 - The legacy random endpoint remains the initialization and operational fallback during rollout.
+
+Media Manager controlled explorer:
+
+- `/combos` retains the existing combo-review index below a client-side explorer.
+- The explorer reuses `packages/shared` tone-word and playback UI, proxies selection through authenticated same-origin `/api/public/combos/select`, and shows requested/resolved mode, distance, predictor, fallback, and bounded-history diagnostics.
+- Playback completion walks automatically by default; manual walking and keyboard play/pause remain available.
 
 ## Public developer profile
 

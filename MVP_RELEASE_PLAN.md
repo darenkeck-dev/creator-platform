@@ -247,13 +247,15 @@ idealAudio = clamp((query - 0.40 * video) / 0.60)
 
 Union direct and complementary candidates, deduplicate pairs, then perform exact reranking.
 
+The initial deployed search bounds complementary fan-out to the three nearest direct anchors per source type and requests up to 20 counterpart matches for each anchor.
+
 ### Fuzzing
 
-- [ ] Select from a small top-scoring pool rather than always choosing rank one.
-- [ ] Weight sampling toward lower-distance candidates.
-- [ ] Exclude recently played combinations.
+- [x] Select from a small top-scoring pool rather than always choosing rank one.
+- [x] Weight sampling toward lower-distance candidates.
+- [x] Exclude recently played combinations.
 - [ ] Keep results within a maximum acceptable query distance.
-- [ ] Support a deterministic seed in tests.
+- [x] Support deterministic sampling in tests.
 
 Important behavior:
 
@@ -322,7 +324,7 @@ Add one public selection boundary:
 POST /public/combos/select
 ```
 
-Use an explicit `mode` discriminator rather than inferring behavior from field presence. The first deployed request mode is `walk`; `search` is added through the same versioned endpoint later.
+Use an explicit `mode` discriminator rather than inferring behavior from field presence. Both `search` and `walk` are deployed through the same versioned endpoint.
 
 Tone restart request:
 

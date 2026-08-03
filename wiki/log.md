@@ -1,5 +1,13 @@
 # Wiki Log
 
+## [2026-08-03] web/backend | shared tone explorer and search
+
+- Moved the duplicated 54-word review hierarchy and deterministic adaptive suggestion logic into browser-safe `tone-core`; added reusable `useToneWordPicker` and `ToneWordPicker` exports in `packages/shared` and migrated combo/audio/video reviews without changing their exploration modes.
+- Added sparse taxonomy-v2 tone queries, zero-filled approximate source retrieval, exact masked combo-tone distance, and target-conditioned complementary source queries bounded to three direct anchors per type and 20 counterpart matches per anchor.
+- Extended `POST /public/combos/select` with strict `mode="search"` requests and versioned search/fallback metadata while retaining existing walk contracts and random fallback.
+- Added a Media Manager `/combos` controlled explorer above the existing review list with initial random playback, combined tone-word search, manual and end-of-playback walking, five-combo/three-audio history, keyboard playback control, selection diagnostics, and review links.
+- Deployed the search backend with the final three-anchor complementary retrieval bound. A production `serene + loving` request returned `resolvedMode="search"` with masked distance and dimensions; walking from that result returned `resolvedMode="walk"` with new audio while retaining the video. The first post-deploy search took 5.4 seconds during cold start, while two warm searches took 1.2-1.5 seconds. The Media Manager web UI built locally but is not published from this repository.
+
 ## [2026-08-03] backend | predicted combo-tone walk endpoint
 
 - Added strict versioned contracts and an isolated read-only `POST /public/combos/select` Lambda for initial `mode="walk"` requests.

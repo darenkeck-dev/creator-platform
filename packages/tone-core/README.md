@@ -77,6 +77,10 @@ const matches = await service.queryNearest({
 
 `comboTonePredictorV0` computes a transient ten-dimensional combo tone as `clamp(0.60 * audio + 0.40 * video)`. `rankComboToneCandidates()` uses exact squared Euclidean distance, and `sampleNearestComboToneCandidate()` samples from the nearest five with weight `1 / (1 + distance)`. These values are computed on demand and are never persisted as combo vectors.
 
+## Tone Word Selection
+
+`review-word-picker.ts` owns the shared 54-word hierarchy and deterministic adaptive suggestion algorithm used by review and explorer interfaces. `reviewWordsToToneQuery()` maps selected words into a sparse taxonomy-v2 query; exact search distance uses only requested dimensions, while direct and target-conditioned source retrieval use complete approximate vectors.
+
 ## Local Smoke CLI
 
 ```bash

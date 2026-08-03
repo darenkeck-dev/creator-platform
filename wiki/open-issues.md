@@ -5,12 +5,13 @@
 - Validate recursive delete in prod-like data after deployment; the new job worker should delete folder descendants and storage objects deepest-first.
 - Upload/delete UI context should consistently respect active folder path.
 - Queued tone/conversion reprocessing jobs currently report queueing completion, not downstream tone/MediaConvert completion; link downstream worker progress to jobs if richer completion tracking is needed.
-- Replace random-only frontend continuation with the deployed predicted-combo-tone walk while retaining random fallback.
+- Publish and validate the Media Manager `/combos` controlled explorer; the source build is complete but this repository has no web deployment target.
 - Darenkeck mobile focus-loss handling needs hardening (background/foreground transitions should not leave combo state machine desynced).
 - Darenkeck mobile native play/pause interactions need explicit state-machine handling so UI and media element state stay aligned.
 - Tone extraction output needs simplification: reassess whether `.tonebundle.tar.gz` is needed now that display-ready tone summary/scores are stored directly on the asset record.
 - Decide whether existing `tone-taxonomy/v1` asset analyses should be reanalyzed or left historical now that new analyses emit `tone-taxonomy/v2`.
 - Compare a larger sample of deployed S3 Vectors walk results against exact local calculations before broad homepage rollout.
+- Calibrate a maximum acceptable masked search distance from controlled-explorer observations before broad homepage rollout.
 - Enable Darenkeck walk mode behind a controlled flag with bounded five-combo/three-audio history.
 - Define deterministic file-to-route mapping and frontmatter metadata extraction for `/news`, `/dev/news`, and project/profile content; `/dev` already renders the fetched resume Markdown.
 - Add collection indexing for fetched `apps/darenkeck/.generated-content/content/`; defer MDX unless embedded React components become necessary.

@@ -9,6 +9,7 @@ import {
   AssetToneVectorRecordSchema,
   type AssetToneVectorIndex,
   type AssetToneVectorRecord,
+  type AssetToneVectorQueryOptions,
 } from "@media-manager/tone-core";
 
 const VectorIndexMetadataSchema = AssetToneVectorRecordSchema.omit({
@@ -64,12 +65,18 @@ export class S3VectorsIndex implements AssetToneVectorIndex {
     );
   }
 
-  async queryNearest({
-    vector,
-    assetType,
-    limit,
-  }: Parameters<AssetToneVectorIndex["queryNearest"]>[0]) {
+  async queryNearest(
+    { vector, assetType, limit }: Parameters<AssetToneVectorIndex["queryNearest"]>[0],
+    options?: AssetToneVectorQueryOptions
+  ) {
     const abortController = this.queryTimeoutMs ? new AbortController() : undefined;
+    const abortFromCaller = () => abortController?.abort();
+    if (options?.signal?.aborted) {
+      abortController?.abort();
+    } else {
+      options?.signal?.addEventListener("abort", abortFromCaller, { once: true });
+    }
+    const abortSignal = abortController?.signal ?? options?.signal;
     const timeout = abortController
       ? setTimeout(() => abortController.abort(), this.queryTimeoutMs)
       : undefined;
@@ -83,7 +90,7 @@ export class S3VectorsIndex implements AssetToneVectorIndex {
           filter: { assetType },
           returnDistance: true,
         }),
-        { abortSignal: abortController?.signal }
+        { abortSignal }
       );
 
       const queryVectors = response.vectors ?? [];
@@ -98,7 +105,7 @@ export class S3VectorsIndex implements AssetToneVectorIndex {
           returnData: true,
           returnMetadata: true,
         }),
-        { abortSignal: abortController?.signal }
+        { abortSignal }
       );
       const records = new Map(
         (stored.vectors ?? []).map((result) => {
@@ -137,6 +144,7 @@ export class S3VectorsIndex implements AssetToneVectorIndex {
       if (timeout) {
         clearTimeout(timeout);
       }
+      options?.signal?.removeEventListener("abort", abortFromCaller);
     }
   }
 }

@@ -118,6 +118,148 @@ describe("public combo selection API", () => {
     expect(metrics).toEqual([expect.objectContaining({ statusCode: 200, resolvedMode: "walk" })]);
   });
 
+  it("searches by exact masked predicted combo tone", async () => {
+    const assets = new Map(
+      [asset("audio-match", "audio", 0), asset("video-match", "video", 0)].map((value) => [
+        value.id,
+        value,
+      ])
+    );
+    const queries: AssetToneVectorIndexQuery[] = [];
+    const dependencies: PublicComboSelectionDependencies = {
+      async getAsset(assetId) {
+        return assets.get(assetId) ?? null;
+      },
+      async listPublicReadyAssets() {
+        throw new Error("Fallback should not be used");
+      },
+      async queryNearest(query) {
+        queries.push(query);
+        const value = match(
+          assets.get(query.assetType === "audio" ? "audio-match" : "video-match") as AssetRecord
+        );
+        return [
+          {
+            ...value,
+            record: {
+              ...value.record,
+              effectiveTone:
+                query.assetType === "audio"
+                  ? [1, -1, 0, 0, -1, 0, 0, 0, 0, 0]
+                  : [0.125, -0.375, 0, 0, -0.25, 0, 0, 0, 0, 0],
+            },
+          },
+        ];
+      },
+      async resolvePlaybackUrl(value) {
+        return value.stream?.hlsMasterUrl ?? null;
+      },
+      random: () => 0,
+      emitMetric() {},
+    };
+
+    const result = await createHandler(dependencies)(
+      event({
+        schemaVersion: "public-combo-selection-request/v1",
+        mode: "search",
+        keywords: ["serene"],
+        history: { recentAudioAssetIds: [], recentComboIds: [] },
+      })
+    );
+    const body = JSON.parse(result.body);
+
+    expect(result.statusCode).toBe(200);
+    expect(queries.slice(0, 2)).toEqual([
+      {
+        vector: [0.65, -0.75, 0, 0, -0.7, 0, 0, 0, 0, 0],
+        assetType: "audio",
+        limit: 100,
+      },
+      {
+        vector: [0.65, -0.75, 0, 0, -0.7, 0, 0, 0, 0, 0],
+        assetType: "video",
+        limit: 100,
+      },
+    ]);
+    const complementaryVideoQuery = queries.find(
+      ({ assetType, limit }) => assetType === "video" && limit === 20
+    );
+    expect(complementaryVideoQuery).toBeDefined();
+    expect(complementaryVideoQuery?.vector[0]).toBeCloseTo(0.125);
+    expect(complementaryVideoQuery?.vector[1]).toBeCloseTo(-0.375);
+    expect(complementaryVideoQuery?.vector[4]).toBeCloseTo(-0.25);
+    expect(queries).toContainEqual({
+      vector: [1, -1, 0, 0, -1, 0, 0, 0, 0, 0],
+      assetType: "audio",
+      limit: 20,
+    });
+    expect(body.comboId).toBe("public-video-match-audio-match");
+    expect(body.selection).toEqual({
+      schemaVersion: "combo-selection/v1",
+      requestedMode: "search",
+      resolvedMode: "search",
+      predictorVersion: "combo-tone-predictor/v0",
+      distance: 0,
+      queryDimensions: ["valence", "arousal", "tension"],
+    });
+  });
+
+  it("rejects search words that do not map to tone dimensions", async () => {
+    const result = await createHandler(unusedDependencies())(
+      event({
+        schemaVersion: "public-combo-selection-request/v1",
+        mode: "search",
+        keywords: ["not-a-tone-word"],
+      })
+    );
+    expect(result.statusCode).toBe(400);
+  });
+
+  it("returns explicit search fallback metadata when no tone candidates exist", async () => {
+    const assets = new Map(
+      [asset("audio-fallback", "audio", 0), asset("video-fallback", "video", 0)].map((value) => [
+        value.id,
+        value,
+      ])
+    );
+    const dependencies: PublicComboSelectionDependencies = {
+      async getAsset(assetId) {
+        return assets.get(assetId) ?? null;
+      },
+      async listPublicReadyAssets(type) {
+        return type === "audio"
+          ? [assets.get("audio-fallback") as AssetRecord]
+          : [assets.get("video-fallback") as AssetRecord];
+      },
+      async queryNearest() {
+        return [];
+      },
+      async resolvePlaybackUrl(value) {
+        return value.stream?.hlsMasterUrl ?? null;
+      },
+      random: () => 0,
+      emitMetric() {},
+    };
+
+    const result = await createHandler(dependencies)(
+      event({
+        schemaVersion: "public-combo-selection-request/v1",
+        mode: "search",
+        keywords: ["serene"],
+      })
+    );
+    const body = JSON.parse(result.body);
+
+    expect(result.statusCode).toBe(200);
+    expect(body.selection).toEqual({
+      schemaVersion: "combo-selection/v1",
+      requestedMode: "search",
+      resolvedMode: "random",
+      predictorVersion: "combo-tone-predictor/v0",
+      fallbackReason: "no_search_candidates",
+    });
+  });
+
   it("returns an explicit random fallback when vector lookup fails", async () => {
     const assets = new Map(
       [

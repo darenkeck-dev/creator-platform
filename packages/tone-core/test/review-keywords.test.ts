@@ -3,6 +3,7 @@
 import { describe, expect, it } from "bun:test";
 
 import { reviewKeywordsToToneScores } from "../src/review-keywords.js";
+import { REVIEW_WORDS } from "../src/review-word-picker.js";
 
 describe("reviewKeywordsToToneScores", () => {
   it("maps review-picker aliases through the production taxonomy", () => {
@@ -28,64 +29,7 @@ describe("reviewKeywordsToToneScores", () => {
   });
 
   it("supports every keyword exposed by the review picker", () => {
-    const pickerKeywords = [
-      "playful",
-      "cheerful",
-      "celebratory",
-      "breezy",
-      "carefree",
-      "sunny",
-      "beautiful",
-      "magical",
-      "radiant",
-      "serene",
-      "quiet",
-      "relaxed",
-      "comforting",
-      "gentle",
-      "grounded",
-      "personal",
-      "loving",
-      "vulnerable",
-      "wistful",
-      "blue",
-      "reflective",
-      "grief",
-      "heartbreak",
-      "mourning",
-      "nostalgic",
-      "lonely",
-      "yearning",
-      "worried",
-      "nervous",
-      "uneasy",
-      "foreboding",
-      "doomed",
-      "haunted",
-      "enigmatic",
-      "secretive",
-      "suspenseful",
-      "tense",
-      "agitated",
-      "abrasive",
-      "hostile",
-      "combative",
-      "confrontational",
-      "rebellious",
-      "forceful",
-      "resistant",
-      "vast",
-      "dominant",
-      "majestic",
-      "eerie",
-      "surreal",
-      "unstable",
-      "ominous",
-      "sinister",
-      "bleak",
-    ];
-
-    for (const keyword of pickerKeywords) {
+    for (const { label: keyword } of REVIEW_WORDS) {
       expect(Object.keys(reviewKeywordsToToneScores([keyword])).length).toBeGreaterThan(0);
     }
   });

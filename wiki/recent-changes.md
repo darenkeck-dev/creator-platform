@@ -11,7 +11,8 @@
 
 ## Recent operational updates
 
-- Deployed the backend `POST /public/combos/select` walk slice with strict contracts, typed S3 Vectors queries, deterministic transient combo-tone prediction, exact ranking, weighted top-five sampling, bounded-history escape behavior, random fallback, read-only IAM, throttling, and embedded metrics. Frontend use remains pending.
+- Centralized adaptive tone-word suggestions in `tone-core`, added reusable shared React picker state/UI, preserved review behavior, deployed combined tone-word search with exact masked combo reranking and bounded complementary retrieval, and added a locally built Media Manager `/combos` search/walk explorer.
+- Deployed the backend `POST /public/combos/select` walk slice with strict contracts, typed S3 Vectors queries, deterministic transient combo-tone prediction, exact ranking, weighted top-five sampling, bounded-history escape behavior, random fallback, read-only IAM, throttling, and embedded metrics. Darenkeck integration remains pending.
 - Rewrote `TONE_REVIEW_PLAN.md` around deployed keyword-only curator behavior, trusted versus legacy fields, materialized asset/vector effects, review operations, and the agreed deterministic-then-learned on-demand combo-tone predictor direction.
 - Fixed the initial walk architecture: one explicit-mode selection endpoint, typed Euclidean source retrieval from S3 Vectors, exact local predicted-combo-tone ranking, top-five weighted sampling, bounded history, and no persisted combo vectors.
 - Consolidated selected-item library controls under an Action disclosure, added bulk public/private reassignment with partial-failure handling, kept Delete standalone, surfaced visibility in list/grid views, and enforced owner-only asset PATCH mutations.

@@ -8,6 +8,8 @@ export * from "./frame-extraction.js";
 export * from "./nearest-neighbor.js";
 export * from "./openai.js";
 export * from "./review-keywords.js";
+export * from "./review-word-picker.js";
 export * from "./schemas.js";
 export * from "./taxonomy.js";
 export * from "./tone-vector.js";
+export * from "./tone-query.js";

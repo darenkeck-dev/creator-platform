@@ -30,6 +30,24 @@ describe("public combo selection contracts", () => {
     });
   });
 
+  it("parses a combined tone-word search request", () => {
+    expect(
+      PublicComboSelectionRequestSchema.parse({
+        schemaVersion: "public-combo-selection-request/v1",
+        mode: "search",
+        keywords: ["serene", "loving"],
+      })
+    ).toEqual({
+      schemaVersion: "public-combo-selection-request/v1",
+      mode: "search",
+      keywords: ["serene", "loving"],
+      history: {
+        recentComboIds: [],
+        recentAudioAssetIds: [],
+      },
+    });
+  });
+
   it("rejects unsupported modes, unknown fields, and oversized history", () => {
     const request = {
       schemaVersion: "public-combo-selection-request/v1",
@@ -45,7 +63,7 @@ describe("public combo selection contracts", () => {
     };
 
     expect(
-      PublicComboSelectionRequestSchema.safeParse({ ...request, mode: "search" }).success
+      PublicComboSelectionRequestSchema.safeParse({ ...request, mode: "random" }).success
     ).toBe(false);
     expect(
       PublicComboSelectionRequestSchema.safeParse({ ...request, unexpected: true }).success
@@ -76,6 +94,19 @@ describe("public combo selection contracts", () => {
       audioSrc: "https://example.com/audio.m3u8",
     };
 
+    expect(
+      PublicComboSelectionResponseSchema.safeParse({
+        ...playback,
+        selection: {
+          schemaVersion: "combo-selection/v1",
+          requestedMode: "search",
+          resolvedMode: "search",
+          predictorVersion: "combo-tone-predictor/v0",
+          distance: 0.1,
+          queryDimensions: ["valence", "warmth"],
+        },
+      }).success
+    ).toBe(true);
     expect(
       PublicComboSelectionResponseSchema.safeParse({
         ...playback,

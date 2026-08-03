@@ -12,11 +12,16 @@ import {
 } from "@media-manager/contracts";
 import {
   COMBO_TONE_PREDICTOR_VERSION,
+  complementaryToneQueryVector,
   comboTonePredictorV0,
   rankComboToneCandidates,
+  rankToneQueryCandidates,
+  reviewWordsToToneQuery,
   sampleNearestComboToneCandidate,
+  toneQueryRetrievalVector,
   type AssetToneVectorIndexQuery,
   type AssetToneVectorMatch,
+  type AssetToneVectorQueryOptions,
   type AssetToneVectorRecord,
 } from "@media-manager/tone-core";
 import { z } from "zod";
@@ -43,7 +48,10 @@ type PublicComboCandidate = {
 export type PublicComboSelectionDependencies = {
   getAsset(assetId: string): Promise<AssetRecord | null>;
   listPublicReadyAssets(type: "audio" | "video"): Promise<AssetRecord[]>;
-  queryNearest(query: AssetToneVectorIndexQuery): Promise<AssetToneVectorMatch[]>;
+  queryNearest(
+    query: AssetToneVectorIndexQuery,
+    options?: AssetToneVectorQueryOptions
+  ): Promise<AssetToneVectorMatch[]>;
   resolvePlaybackUrl(asset: AssetRecord): Promise<string | null>;
   random: () => number;
   emitMetric(metric: PublicComboSelectionMetric): void;
@@ -51,12 +59,14 @@ export type PublicComboSelectionDependencies = {
 
 type PublicComboSelectionMetric = {
   statusCode: number;
-  resolvedMode: "walk" | "random" | "unavailable";
+  resolvedMode: "search" | "walk" | "random" | "unavailable";
   fallbackReason?: PublicComboSelectionFallbackReason;
   latencyMs: number;
 };
 
 const SOURCE_CANDIDATE_LIMIT = 100;
+const COMPLEMENTARY_ANCHOR_LIMIT = 3;
+const COMPLEMENTARY_MATCH_LIMIT = 20;
 const MAX_REQUEST_BODY_BYTES = 10 * 1024;
 
 export function createHandler(
@@ -117,6 +127,17 @@ export const handler = createHandler();
 
 async function selectPublicCombo(
   request: PublicComboSelectionRequest,
+  dependencies: PublicComboSelectionDependencies
+): Promise<HttpResponse> {
+  if (request.mode === "search") {
+    return await searchPublicCombo(request, dependencies);
+  }
+
+  return await walkPublicCombo(request, dependencies);
+}
+
+async function walkPublicCombo(
+  request: Extract<PublicComboSelectionRequest, { mode: "walk" }>,
   dependencies: PublicComboSelectionDependencies
 ): Promise<HttpResponse> {
   const [currentAudio, currentVideo] = await Promise.all([
@@ -214,6 +235,161 @@ async function selectPublicCombo(
   return response(200, payload);
 }
 
+async function searchPublicCombo(
+  request: Extract<PublicComboSelectionRequest, { mode: "search" }>,
+  dependencies: PublicComboSelectionDependencies
+): Promise<HttpResponse> {
+  const query = reviewWordsToToneQuery(request.keywords);
+  if (!query) {
+    return response(400, { message: "No supported tone words were provided" });
+  }
+
+  const retrievalVector = toneQueryRetrievalVector(query);
+  const retrievalAbortController = new AbortController();
+  const retrievalTimeout = setTimeout(() => retrievalAbortController.abort(), 4_000);
+  const queryOptions = { signal: retrievalAbortController.signal };
+  let audioMatches: Awaited<ReturnType<PublicComboSelectionDependencies["queryNearest"]>>;
+  let videoMatches: Awaited<ReturnType<PublicComboSelectionDependencies["queryNearest"]>>;
+  try {
+    [audioMatches, videoMatches] = await Promise.all([
+      dependencies.queryNearest(
+        {
+          vector: retrievalVector,
+          assetType: "audio",
+          limit: SOURCE_CANDIDATE_LIMIT,
+        },
+        queryOptions
+      ),
+      dependencies.queryNearest(
+        {
+          vector: retrievalVector,
+          assetType: "video",
+          limit: SOURCE_CANDIDATE_LIMIT,
+        },
+        queryOptions
+      ),
+    ]);
+  } catch (error) {
+    clearTimeout(retrievalTimeout);
+    console.error("Public combo search vector query failed", { error });
+    return await randomFallback(request, dependencies, "vector_query_failed");
+  }
+
+  const excludedAudioIds = new Set(request.history.recentAudioAssetIds);
+  const recentComboIds = new Set(request.history.recentComboIds);
+  const audioCandidates = uniqueEligibleRecords(
+    audioMatches.map(({ record }) => record),
+    "audio"
+  ).filter(({ assetId }) => !excludedAudioIds.has(assetId));
+  const videoCandidates = uniqueEligibleRecords(
+    videoMatches.map(({ record }) => record),
+    "video"
+  );
+  const candidates = new Map<
+    string,
+    {
+      candidate: PublicComboCandidate;
+      predictedTone: AssetToneVectorRecord["effectiveTone"];
+    }
+  >();
+  const addCandidate = (audio: AssetToneVectorRecord, video: AssetToneVectorRecord) => {
+    if (excludedAudioIds.has(audio.assetId)) return;
+    const candidate = pairCandidate(video.assetId, audio.assetId);
+    if (recentComboIds.has(candidate.comboId) || candidates.has(candidate.comboId)) return;
+    candidates.set(candidate.comboId, {
+      candidate,
+      predictedTone: comboTonePredictorV0.predict({
+        audioTone: audio.effectiveTone,
+        videoTone: video.effectiveTone,
+      }),
+    });
+  };
+
+  for (const audio of audioCandidates) {
+    for (const video of videoCandidates) {
+      addCandidate(audio, video);
+    }
+  }
+
+  const complementaryQueries = await Promise.allSettled([
+    ...audioCandidates.slice(0, COMPLEMENTARY_ANCHOR_LIMIT).map(async (audio) => ({
+      kind: "video" as const,
+      audio,
+      matches: await dependencies.queryNearest(
+        {
+          vector: complementaryToneQueryVector(query, audio.effectiveTone, 0.6, 0.4),
+          assetType: "video",
+          limit: COMPLEMENTARY_MATCH_LIMIT,
+        },
+        queryOptions
+      ),
+    })),
+    ...videoCandidates.slice(0, COMPLEMENTARY_ANCHOR_LIMIT).map(async (video) => ({
+      kind: "audio" as const,
+      video,
+      matches: await dependencies.queryNearest(
+        {
+          vector: complementaryToneQueryVector(query, video.effectiveTone, 0.4, 0.6),
+          assetType: "audio",
+          limit: COMPLEMENTARY_MATCH_LIMIT,
+        },
+        queryOptions
+      ),
+    })),
+  ]);
+  clearTimeout(retrievalTimeout);
+
+  for (const result of complementaryQueries) {
+    if (result.status !== "fulfilled") continue;
+    if (result.value.kind === "video") {
+      for (const video of uniqueEligibleRecords(
+        result.value.matches.map(({ record }) => record),
+        "video"
+      )) {
+        addCandidate(result.value.audio, video);
+      }
+    } else {
+      for (const audio of uniqueEligibleRecords(
+        result.value.matches.map(({ record }) => record),
+        "audio"
+      )) {
+        addCandidate(audio, result.value.video);
+      }
+    }
+  }
+  const complementaryFailures = complementaryQueries.filter(
+    (result) => result.status === "rejected"
+  ).length;
+  if (complementaryFailures > 0) {
+    console.error("Public combo complementary retrieval partially failed", {
+      failures: complementaryFailures,
+    });
+  }
+
+  const selected = sampleNearestComboToneCandidate(
+    rankToneQueryCandidates(query, [...candidates.values()]),
+    dependencies.random
+  );
+
+  if (!selected) {
+    return await randomFallback(request, dependencies, "no_search_candidates");
+  }
+
+  const payload = await resolveCandidate(selected.candidate, dependencies, {
+    schemaVersion: "combo-selection/v1",
+    requestedMode: "search",
+    resolvedMode: "search",
+    predictorVersion: COMBO_TONE_PREDICTOR_VERSION,
+    distance: selected.distance,
+    queryDimensions: query.dimensions,
+  });
+  if (!payload) {
+    return await randomFallback(request, dependencies, "selected_candidate_unavailable");
+  }
+
+  return response(200, payload);
+}
+
 async function randomFallback(
   request: PublicComboSelectionRequest,
   dependencies: PublicComboSelectionDependencies,
@@ -225,17 +401,26 @@ async function randomFallback(
   ]);
   const shuffledVideos = shuffle(videos, dependencies.random);
   const shuffledAudios = shuffle(audios, dependencies.random);
+  const currentAudioAssetId = request.mode === "walk" ? request.current.audioAssetId : undefined;
   const exclusionStages = [
     {
-      audioIds: new Set([request.current.audioAssetId, ...request.history.recentAudioAssetIds]),
+      audioIds: new Set(
+        [currentAudioAssetId, ...request.history.recentAudioAssetIds].filter(
+          (assetId): assetId is string => Boolean(assetId)
+        )
+      ),
       comboIds: new Set(request.history.recentComboIds),
     },
     {
-      audioIds: new Set([request.current.audioAssetId, ...request.history.recentAudioAssetIds]),
+      audioIds: new Set(
+        [currentAudioAssetId, ...request.history.recentAudioAssetIds].filter(
+          (assetId): assetId is string => Boolean(assetId)
+        )
+      ),
       comboIds: new Set<string>(),
     },
     {
-      audioIds: new Set([request.current.audioAssetId]),
+      audioIds: new Set(currentAudioAssetId ? [currentAudioAssetId] : []),
       comboIds: new Set<string>(),
     },
   ];
@@ -252,7 +437,7 @@ async function randomFallback(
         }
         const payload = await resolveCandidate(candidate, dependencies, {
           schemaVersion: "combo-selection/v1",
-          requestedMode: "walk",
+          requestedMode: request.mode,
           resolvedMode: "random",
           predictorVersion: COMBO_TONE_PREDICTOR_VERSION,
           fallbackReason,
@@ -411,8 +596,8 @@ function createDefaultDependencies(): PublicComboSelectionDependencies {
       } while (lastEvaluatedKey && assets.length < 500);
       return assets;
     },
-    queryNearest(query) {
-      return vectorIndex.queryNearest(query);
+    queryNearest(query, options) {
+      return vectorIndex.queryNearest(query, options);
     },
     async resolvePlaybackUrl(asset) {
       if (!isPublicReadyAsset(asset, asset.type === "audio" ? "audio" : "video")) {
@@ -454,7 +639,7 @@ function finishResponse(
   const body = JSON.parse(result.body) as {
     fallbackReason?: PublicComboSelectionFallbackReason;
     selection?: {
-      resolvedMode?: "walk" | "random";
+      resolvedMode?: "search" | "walk" | "random";
       fallbackReason?: PublicComboSelectionFallbackReason;
     };
   };
