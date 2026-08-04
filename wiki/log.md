@@ -1,5 +1,17 @@
 # Wiki Log
 
+## [2026-08-04] web/backend | history-preserving fresh-source selection
+
+- Extended bounded selection history with three recent video IDs and carried prior history plus the departing combo into new tone searches.
+- Required both audio and video to change during walks, including random fallback paths that may relax older history but never either current source.
+- Added a visible remove `X` to selected tone chips and updated focused contract, explorer, journey, and Lambda tests.
+- Deployed `MediaManagerApiStack`. A production initial search, history-aware second search, and subsequent walk all returned exact selection metadata; both source IDs changed at each transition.
+
+## [2026-08-04] web | resume route transition
+
+- Retained the routed resume during navigation long enough to animate opacity, vertical position, scale, and blur on both entry and exit, including browser Back.
+- Kept print and reduced-motion modes transition-free; Darenkeck lint, type-check, production build, and route-continuity browser smoke passed.
+
 ## [2026-08-03] web | persistent Darenkeck experience
 
 - Nested `/` and lazy `/dev` under the persistent Darenkeck `App` layout so the same player, audio state, tone selections, and random/search/walk journey survive SPA navigation and browser Back.

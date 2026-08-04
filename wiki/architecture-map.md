@@ -32,7 +32,7 @@
 13. The MVP vector foundation uses one retained S3 Vectors bucket and a 10-dimensional Euclidean `asset-tone-v1` index behind the provider-neutral `AssetToneVectorIndex` boundary. Asset, processing, tone-analysis, curator-review, and deletion mutations enqueue only `{assetId}`, while the Assets DynamoDB Stream provides durable mutation/delete capture. The vector worker rereads DynamoDB and converges the index to the current eligibility state. Sparse curator adjustments overlay model scores in canonical `asset-tone-vector/v1` order, sync state is recorded on the asset, DynamoDB remains authoritative, and no combination vectors are persisted.
 14. The implemented `ComboTonePredictor` boundary computes combo tone on demand from current effective audio/video vectors. `combo-tone-predictor/v0` is deterministic (`0.60 * audio + 0.40 * video`); a future learned residual may use server-derived sparse combo labels and review-time source snapshots without introducing a combo-vector index. Sparse labels are training evidence for reviewed dimensions, not persisted predicted combo vectors.
 15. The deployed walking backend uses `POST /public/combos/select` with explicit `mode="walk"`. S3 Vectors performs filtered Euclidean retrieval of audio/video source candidates; the application forms pairs, predicts transient 10-dimensional combo tones, and ranks them with exact squared Euclidean distance. Retrieval is capped at 100 eligible sources per type with no source-distance cutoff; the nearest five are sampled with weight `1 / (1 + distance)`. Vector queries abort after four seconds so the 15-second Lambda retains time for random fallback.
-16. The same endpoint supports `mode="search"`. Shared picker words map to a sparse taxonomy-v2 query; direct typed retrieval is supplemented by target-conditioned queries from three audio and three video anchors, then transient predicted combo tones are reranked by exact squared distance over requested dimensions only. Search establishes a new walk anchor and resets client history.
+16. The same endpoint supports `mode="search"`. Shared picker words map to a sparse taxonomy-v2 query; direct typed retrieval is supplemented by target-conditioned queries from three audio and three video anchors, then transient predicted combo tones are reranked by exact squared distance over requested dimensions only. Search establishes a new walk anchor while retaining bounded prior history.
 17. The Darenkeck homepage keeps one `SlotManager` as playback authority. Its curiosity-gated tone explorer submits selected words as a one-shot search, continues through bounded nearby walks, and uses the legacy random endpoint for both immediate and automatic transitions when no words are submitted.
 
 Eventing note: EventBridge is the common router. Separate SQS queues keep conversion and tone analysis operationally isolated so tone retries/backlogs do not delay playback processing.
@@ -57,10 +57,10 @@ Deployed controlled walk path:
 
 - Endpoint: `POST /public/combos/select`
 - Request modes: `mode="search"` for a new combined tone-word target and `mode="walk"` for continuation.
-- Current audio is always excluded; the current video may remain.
-- Client history retains five recent combo IDs and three recent audio IDs.
+- Current audio and video are always excluded from walks.
+- Client history retains five recent combo IDs plus three recent audio and video IDs.
 - The endpoint returns versioned selection metadata and may resolve to a random fallback.
-- Fallback relaxes recent combo history first and recent audio history second, while always prohibiting the current audio.
+- Fallback relaxes recent combo history first and recent source history second, while always prohibiting both current sources.
 - The legacy random endpoint remains the initialization and operational fallback during rollout.
 
 Media Manager controlled explorer:
