@@ -7,13 +7,19 @@ import { NotFoundPage } from "./components/NotFoundPage";
 import "./index.css";
 
 const router = createBrowserRouter([
-  { path: "/", element: <App /> },
   {
-    path: "/dev",
-    lazy: async () => {
-      const { DevPage } = await import("./components/DevPage");
-      return { Component: DevPage };
-    },
+    path: "/",
+    element: <App />,
+    children: [
+      { index: true, element: null },
+      {
+        path: "dev",
+        lazy: async () => {
+          const { DevPage } = await import("./components/DevPage");
+          return { Component: DevPage };
+        },
+      },
+    ],
   },
   { path: "*", element: <NotFoundPage /> },
 ]);

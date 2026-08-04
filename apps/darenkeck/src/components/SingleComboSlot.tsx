@@ -34,7 +34,7 @@ export function SingleComboSlot({
   onPlaybackStateChange,
 }: SingleComboSlotProps) {
   return (
-    <div className="pointer-events-none absolute inset-0 z-0">
+    <div className="pointer-events-none fixed inset-0 z-0 print:hidden">
       <ComboPlayer
         key={`${combo.comboId}-${playbackCycle}`}
         audioMuted={audioMuted}

@@ -43,7 +43,9 @@ const resumeComponents: Components = {
       {children}
     </li>
   ),
-  strong: ({ children }) => <strong className="font-semibold text-white print:text-black">{children}</strong>,
+  strong: ({ children }) => (
+    <strong className="font-semibold text-white print:text-black">{children}</strong>
+  ),
   a: ({ children, href }) => {
     if (!href) {
       return <span className="text-cyan-200 print:text-black">{children}</span>;
@@ -79,26 +81,46 @@ export function DevPage() {
   }, []);
 
   return (
-    <main className="min-h-dvh px-4 py-6 sm:px-6 sm:py-10 print:min-h-0 print:p-0">
+    <main className="min-h-dvh px-4 pb-6 pt-24 sm:px-6 sm:pb-10 sm:pt-24 print:min-h-0 print:p-0">
       <div className="mx-auto w-full max-w-4xl">
-        <nav className="mb-6 flex items-center justify-between gap-3 print:hidden" aria-label="Resume actions">
-          <Link
-            className="inline-flex rounded-full border px-4 py-2 text-xs text-white/80 transition hover:bg-white/10 hover:text-white"
-            to="/"
+        <article className="resume-document rounded-2xl border bg-black/65 px-6 pb-8 pt-5 shadow-2xl shadow-black/30 backdrop-blur-[10px] sm:px-10 sm:pb-12 sm:pt-6 lg:px-14 print:rounded-none print:border-0 print:bg-transparent print:p-0 print:text-black print:shadow-none print:backdrop-blur-none">
+          <div
+            className="mb-4 flex items-center justify-between gap-4 text-sm leading-none text-white/65 print:hidden"
+            data-resume-controls
           >
-            Back to darenkeck.com
-          </Link>
-          <a
-            className="inline-flex rounded-full border px-4 py-2 text-xs text-white/80 transition hover:bg-white/10 hover:text-white"
-            download
-            href="/daren-keck-resume.pdf"
+            <a
+              className="inline-flex rounded-full border px-4 py-1.5 text-white/80 transition hover:bg-white/10 hover:text-white"
+              download
+              href="/daren-keck-resume.pdf"
+            >
+              Download
+            </a>
+            <Link
+              aria-label="Minimize resume"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-white transition-all duration-200 ease-in-out hover:bg-black/35"
+              title="Minimize"
+              to="/"
+            >
+              <svg
+                aria-hidden="true"
+                fill="none"
+                height="20"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.8"
+                viewBox="0 0 24 24"
+                width="20"
+              >
+                <rect height="16" rx="2.5" width="16" x="4" y="4" />
+                <path d="M8 12h8" />
+              </svg>
+            </Link>
+          </div>
+          <ReactMarkdown
+            components={resumeComponents}
+            remarkPlugins={[remarkFrontmatter, remarkGfm]}
           >
-            Download PDF
-          </a>
-        </nav>
-
-        <article className="resume-document rounded-2xl border bg-[var(--panel)] px-6 py-8 shadow-2xl shadow-black/30 backdrop-blur-[10px] sm:px-10 sm:py-12 lg:px-14 print:rounded-none print:border-0 print:bg-transparent print:p-0 print:text-black print:shadow-none print:backdrop-blur-none">
-          <ReactMarkdown components={resumeComponents} remarkPlugins={[remarkFrontmatter, remarkGfm]}>
             {resumeMarkdown}
           </ReactMarkdown>
         </article>

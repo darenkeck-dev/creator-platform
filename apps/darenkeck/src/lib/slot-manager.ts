@@ -52,9 +52,14 @@ type SlotManagerEvents = {
 };
 
 type SlotManagerOptions = {
-  fetchRandomCombo: (previousAudioAssetId?: string) => Promise<ComboPayload | null>;
+  fetchNextCombo: (
+    currentCombo: ComboPayload | null,
+    reason: SlotLoadReason
+  ) => Promise<ComboPayload | null>;
   events: SlotManagerEvents;
 };
+
+export type SlotLoadReason = "init" | "slot-playback-ended" | "tone-submit";
 
 function mapPlayerPhaseToSlotPlaybackState(phase: string): SlotPlaybackState {
   if (phase === "loading") {
@@ -85,6 +90,7 @@ export class SlotManager {
   private loading = false;
   private destroyed = false;
   private inFlightFetch: Promise<void> | null = null;
+  private pendingManualRequest = false;
   private managerState: SlotManagerState = SlotManagerState.Idle;
   private slotState: SlotPlaybackState = SlotPlaybackState.Idle;
   private combosPlayedCount = 0;
@@ -101,6 +107,18 @@ export class SlotManager {
     this.setSlotState(slot, SlotPlaybackState.Completed);
     this.setCombosPlayedCount(this.combosPlayedCount + 1);
     await this.loadNext("slot-playback-ended");
+  }
+
+  async requestNext(): Promise<void> {
+    if (this.inFlightFetch) {
+      this.pendingManualRequest = true;
+      await this.inFlightFetch;
+      if (this.destroyed || !this.pendingManualRequest) {
+        return;
+      }
+      this.pendingManualRequest = false;
+    }
+    await this.loadNext("tone-submit");
   }
 
   handleSlotPlaybackReady(slot: SingleSlotKey): void {
@@ -124,7 +142,7 @@ export class SlotManager {
     this.setManagerState(SlotManagerState.Destroyed);
   }
 
-  private async loadNext(reason: string): Promise<void> {
+  private async loadNext(reason: SlotLoadReason): Promise<void> {
     if (this.destroyed) {
       return;
     }
@@ -144,13 +162,13 @@ export class SlotManager {
       this.emitDebug("fetch.start", { reason });
 
       try {
-        const next = await this.options.fetchRandomCombo(this.currentCombo?.audioAssetId);
+        const next = await this.options.fetchNextCombo(this.currentCombo, reason);
         if (this.destroyed) {
           return;
         }
 
         if (!next) {
-          throw new Error("No combo returned from random combo endpoint");
+          throw new Error("No combo returned from combo selection endpoint");
         }
 
         const previousComboId = this.currentCombo?.comboId ?? null;

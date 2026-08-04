@@ -1,8 +1,17 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import type { PublicComboSelectionRequest } from "@media-manager/contracts";
+import { lazy, Suspense, useEffect, useEffectEvent, useRef, useState } from "react";
+import { Outlet, useLocation } from "react-router-dom";
 
 import { BulletinSection } from "./components/BulletinSection";
 import { LinksSection } from "./components/LinksSection";
 import { ShellLoader } from "./components/ShellLoader";
+import { ToneExplorer, ToneExplorerExplainer, ToneExplorerIcon } from "./components/ToneExplorer";
+import {
+  advanceJourney,
+  journeyForKeywords,
+  requestForJourney,
+  type ComboJourney,
+} from "./lib/combo-journey";
 import {
   SingleSlotKey,
   SlotManager,
@@ -12,6 +21,12 @@ import {
   type SlotPlaybackAssignment,
 } from "./lib/slot-manager";
 import { setPageMetadata } from "./lib/page-metadata";
+import { isHomePath, isResumePrintMode } from "./lib/route-mode";
+import {
+  acknowledgeToneExplorer,
+  hasAcknowledgedToneExplorer,
+  type StorageLike,
+} from "./lib/tone-explorer-preference";
 
 const SingleComboSlot = lazy(async () => {
   const module = await import("./components/SingleComboSlot");
@@ -67,6 +82,41 @@ function getApiBaseUrl(): string | null {
   return raw.replace(/\/$/, "");
 }
 
+function getToneExplorerStorage(): StorageLike | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function parseComboPayload(payload: unknown): ComboPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const candidate = payload as Record<string, unknown>;
+  if (
+    typeof candidate.comboId !== "string" ||
+    typeof candidate.videoAssetId !== "string" ||
+    typeof candidate.audioAssetId !== "string" ||
+    typeof candidate.videoTitle !== "string" ||
+    typeof candidate.audioTitle !== "string" ||
+    typeof candidate.videoSrc !== "string" ||
+    typeof candidate.audioSrc !== "string"
+  ) {
+    return null;
+  }
+  return {
+    comboId: candidate.comboId,
+    videoAssetId: candidate.videoAssetId,
+    audioAssetId: candidate.audioAssetId,
+    videoTitle: candidate.videoTitle,
+    audioTitle: candidate.audioTitle,
+    videoSrc: candidate.videoSrc,
+    audioSrc: candidate.audioSrc,
+  };
+}
+
 async function fetchRandomCombo(previousAudioAssetId?: string): Promise<ComboPayload | null> {
   const apiBaseUrl = getApiBaseUrl();
 
@@ -85,44 +135,72 @@ async function fetchRandomCombo(previousAudioAssetId?: string): Promise<ComboPay
     return null;
   }
 
+  return parseComboPayload(await response.json());
+}
+
+async function fetchSelectedCombo(
+  request: PublicComboSelectionRequest
+): Promise<ComboPayload | null> {
+  const apiBaseUrl = getApiBaseUrl();
+  if (!apiBaseUrl && !import.meta.env.DEV) {
+    return null;
+  }
+
+  const response = await fetch(`${apiBaseUrl}/public/combos/select`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(request),
+  });
   const payload = (await response.json()) as unknown;
-  if (!payload || typeof payload !== "object") {
-    return null;
+  if (!response.ok) {
+    const message =
+      payload && typeof payload === "object" && "message" in payload
+        ? String(payload.message)
+        : `Combo selection failed (${response.status})`;
+    throw new Error(message);
   }
 
-  const candidate = payload as Record<string, unknown>;
-  if (
-    typeof candidate.comboId !== "string" ||
-    typeof candidate.videoAssetId !== "string" ||
-    typeof candidate.audioAssetId !== "string" ||
-    typeof candidate.videoTitle !== "string" ||
-    typeof candidate.audioTitle !== "string" ||
-    typeof candidate.videoSrc !== "string" ||
-    typeof candidate.audioSrc !== "string"
-  ) {
-    return null;
-  }
+  return parseComboPayload(payload);
+}
 
-  return {
-    comboId: candidate.comboId,
-    videoAssetId: candidate.videoAssetId,
-    audioAssetId: candidate.audioAssetId,
-    videoTitle: candidate.videoTitle,
-    audioTitle: candidate.audioTitle,
-    videoSrc: candidate.videoSrc,
-    audioSrc: candidate.audioSrc,
-  };
+function DarenKeckWordmark() {
+  return (
+    <span className="relative inline-flex items-center">
+      <img
+        alt="Daren Keck"
+        className="h-12 w-auto"
+        draggable={false}
+        onDragStart={(event) => {
+          event.preventDefault();
+        }}
+        src="/images/written_title_700.webp"
+      />
+      <span
+        className="absolute inset-0 select-text text-transparent"
+        style={{ userSelect: "text" }}
+      >
+        Daren Keck
+      </span>
+    </span>
+  );
 }
 
 export function App() {
   type AudioLevel = "muted" | "full";
 
+  const location = useLocation();
+  const isHome = isHomePath(location.pathname);
+  const printMode = isResumePrintMode(location.pathname, location.search);
   const [slotAssignment, setSlotAssignment] = useState<SlotPlaybackAssignment | null>(null);
   const [comboLoading, setComboLoading] = useState(false);
   const [comboError, setComboError] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState<AudioLevel>("muted");
   const [audioVolume, setAudioVolume] = useState(1);
   const [isBulletinOpen, setIsBulletinOpen] = useState(true);
+  const [isToneExplorerOpen, setIsToneExplorerOpen] = useState(false);
+  const [showToneExplorerExplainer, setShowToneExplorerExplainer] = useState(false);
+  const [toneExplorerAcknowledged, setToneExplorerAcknowledged] = useState(false);
   const [playerEnabled, setPlayerEnabled] = useState(false);
   const [managerEnabled, setManagerEnabled] = useState(false);
   const [playbackPhase, setPlaybackPhase] = useState("loading");
@@ -132,18 +210,34 @@ export function App() {
   const [debugActionMessage, setDebugActionMessage] = useState<string | null>(null);
   const [debugSampleCount, setDebugSampleCount] = useState(0);
   const managerRef = useRef<SlotManager | null>(null);
+  const toneExplorerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const journeyRef = useRef<ComboJourney>({ mode: "random" });
+  const bulletinStateBeforeToneRef = useRef(true);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
+  const previousPathRef = useRef(location.pathname);
 
   useEffect(() => {
+    if (!isHome) {
+      return;
+    }
     setPageMetadata({
       title: "darenkeck",
       description: "Personal page for Daren Keck with music, links, and live combo visuals.",
       url: "https://darenkeck.com/",
     });
+  }, [isHome]);
+
+  useEffect(() => {
+    setToneExplorerAcknowledged(hasAcknowledgedToneExplorer(getToneExplorerStorage()));
   }, []);
 
   useEffect(() => {
+    if (printMode) {
+      setPlayerEnabled(false);
+      setManagerEnabled(false);
+      return;
+    }
     const frameId = window.requestAnimationFrame(() => {
       setPlayerEnabled(true);
     });
@@ -151,10 +245,10 @@ export function App() {
     return () => {
       window.cancelAnimationFrame(frameId);
     };
-  }, []);
+  }, [printMode]);
 
   useEffect(() => {
-    if (!playerEnabled) {
+    if (!playerEnabled || printMode) {
       return;
     }
 
@@ -184,7 +278,7 @@ export function App() {
         window.clearTimeout(timeoutId);
       }
     };
-  }, [playerEnabled]);
+  }, [playerEnabled, printMode]);
 
   useEffect(() => {
     if (!SHOW_LOCAL_DEBUG_CONTROLS) {
@@ -201,12 +295,37 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!managerEnabled) {
+    if (!managerEnabled || printMode) {
       return;
     }
 
     const manager = new SlotManager({
-      fetchRandomCombo,
+      fetchNextCombo: async (currentCombo) => {
+        const journey = journeyRef.current;
+        const request = requestForJourney(journey, currentCombo);
+        if (!request) {
+          return fetchRandomCombo(currentCombo?.audioAssetId);
+        }
+
+        let next: ComboPayload | null = null;
+        try {
+          next = await fetchSelectedCombo(request);
+          if (!next) {
+            throw new Error("Combo selection returned an invalid payload");
+          }
+        } catch (error) {
+          console.error("Tone selection failed; falling back to random playback", { error });
+          const fallback = await fetchRandomCombo(currentCombo?.audioAssetId);
+          if (fallback && journeyRef.current === journey) {
+            journeyRef.current = { mode: "random" };
+          }
+          return fallback;
+        }
+        if (next && journeyRef.current === journey) {
+          journeyRef.current = advanceJourney(journey, currentCombo);
+        }
+        return next;
+      },
       events: {
         onComboChanged: setSlotAssignment,
         onLoadingChange: setComboLoading,
@@ -232,10 +351,74 @@ export function App() {
         managerRef.current = null;
       }
     };
-  }, [managerEnabled]);
+  }, [managerEnabled, printMode]);
 
   const handleTimelineEnded = () => {
     void managerRef.current?.handleSlotPlaybackEnded(SingleSlotKey.Primary);
+  };
+
+  const openToneExplorer = () => {
+    if (isToneExplorerOpen) {
+      return;
+    }
+    bulletinStateBeforeToneRef.current = isBulletinOpen;
+    setIsBulletinOpen(false);
+    setIsToneExplorerOpen(true);
+  };
+
+  const closeToneExplorer = () => {
+    setIsToneExplorerOpen(false);
+    setIsBulletinOpen(bulletinStateBeforeToneRef.current);
+  };
+
+  const closeToneExplorerForNavigation = useEffectEvent(() => {
+    setShowToneExplorerExplainer(false);
+    if (!isToneExplorerOpen) {
+      return;
+    }
+    setIsToneExplorerOpen(false);
+    setIsBulletinOpen(bulletinStateBeforeToneRef.current);
+  });
+
+  useEffect(() => {
+    if (previousPathRef.current === location.pathname) {
+      return;
+    }
+    previousPathRef.current = location.pathname;
+    closeToneExplorerForNavigation();
+  }, [location.pathname]);
+
+  const handleBulletinMaximize = () => {
+    setIsToneExplorerOpen(false);
+    setIsBulletinOpen(true);
+  };
+
+  const handleToneExplorerToggle = () => {
+    if (isToneExplorerOpen) {
+      closeToneExplorer();
+      return;
+    }
+    if (toneExplorerAcknowledged || hasAcknowledgedToneExplorer(getToneExplorerStorage())) {
+      setToneExplorerAcknowledged(true);
+      openToneExplorer();
+      return;
+    }
+    setShowToneExplorerExplainer(true);
+  };
+
+  const handleToneExplorerAccept = () => {
+    acknowledgeToneExplorer(getToneExplorerStorage());
+    setToneExplorerAcknowledged(true);
+    setShowToneExplorerExplainer(false);
+    openToneExplorer();
+  };
+
+  const handleToneSubmit = (keywords: string[]) => {
+    if (comboLoading || !managerRef.current) {
+      return;
+    }
+    journeyRef.current = journeyForKeywords(keywords);
+    void managerRef.current.requestNext();
   };
 
   const handlePlaybackReady = () => {
@@ -358,8 +541,8 @@ export function App() {
   ];
 
   return (
-    <main className="relative isolate h-dvh overflow-hidden px-4 sm:px-6">
-      {playerEnabled ? (
+    <div className="relative isolate min-h-dvh overflow-x-hidden">
+      {playerEnabled && !printMode ? (
         <Suspense fallback={null}>
           {slotAssignment ? (
             <SingleComboSlot
@@ -380,94 +563,161 @@ export function App() {
           ) : null}
         </Suspense>
       ) : null}
-      <button
-        aria-label={audioButtonTitle}
-        className="pointer-events-auto fixed z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/40 bg-black/45 text-white shadow-lg backdrop-blur-sm [left:max(1.5rem,env(safe-area-inset-left))] [top:max(1.5rem,env(safe-area-inset-top))]"
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          handleAudioLevelToggle();
-        }}
-        title={audioButtonTitle}
-        type="button"
-      >
-        <svg
-          aria-hidden="true"
-          fill="none"
-          height="24"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="2"
-          viewBox="0 0 24 24"
-          width="24"
-        >
-          <path d="M11 5L6 9H3v6h3l5 4V5z" />
-          {audioLevel === "muted" ? (
-            <>
-              <path d="M16 9l5 6" />
-              <path d="M21 9l-5 6" />
-            </>
-          ) : (
-            <g transform="translate(0 -2)">
-              <path d="M16 10.5c1 .8 1.5 2 1.5 3.5s-.5 2.7-1.5 3.5" />
-              <path d="M18.8 7.7c1.7 1.5 2.7 3.8 2.7 6.3s-1 4.8-2.7 6.3" />
-            </g>
-          )}
-        </svg>
-      </button>
-
-      <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(0,0,0,0.1),rgba(0,0,0,0.68))]" />
-
-      <section className="relative z-20 mx-auto flex h-full w-full max-w-xl items-end py-4 sm:py-8">
-        <div className="relative w-full">
-          <div
-            className={`relative z-10 flex items-center justify-between px-1 transition-all duration-300 ease-in-out ${
-              isBulletinOpen ? "mb-1 translate-y-[8px]" : "mb-0 translate-y-1"
-            }`}
+      {!printMode ? (
+        <>
+          <button
+            aria-label={audioButtonTitle}
+            className="pointer-events-auto fixed z-[130] inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/40 bg-black/45 text-white shadow-lg backdrop-blur-sm [left:max(1.5rem,env(safe-area-inset-left))] [top:max(1.5rem,env(safe-area-inset-top))] print:hidden"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              handleAudioLevelToggle();
+            }}
+            title={audioButtonTitle}
+            type="button"
           >
-            <div className="relative inline-flex items-center">
-              <img
-                alt="Daren Keck"
-                className="h-12 w-auto"
-                draggable={false}
-                onDragStart={(event) => {
-                  event.preventDefault();
-                }}
-                src="/images/written_title_700.webp"
-              />
-              <span
-                className="absolute inset-0 select-text text-transparent"
-                style={{ userSelect: "text" }}
-              >
-                Daren Keck
-              </span>
-            </div>
-            <button
-              aria-label={isBulletinOpen ? "Minimize bulletin" : "Maximize bulletin"}
-              className="inline-flex h-8 w-8 items-center rounded-lg justify-center text-white transition-all duration-200 ease-in-out hover:bg-black/35"
-              onClick={() => {
-                setIsBulletinOpen((previous) => !previous);
-              }}
-              title={isBulletinOpen ? "Minimize" : "Maximize"}
-              type="button"
+            <svg
+              aria-hidden="true"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              width="24"
             >
-              {isBulletinOpen ? (
-                <svg
-                  aria-hidden="true"
-                  fill="none"
-                  height="20"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="1.8"
-                  viewBox="0 0 24 24"
-                  width="20"
-                >
-                  <rect height="16" rx="2.5" width="16" x="4" y="4" />
-                  <path d="M8 12h8" />
-                </svg>
+              <path d="M11 5L6 9H3v6h3l5 4V5z" />
+              {audioLevel === "muted" ? (
+                <>
+                  <path d="M16 9l5 6" />
+                  <path d="M21 9l-5 6" />
+                </>
               ) : (
+                <g transform="translate(0 -2)">
+                  <path d="M16 10.5c1 .8 1.5 2 1.5 3.5s-.5 2.7-1.5 3.5" />
+                  <path d="M18.8 7.7c1.7 1.5 2.7 3.8 2.7 6.3s-1 4.8-2.7 6.3" />
+                </g>
+              )}
+            </svg>
+          </button>
+
+          <button
+            aria-expanded={isToneExplorerOpen}
+            aria-label={isToneExplorerOpen ? "Close tone explorer" : "Explore combinations by tone"}
+            className={`pointer-events-auto fixed z-[130] inline-flex h-12 w-12 items-center justify-center rounded-full border bg-black/45 text-white shadow-lg backdrop-blur-sm transition [right:max(1.5rem,env(safe-area-inset-right))] [top:max(1.5rem,env(safe-area-inset-top))] hover:bg-black/65 print:hidden ${
+              isToneExplorerOpen
+                ? "border-sky-300 text-sky-200 shadow-[0_0_24px_rgba(56,189,248,0.45)]"
+                : toneExplorerAcknowledged
+                  ? "border-white/40"
+                  : "border-sky-200/70 text-sky-100 shadow-[0_0_24px_rgba(56,189,248,0.35)] motion-safe:animate-pulse"
+            }`}
+            onClick={handleToneExplorerToggle}
+            ref={toneExplorerButtonRef}
+            title={isToneExplorerOpen ? "Close tone explorer" : "Explore by tone"}
+            type="button"
+          >
+            {isToneExplorerOpen ? (
+              <svg
+                aria-hidden="true"
+                fill="none"
+                height="24"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+                width="24"
+              >
+                <path d="M6 6l12 12" />
+                <path d="M18 6L6 18" />
+              </svg>
+            ) : (
+              <ToneExplorerIcon />
+            )}
+          </button>
+
+          <ToneExplorer
+            disabled={!slotAssignment}
+            error={comboError}
+            loading={comboLoading}
+            onSubmit={handleToneSubmit}
+            open={isToneExplorerOpen}
+          />
+
+          {showToneExplorerExplainer ? (
+            <ToneExplorerExplainer
+              onAccept={handleToneExplorerAccept}
+              onDismiss={() => setShowToneExplorerExplainer(false)}
+              returnFocusRef={toneExplorerButtonRef}
+            />
+          ) : null}
+        </>
+      ) : null}
+
+      {!printMode ? (
+        <div className="pointer-events-none fixed inset-0 z-10 bg-[linear-gradient(180deg,rgba(0,0,0,0.12),rgba(0,0,0,0.62))] print:hidden" />
+      ) : null}
+
+      <div className="relative z-20 min-h-dvh">
+        <Outlet />
+      </div>
+
+      {isHome ? (
+        <section className="fixed inset-0 z-20 mx-auto flex h-dvh w-full max-w-xl items-end px-4 py-4 sm:px-6 sm:py-8">
+          <div className="relative w-full">
+            <div
+              aria-hidden={!isBulletinOpen}
+              className={`relative z-10 mb-1 flex items-center justify-end px-1 transition-all duration-300 ease-in-out ${
+                isBulletinOpen
+                  ? "translate-y-[8px] scale-100 opacity-100"
+                  : "pointer-events-none translate-y-4 scale-95 opacity-0"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <DarenKeckWordmark />
+                <button
+                  aria-label="Minimize bulletin"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-white transition-all duration-200 ease-in-out hover:bg-black/35"
+                  onClick={() => setIsBulletinOpen(false)}
+                  tabIndex={isBulletinOpen ? 0 : -1}
+                  title="Minimize"
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    fill="none"
+                    height="20"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.8"
+                    viewBox="0 0 24 24"
+                    width="20"
+                  >
+                    <rect height="16" rx="2.5" width="16" x="4" y="4" />
+                    <path d="M8 12h8" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div
+              aria-hidden={isBulletinOpen}
+              className={`fixed right-4 z-[120] flex items-center gap-2 transition-all duration-300 ease-in-out [bottom:max(1.5rem,calc(env(safe-area-inset-bottom)+1rem))] sm:right-6 sm:[bottom:max(2.5rem,calc(env(safe-area-inset-bottom)+2rem))] ${
+                isBulletinOpen
+                  ? "pointer-events-none translate-y-3 scale-95 opacity-0"
+                  : "pointer-events-auto translate-y-0 scale-100 opacity-100"
+              }`}
+            >
+              <DarenKeckWordmark />
+              <button
+                aria-label="Maximize bulletin"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-white transition-all duration-200 ease-in-out hover:bg-black/35"
+                onClick={handleBulletinMaximize}
+                tabIndex={isBulletinOpen ? -1 : 0}
+                title="Maximize"
+                type="button"
+              >
                 <svg
                   aria-hidden="true"
                   fill="none"
@@ -483,64 +733,68 @@ export function App() {
                   <path d="M12 8v8" />
                   <path d="M8 12h8" />
                 </svg>
-              )}
-            </button>
-          </div>
+              </button>
+            </div>
 
-          <div
-            className={`glass-card overflow-hidden border transition-all duration-300 ease-in-out ${
-              isBulletinOpen
-                ? "rounded-2xl p-4 shadow-2xl shadow-black/35 sm:p-5"
-                : "h-[2px] rounded-none border-x-0 border-b-0 p-0 shadow-none"
-            }`}
-          >
             <div
-              className={`grid overflow-hidden transition-all duration-300 ease-in-out ${
-                isBulletinOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+              className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                isBulletinOpen
+                  ? "glass-card rounded-2xl border p-4 shadow-2xl shadow-black/35 sm:p-5"
+                  : "rounded-2xl border-0 p-0 shadow-none"
               }`}
             >
-              <div className="min-h-0 space-y-5">
-                <header className="space-y-2">
-                  <h1 className="text-3xl font-bold text-white">Hey!</h1>
-                  <p className="text-sm leading-relaxed text-white/85">
-                    This is my personal page. I'm a full-stack developer with a decade of experience, and I write music
-                    at Wayfarer Records!
-                  </p>
-                  <p className="text-sm leading-relaxed text-white/80">
-                    I'll occasionally link up fun projects here as well.
-                  </p>
-                </header>
-                <BulletinSection items={bulletinItems} />
-                <LinksSection links={linkItems} />
-                {/* {!slotAssignment ? (
+              <div
+                aria-hidden={!isBulletinOpen}
+                className={`grid overflow-hidden transition-all duration-300 ease-in-out ${
+                  isBulletinOpen
+                    ? "grid-rows-[1fr] opacity-100"
+                    : "pointer-events-none grid-rows-[0fr] opacity-0"
+                }`}
+                inert={!isBulletinOpen}
+              >
+                <div className="min-h-0 space-y-5">
+                  <header className="space-y-2">
+                    <h1 className="text-3xl font-bold text-white">Hey!</h1>
+                    <p className="text-sm leading-relaxed text-white/85">
+                      This is my personal page. I'm a full-stack developer with a decade of
+                      experience, and I write music at Wayfarer Records!
+                    </p>
+                    <p className="text-sm leading-relaxed text-white/80">
+                      I'll occasionally link up fun projects here as well.
+                    </p>
+                  </header>
+                  <BulletinSection items={bulletinItems} />
+                  <LinksSection links={linkItems} />
+                  {/* {!slotAssignment ? (
                   <p className="text-xs text-white/70">
                     {comboLoading
                       ? "Loading combo player..."
                       : (comboError ?? "Combo playback unavailable. Set VITE_COMBO_API_BASE_URL.")}
                   </p>
                 ) : null} */}
-                {/* <p className="text-[11px] text-white/65">
+                  {/* <p className="text-[11px] text-white/65">
                   manager: {managerState} | slot: {slotState} | combos played: {combosPlayedCount}
                 </p> */}
+                </div>
               </div>
             </div>
+
+            {comboLoading ? (
+              <div className="pointer-events-none fixed z-40 left-1/2 [top:calc(max(1.5rem,env(safe-area-inset-top))+24px)] -translate-x-1/2 -translate-y-1/2">
+                <ShellLoader />
+              </div>
+            ) : null}
+
+            {!comboLoading && !slotAssignment && comboError ? (
+              <p className="pointer-events-none absolute left-1/2 top-full mt-3 -translate-x-1/2 text-xs text-white/70">
+                {comboError}
+              </p>
+            ) : null}
           </div>
+        </section>
+      ) : null}
 
-          {comboLoading ? (
-            <div className="pointer-events-none fixed z-40 left-1/2 [top:calc(max(1.5rem,env(safe-area-inset-top))+24px)] -translate-x-1/2 -translate-y-1/2">
-              <ShellLoader />
-            </div>
-          ) : null}
-
-          {!comboLoading && !slotAssignment && comboError ? (
-            <p className="pointer-events-none absolute left-1/2 top-full mt-3 -translate-x-1/2 text-xs text-white/70">
-              {comboError}
-            </p>
-          ) : null}
-        </div>
-      </section>
-
-      {SHOW_LOCAL_DEBUG_CONTROLS ? (
+      {SHOW_LOCAL_DEBUG_CONTROLS && !printMode ? (
         <aside className="pointer-events-auto fixed bottom-3 right-3 z-[60] w-[min(92vw,420px)] rounded-xl border border-white/30 bg-black/70 p-3 text-[11px] text-white shadow-2xl backdrop-blur-sm">
           <p className="font-semibold uppercase tracking-[0.14em] text-white/85">
             Local playback debug
@@ -634,6 +888,6 @@ export function App() {
           </p>
         </aside>
       ) : null}
-    </main>
+    </div>
   );
 }
