@@ -127,14 +127,25 @@ export function ToneWordSubmitPile({
       </div>
       {keywordPlacements.map(({ column, keyword, rowFromBottom }) => (
         <button
-          className="max-w-32 truncate rounded-full border border-sky-400 bg-black/45 px-3 py-1.5 text-sm text-white shadow-sm backdrop-blur-sm transition hover:bg-black/60"
+          className="inline-flex w-32 items-center justify-between gap-1.5 rounded-full border border-sky-400 bg-black/45 px-3 py-1.5 text-sm text-white shadow-sm backdrop-blur-sm transition hover:bg-black/60"
           key={keyword}
           onClick={() => onToggleWord(keyword)}
           style={{ gridColumn: column + 1, gridRow: pileGridRows - rowFromBottom }}
           title={wordTitle(keyword)}
           type="button"
         >
-          {keyword}
+          <span className="truncate">{keyword}</span>
+          <svg
+            aria-hidden="true"
+            className="h-3 w-3 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeWidth="2"
+            viewBox="0 0 12 12"
+          >
+            <path d="M2 2l8 8M10 2L2 10" />
+          </svg>
         </button>
       ))}
     </div>

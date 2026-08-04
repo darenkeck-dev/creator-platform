@@ -1,6 +1,6 @@
 import type { PublicComboSelectionRequest } from "@media-manager/contracts";
 import { lazy, Suspense, useEffect, useEffectEvent, useRef, useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { useLocation, useOutlet } from "react-router-dom";
 
 import { BulletinSection } from "./components/BulletinSection";
 import { LinksSection } from "./components/LinksSection";
@@ -35,6 +35,63 @@ const SingleComboSlot = lazy(async () => {
 
 const ENABLE_DEBUG_LOGS = false;
 const SHOW_LOCAL_DEBUG_CONTROLS = false;
+const RESUME_TRANSITION_MS = 400;
+
+function ResumeRouteTransition({ pathname, printMode }: { pathname: string; printMode: boolean }) {
+  const outlet = useOutlet();
+  const outletRef = useRef(outlet);
+  const renderedPathRef = useRef(pathname);
+  const [renderedOutlet, setRenderedOutlet] = useState(outlet);
+  const [resumeVisible, setResumeVisible] = useState(printMode);
+  outletRef.current = outlet;
+
+  useEffect(() => {
+    if (printMode) {
+      renderedPathRef.current = pathname;
+      setRenderedOutlet(outletRef.current);
+      setResumeVisible(true);
+      return;
+    }
+
+    let frameId: number | null = null;
+    let timeoutId: number | null = null;
+
+    if (pathname === "/dev") {
+      renderedPathRef.current = pathname;
+      setRenderedOutlet(outletRef.current);
+      setResumeVisible(false);
+      frameId = window.requestAnimationFrame(() => setResumeVisible(true));
+    } else if (renderedPathRef.current === "/dev") {
+      setResumeVisible(false);
+      timeoutId = window.setTimeout(() => {
+        renderedPathRef.current = pathname;
+        setRenderedOutlet(outletRef.current);
+      }, RESUME_TRANSITION_MS);
+    } else {
+      renderedPathRef.current = pathname;
+      setRenderedOutlet(outletRef.current);
+    }
+
+    return () => {
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+    };
+  }, [pathname, printMode]);
+
+  return (
+    <div
+      aria-hidden={!resumeVisible && renderedPathRef.current === "/dev"}
+      className={`min-h-dvh origin-bottom transition-[opacity,transform,filter] duration-[400ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none print:transform-none print:opacity-100 print:filter-none ${
+        resumeVisible
+          ? "translate-y-0 scale-100 opacity-100 blur-none"
+          : "pointer-events-none translate-y-6 scale-[0.985] opacity-0 blur-[2px]"
+      }`}
+      inert={!resumeVisible}
+    >
+      {renderedOutlet}
+    </div>
+  );
+}
 
 function formatMediaDuration(value: number): string {
   if (!Number.isFinite(value) || value <= 0) {
@@ -417,7 +474,11 @@ export function App() {
     if (comboLoading || !managerRef.current) {
       return;
     }
-    journeyRef.current = journeyForKeywords(keywords);
+    journeyRef.current = journeyForKeywords(
+      keywords,
+      journeyRef.current,
+      slotAssignment?.combo ?? null
+    );
     void managerRef.current.requestNext();
   };
 
@@ -659,7 +720,7 @@ export function App() {
       ) : null}
 
       <div className="relative z-20 min-h-dvh">
-        <Outlet />
+        <ResumeRouteTransition pathname={location.pathname} printMode={printMode} />
       </div>
 
       {isHome ? (
