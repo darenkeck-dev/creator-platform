@@ -182,14 +182,20 @@ async function walkPublicCombo(
     request.current.audioAssetId,
     ...request.history.recentAudioAssetIds,
   ]);
+  const excludedVideoIds = new Set([
+    request.current.videoAssetId,
+    ...request.history.recentVideoAssetIds,
+  ]);
   const audioCandidates = uniqueEligibleRecords(
     audioMatches.map(({ record }) => record),
     "audio"
   ).filter(({ assetId }) => !excludedAudioIds.has(assetId));
   const videoCandidates = uniqueEligibleRecords(
-    [currentVideoVector, ...videoMatches.map(({ record }) => record)],
+    videoMatches.map(({ record }) => record),
     "video"
-  ).slice(0, SOURCE_CANDIDATE_LIMIT);
+  )
+    .filter(({ assetId }) => !excludedVideoIds.has(assetId))
+    .slice(0, SOURCE_CANDIDATE_LIMIT);
   const recentComboIds = new Set(request.history.recentComboIds);
   const currentTone = comboTonePredictorV0.predict({
     audioTone: currentAudioVector.effectiveTone,
@@ -276,6 +282,7 @@ async function searchPublicCombo(
   }
 
   const excludedAudioIds = new Set(request.history.recentAudioAssetIds);
+  const excludedVideoIds = new Set(request.history.recentVideoAssetIds);
   const recentComboIds = new Set(request.history.recentComboIds);
   const audioCandidates = uniqueEligibleRecords(
     audioMatches.map(({ record }) => record),
@@ -284,7 +291,7 @@ async function searchPublicCombo(
   const videoCandidates = uniqueEligibleRecords(
     videoMatches.map(({ record }) => record),
     "video"
-  );
+  ).filter(({ assetId }) => !excludedVideoIds.has(assetId));
   const candidates = new Map<
     string,
     {
@@ -293,7 +300,7 @@ async function searchPublicCombo(
     }
   >();
   const addCandidate = (audio: AssetToneVectorRecord, video: AssetToneVectorRecord) => {
-    if (excludedAudioIds.has(audio.assetId)) return;
+    if (excludedAudioIds.has(audio.assetId) || excludedVideoIds.has(video.assetId)) return;
     const candidate = pairCandidate(video.assetId, audio.assetId);
     if (recentComboIds.has(candidate.comboId) || candidates.has(candidate.comboId)) return;
     candidates.set(candidate.comboId, {
@@ -402,10 +409,16 @@ async function randomFallback(
   const shuffledVideos = shuffle(videos, dependencies.random);
   const shuffledAudios = shuffle(audios, dependencies.random);
   const currentAudioAssetId = request.mode === "walk" ? request.current.audioAssetId : undefined;
+  const currentVideoAssetId = request.mode === "walk" ? request.current.videoAssetId : undefined;
   const exclusionStages = [
     {
       audioIds: new Set(
         [currentAudioAssetId, ...request.history.recentAudioAssetIds].filter(
+          (assetId): assetId is string => Boolean(assetId)
+        )
+      ),
+      videoIds: new Set(
+        [currentVideoAssetId, ...request.history.recentVideoAssetIds].filter(
           (assetId): assetId is string => Boolean(assetId)
         )
       ),
@@ -417,10 +430,16 @@ async function randomFallback(
           (assetId): assetId is string => Boolean(assetId)
         )
       ),
+      videoIds: new Set(
+        [currentVideoAssetId, ...request.history.recentVideoAssetIds].filter(
+          (assetId): assetId is string => Boolean(assetId)
+        )
+      ),
       comboIds: new Set<string>(),
     },
     {
       audioIds: new Set(currentAudioAssetId ? [currentAudioAssetId] : []),
+      videoIds: new Set(currentVideoAssetId ? [currentVideoAssetId] : []),
       comboIds: new Set<string>(),
     },
   ];
@@ -431,6 +450,9 @@ async function randomFallback(
         continue;
       }
       for (const video of shuffledVideos) {
+        if (exclusions.videoIds.has(video.id)) {
+          continue;
+        }
         const candidate = pairCandidate(video.id, audio.id);
         if (exclusions.comboIds.has(candidate.comboId)) {
           continue;

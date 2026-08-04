@@ -30,6 +30,7 @@ const request = {
   },
   history: {
     recentAudioAssetIds: ["audio-recent"],
+    recentVideoAssetIds: ["video-recent"],
     recentComboIds: ["public-video-other-audio-near"],
   },
 };
@@ -57,8 +58,10 @@ describe("public combo selection API", () => {
         asset("audio-current", "audio", 0),
         asset("video-current", "video", 0),
         asset("audio-near", "audio", 0.1),
+        asset("audio-far", "audio", 0.2),
         asset("audio-recent", "audio", 0.01),
-        asset("video-other", "video", 1),
+        asset("video-recent", "video", 0.01),
+        asset("video-other", "video", 0.1),
       ].map((value) => [value.id, value])
     );
     const queries: AssetToneVectorIndexQuery[] = [];
@@ -78,6 +81,7 @@ describe("public combo selection API", () => {
             match(assets.get("audio-current") as AssetRecord),
             match(assets.get("audio-recent") as AssetRecord),
             match(assets.get("audio-near") as AssetRecord),
+            match(assets.get("audio-far") as AssetRecord),
           ];
         }
         return [
@@ -88,6 +92,7 @@ describe("public combo selection API", () => {
               effectiveTone: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
             },
           },
+          match(assets.get("video-recent") as AssetRecord),
           match(assets.get("video-other") as AssetRecord),
         ];
       },
@@ -106,7 +111,7 @@ describe("public combo selection API", () => {
     expect(result.statusCode).toBe(200);
     expect(queries.map(({ assetType }) => assetType).sort()).toEqual(["audio", "video"]);
     expect(queries.every(({ limit }) => limit === 100)).toBe(true);
-    expect(body.comboId).toBe("public-video-current-audio-near");
+    expect(body.comboId).toBe("public-video-other-audio-far");
     expect(body.selection).toEqual({
       schemaVersion: "combo-selection/v1",
       requestedMode: "walk",
@@ -114,7 +119,7 @@ describe("public combo selection API", () => {
       predictorVersion: "combo-tone-predictor/v0",
       distance: expect.any(Number),
     });
-    expect(body.selection.distance).toBeCloseTo(0.036);
+    expect(body.selection.distance).toBeCloseTo(0.256);
     expect(metrics).toEqual([expect.objectContaining({ statusCode: 200, resolvedMode: "walk" })]);
   });
 
@@ -163,7 +168,7 @@ describe("public combo selection API", () => {
         schemaVersion: "public-combo-selection-request/v1",
         mode: "search",
         keywords: ["serene"],
-        history: { recentAudioAssetIds: [], recentComboIds: [] },
+        history: { recentAudioAssetIds: [], recentVideoAssetIds: [], recentComboIds: [] },
       })
     );
     const body = JSON.parse(result.body);
@@ -313,7 +318,7 @@ describe("public combo selection API", () => {
     ]);
   });
 
-  it("relaxes recent history for fallback without repeating the current audio", async () => {
+  it("relaxes recent history for fallback without repeating either current source", async () => {
     const assets = new Map(
       [
         asset("audio-current", "audio", 0),
@@ -349,6 +354,7 @@ describe("public combo selection API", () => {
         ...request,
         history: {
           recentAudioAssetIds: ["audio-fallback"],
+          recentVideoAssetIds: ["video-fallback"],
           recentComboIds: ["public-video-fallback-audio-fallback"],
         },
       })
@@ -358,6 +364,8 @@ describe("public combo selection API", () => {
     expect(result.statusCode).toBe(200);
     expect(body.audioAssetId).toBe("audio-fallback");
     expect(body.audioAssetId).not.toBe("audio-current");
+    expect(body.videoAssetId).toBe("video-fallback");
+    expect(body.videoAssetId).not.toBe("video-current");
     expect(body.selection.fallbackReason).toBe("no_walk_candidates");
   });
 

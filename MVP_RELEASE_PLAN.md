@@ -19,7 +19,7 @@ This is an MVP for collecting useful tone and combination data. It is not expect
 3. The requested tone ignores the currently playing combination and searches globally for a close match.
 4. The result is fuzzed among a small set of strong matches so the same request does not always return the same pair.
 5. When playback completes without new tone input, the next pair is chosen from the current combination's nearest neighbors.
-6. Neighbor steps must use new audio but may retain the same video.
+6. Neighbor steps must use both new audio and new video.
 7. The visitor can submit a keyword-only review of the current combination.
 8. Playback and random selection remain available as fallbacks when search or review APIs fail.
 
@@ -52,7 +52,7 @@ This is an MVP for collecting useful tone and combination data. It is not expect
 - [ ] Agree on the MVP user journey and non-goals above.
 - [x] Select S3 Vectors as the production vector database.
 - [x] Launch on a controlled explorer route or gated mode before promoting to the homepage.
-- [x] Exclude the five most recent combinations and three most recent audio assets.
+- [x] Exclude the five most recent combinations plus three recent audio and video assets.
 - [x] Use distance-weighted sampling from the top five valid candidates for search and walk fuzzing.
 - [x] Record the initial algorithm constants under `combo-selection/v1`.
 
@@ -66,8 +66,9 @@ walk candidate sample pool: top 5
 candidate sampling: distance weighted
 recent combination exclusion count: 5
 recent audio exclusion count: 3
+recent video exclusion count: 3
 immediate audio repeat: prohibited
-same video on next step: allowed
+immediate video repeat: prohibited
 initial source candidate cap per asset type: 100
 source retrieval metric: Euclidean, no initial maximum-distance cutoff
 walk ranking metric: squared Euclidean over predicted combo tone
@@ -269,23 +270,20 @@ When playback completes without new tone input, selection switches to walk mode.
 
 Walk constraints:
 
-- Audio must change.
-- Video may remain the same.
+- Audio and video must both change.
 - The original tone query no longer affects ranking.
 - The current combination is the only tonal anchor.
-- Recent combinations and recent audio are excluded.
+- Recent combinations, audio, and video are excluded.
 
 ### Candidate Generation
 
 1. Query S3 Vectors around the current audio vector with an audio metadata filter.
 2. Query S3 Vectors around the current video vector with a video metadata filter.
 3. During the exact-baseline phase, request every eligible source under a hard cap of 100 per type.
-4. Exclude the current audio and three recent audio assets.
-5. Explicitly include the current video as a valid candidate.
-6. Include same-video/new-audio candidates.
-7. Include candidates where both audio and video change.
-8. Exclude the current pair and five recent combinations.
-9. Compute current and candidate combo tones on demand with `combo-tone-predictor/v0`.
+4. Exclude the current audio and video plus three recent assets of each type.
+5. Include only candidates where both audio and video change.
+6. Exclude the current pair and five recent combinations.
+7. Compute current and candidate combo tones on demand with `combo-tone-predictor/v0`.
 
 S3 Vectors uses the index's Euclidean metric only to retrieve plausible source assets. It does not calculate or store combo tone. Do not apply an initial maximum-distance cutoff to source queries: a farther source can still form a nearby predicted combo with its counterpart.
 
@@ -307,12 +305,12 @@ walkScore(candidate) = distance(
 Use exact squared Euclidean distance over all ten predicted combo-tone dimensions. A maximum predicted-combo step may be added after observed distance distributions are calibrated; it belongs after combo prediction, not in source retrieval.
 
 - [x] Sample among the nearest valid candidates rather than always selecting rank one.
-- [x] Prevent immediate audio repeats at the API level.
+- [x] Prevent immediate audio and video repeats at the API level.
 - [ ] Maintain a short client/API recent-history list to prevent loops.
 - [x] Add an escape path when all local candidates are excluded.
 - [x] Fall back to a valid random public pair if vector lookup fails.
 
-The backend fallback first honors all supplied history, then relaxes recent combo exclusions, then relaxes recent audio history. It never relaxes the immediate current-audio exclusion.
+The backend fallback first honors all supplied history, then relaxes recent combo exclusions, then relaxes recent source history. It never relaxes the immediate current-audio or current-video exclusions.
 
 No combo tone is persisted. The existing 50-dimensional relationship geometry in `tone-core` remains experimental and is not part of the initial production walk score.
 
@@ -335,7 +333,8 @@ Tone restart request:
   "keywords": ["serene", "warm", "intimate"],
   "history": {
     "recentComboIds": [],
-    "recentAudioAssetIds": []
+    "recentAudioAssetIds": [],
+    "recentVideoAssetIds": []
   }
 }
 ```
@@ -352,6 +351,7 @@ Walk continuation request:
   },
   "history": {
     "recentAudioAssetIds": ["..."],
+    "recentVideoAssetIds": ["..."],
     "recentComboIds": ["..."]
   }
 }

@@ -75,13 +75,16 @@ export function ComboExplorer({
 
   async function search() {
     if (picker.selectedWords.length === 0 || pendingMode) return;
+    const searchHistory = combo ? advanceComboExplorerHistory(history, combo) : history;
     setPendingMode("search");
     setError(null);
     try {
-      const result = await requestSelection(buildComboSearchRequest(picker.selectedWords));
+      const result = await requestSelection(
+        buildComboSearchRequest(picker.selectedWords, searchHistory)
+      );
       setCombo(result);
       setSelection(result.selection);
-      setHistory(EMPTY_COMBO_EXPLORER_HISTORY);
+      setHistory(searchHistory);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Tone search failed");
     } finally {
@@ -121,7 +124,7 @@ export function ComboExplorer({
           </div>
           <p className="text-xs text-muted-foreground">
             History {history.recentComboIds.length}/5 combos · {history.recentAudioAssetIds.length}
-            /3 audio
+            /3 audio · {history.recentVideoAssetIds.length}/3 video
           </p>
         </div>
       </div>

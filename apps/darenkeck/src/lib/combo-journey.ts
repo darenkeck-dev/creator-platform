@@ -10,12 +10,23 @@ import {
 
 export type ComboJourney =
   | { mode: "random" }
-  | { mode: "search"; keywords: string[] }
+  | { mode: "search"; keywords: string[]; history: ComboExplorerHistory }
   | { mode: "walk"; history: ComboExplorerHistory };
 
-export function journeyForKeywords(keywords: string[]): ComboJourney {
+export function journeyForKeywords(
+  keywords: string[],
+  previousJourney: ComboJourney = { mode: "random" },
+  departing: ComboExplorerCurrent | null = null
+): ComboJourney {
   const normalized = [...new Set(keywords.map((keyword) => keyword.trim()).filter(Boolean))];
-  return normalized.length > 0 ? { mode: "search", keywords: normalized } : { mode: "random" };
+  if (normalized.length === 0) return { mode: "random" };
+
+  const previousHistory =
+    previousJourney.mode === "random" ? EMPTY_COMBO_EXPLORER_HISTORY : previousJourney.history;
+  const history = departing
+    ? advanceComboExplorerHistory(previousHistory, departing)
+    : previousHistory;
+  return { mode: "search", keywords: normalized, history };
 }
 
 export function requestForJourney(
@@ -26,7 +37,7 @@ export function requestForJourney(
     return null;
   }
   if (journey.mode === "search") {
-    return buildComboSearchRequest(journey.keywords);
+    return buildComboSearchRequest(journey.keywords, journey.history);
   }
   return current ? buildComboWalkRequest(current, journey.history) : null;
 }
@@ -36,7 +47,7 @@ export function advanceJourney(
   departing: ComboExplorerCurrent | null
 ): ComboJourney {
   if (journey.mode === "search") {
-    return { mode: "walk", history: EMPTY_COMBO_EXPLORER_HISTORY };
+    return { mode: "walk", history: journey.history };
   }
   if (journey.mode === "walk" && departing) {
     return {

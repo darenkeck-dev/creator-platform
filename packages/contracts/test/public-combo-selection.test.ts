@@ -26,6 +26,7 @@ describe("public combo selection contracts", () => {
       history: {
         recentComboIds: [],
         recentAudioAssetIds: [],
+        recentVideoAssetIds: [],
       },
     });
   });
@@ -44,6 +45,7 @@ describe("public combo selection contracts", () => {
       history: {
         recentComboIds: [],
         recentAudioAssetIds: [],
+        recentVideoAssetIds: [],
       },
     });
   });
@@ -59,6 +61,7 @@ describe("public combo selection contracts", () => {
       history: {
         recentComboIds: ["1", "2", "3", "4", "5"],
         recentAudioAssetIds: ["1", "2", "3"],
+        recentVideoAssetIds: ["1", "2", "3"],
       },
     };
 
@@ -78,6 +81,12 @@ describe("public combo selection contracts", () => {
       PublicComboSelectionRequestSchema.safeParse({
         ...request,
         history: { ...request.history, recentAudioAssetIds: ["1", "2", "3", "4"] },
+      }).success
+    ).toBe(false);
+    expect(
+      PublicComboSelectionRequestSchema.safeParse({
+        ...request,
+        history: { ...request.history, recentVideoAssetIds: ["1", "2", "3", "4"] },
       }).success
     ).toBe(false);
   });

@@ -661,6 +661,7 @@ const PublicComboSelectionHistorySchema = z
   .object({
     recentComboIds: z.array(z.string().min(1)).max(5).default([]),
     recentAudioAssetIds: z.array(z.string().min(1)).max(3).default([]),
+    recentVideoAssetIds: z.array(z.string().min(1)).max(3).default([]),
   })
   .strict();
 

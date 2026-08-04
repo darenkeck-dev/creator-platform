@@ -9,12 +9,17 @@ import {
 } from "@media-manager/shared";
 
 describe("combo explorer state", () => {
-  it("builds a combined tone-word search that resets history", () => {
-    expect(buildComboSearchRequest(["serene", "loving"])).toEqual({
+  it("builds a combined tone-word search with prior history", () => {
+    const history = {
+      recentComboIds: ["combo-old"],
+      recentAudioAssetIds: ["audio-old"],
+      recentVideoAssetIds: ["video-old"],
+    };
+    expect(buildComboSearchRequest(["serene", "loving"], history)).toEqual({
       schemaVersion: "public-combo-selection-request/v1",
       mode: "search",
       keywords: ["serene", "loving"],
-      history: { recentComboIds: [], recentAudioAssetIds: [] },
+      history,
     });
   });
 
@@ -30,6 +35,7 @@ describe("combo explorer state", () => {
 
     expect(history.recentComboIds).toEqual(["combo-6", "combo-5", "combo-4", "combo-3", "combo-2"]);
     expect(history.recentAudioAssetIds).toEqual(["audio-6", "audio-5", "audio-4"]);
+    expect(history.recentVideoAssetIds).toEqual(["video-6", "video-5", "video-4"]);
 
     expect(
       advanceComboExplorerHistory(history, {
@@ -40,6 +46,7 @@ describe("combo explorer state", () => {
     ).toEqual({
       recentComboIds: ["combo-4", "combo-6", "combo-5", "combo-3", "combo-2"],
       recentAudioAssetIds: ["audio-4", "audio-6", "audio-5"],
+      recentVideoAssetIds: ["video-4", "video-6", "video-5"],
     });
   });
 
@@ -47,13 +54,21 @@ describe("combo explorer state", () => {
     expect(
       buildComboWalkRequest(
         { comboId: "combo-current", audioAssetId: "audio-current", videoAssetId: "video-current" },
-        { recentComboIds: ["combo-old"], recentAudioAssetIds: ["audio-old"] }
+        {
+          recentComboIds: ["combo-old"],
+          recentAudioAssetIds: ["audio-old"],
+          recentVideoAssetIds: ["video-old"],
+        }
       )
     ).toEqual({
       schemaVersion: "public-combo-selection-request/v1",
       mode: "walk",
       current: { audioAssetId: "audio-current", videoAssetId: "video-current" },
-      history: { recentComboIds: ["combo-old"], recentAudioAssetIds: ["audio-old"] },
+      history: {
+        recentComboIds: ["combo-old"],
+        recentAudioAssetIds: ["audio-old"],
+        recentVideoAssetIds: ["video-old"],
+      },
     });
   });
 });

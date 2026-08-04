@@ -6,6 +6,7 @@ import type {
 export type ComboExplorerHistory = {
   recentComboIds: string[];
   recentAudioAssetIds: string[];
+  recentVideoAssetIds: string[];
 };
 
 export type ComboExplorerCurrent = Pick<
@@ -16,6 +17,7 @@ export type ComboExplorerCurrent = Pick<
 export const EMPTY_COMBO_EXPLORER_HISTORY: ComboExplorerHistory = {
   recentComboIds: [],
   recentAudioAssetIds: [],
+  recentVideoAssetIds: [],
 };
 
 export function advanceComboExplorerHistory(
@@ -25,15 +27,19 @@ export function advanceComboExplorerHistory(
   return {
     recentComboIds: prependBounded(departing.comboId, history.recentComboIds, 5),
     recentAudioAssetIds: prependBounded(departing.audioAssetId, history.recentAudioAssetIds, 3),
+    recentVideoAssetIds: prependBounded(departing.videoAssetId, history.recentVideoAssetIds, 3),
   };
 }
 
-export function buildComboSearchRequest(keywords: string[]): PublicComboSelectionRequest {
+export function buildComboSearchRequest(
+  keywords: string[],
+  history: ComboExplorerHistory = EMPTY_COMBO_EXPLORER_HISTORY
+): PublicComboSelectionRequest {
   return {
     schemaVersion: "public-combo-selection-request/v1",
     mode: "search",
     keywords,
-    history: EMPTY_COMBO_EXPLORER_HISTORY,
+    history,
   };
 }
 

@@ -23,7 +23,7 @@ describe("combo journey", () => {
       schemaVersion: "public-combo-selection-request/v1",
       mode: "search",
       keywords: ["serene", "loving"],
-      history: { recentComboIds: [], recentAudioAssetIds: [] },
+      history: { recentComboIds: [], recentAudioAssetIds: [], recentVideoAssetIds: [] },
     });
   });
 
@@ -31,7 +31,7 @@ describe("combo journey", () => {
     let journey = advanceJourney(journeyForKeywords(["serene"]), current);
     expect(journey).toEqual({
       mode: "walk",
-      history: { recentComboIds: [], recentAudioAssetIds: [] },
+      history: { recentComboIds: [], recentAudioAssetIds: [], recentVideoAssetIds: [] },
     });
 
     journey = advanceJourney(journey, current);
@@ -42,6 +42,38 @@ describe("combo journey", () => {
       history: {
         recentComboIds: ["combo-current"],
         recentAudioAssetIds: ["audio-current"],
+        recentVideoAssetIds: ["video-current"],
+      },
+    });
+  });
+
+  it("carries the departing combo and prior walk history into a new search", () => {
+    const previousJourney = {
+      mode: "walk" as const,
+      history: {
+        recentComboIds: ["combo-old"],
+        recentAudioAssetIds: ["audio-old"],
+        recentVideoAssetIds: ["video-old"],
+      },
+    };
+
+    const journey = journeyForKeywords(["serene"], previousJourney, current);
+    expect(requestForJourney(journey, current)).toEqual({
+      schemaVersion: "public-combo-selection-request/v1",
+      mode: "search",
+      keywords: ["serene"],
+      history: {
+        recentComboIds: ["combo-current", "combo-old"],
+        recentAudioAssetIds: ["audio-current", "audio-old"],
+        recentVideoAssetIds: ["video-current", "video-old"],
+      },
+    });
+    expect(advanceJourney(journey, current)).toEqual({
+      mode: "walk",
+      history: {
+        recentComboIds: ["combo-current", "combo-old"],
+        recentAudioAssetIds: ["audio-current", "audio-old"],
+        recentVideoAssetIds: ["video-current", "video-old"],
       },
     });
   });
