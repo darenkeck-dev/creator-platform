@@ -110,6 +110,7 @@ Migration note:
 - Processing deploy no longer builds a tone-analysis container image; the tone worker is a Node Lambda bundled from `@media-manager/tone-core`.
 - Current prod tone worker is a zip Lambda on `nodejs22.x` with the account-local ffmpeg layer attached.
 - Ready tone analyses generated before display-field deployment may need the tone display backfill before the UI can render their Analysis section.
+- Darenkeck resume PDF generation uses `/dev?print=1`; this internal mode must remain free of combo/HLS requests so content preparation does not depend on playback services.
 
 ## Generic asset jobs
 

@@ -33,6 +33,7 @@
 14. The implemented `ComboTonePredictor` boundary computes combo tone on demand from current effective audio/video vectors. `combo-tone-predictor/v0` is deterministic (`0.60 * audio + 0.40 * video`); a future learned residual may use server-derived sparse combo labels and review-time source snapshots without introducing a combo-vector index. Sparse labels are training evidence for reviewed dimensions, not persisted predicted combo vectors.
 15. The deployed walking backend uses `POST /public/combos/select` with explicit `mode="walk"`. S3 Vectors performs filtered Euclidean retrieval of audio/video source candidates; the application forms pairs, predicts transient 10-dimensional combo tones, and ranks them with exact squared Euclidean distance. Retrieval is capped at 100 eligible sources per type with no source-distance cutoff; the nearest five are sampled with weight `1 / (1 + distance)`. Vector queries abort after four seconds so the 15-second Lambda retains time for random fallback.
 16. The same endpoint supports `mode="search"`. Shared picker words map to a sparse taxonomy-v2 query; direct typed retrieval is supplemented by target-conditioned queries from three audio and three video anchors, then transient predicted combo tones are reranked by exact squared distance over requested dimensions only. Search establishes a new walk anchor and resets client history.
+17. The Darenkeck homepage keeps one `SlotManager` as playback authority. Its curiosity-gated tone explorer submits selected words as a one-shot search, continues through bounded nearby walks, and uses the legacy random endpoint for both immediate and automatic transitions when no words are submitted.
 
 Eventing note: EventBridge is the common router. Separate SQS queues keep conversion and tone analysis operationally isolated so tone retries/backlogs do not delay playback processing.
 
@@ -68,14 +69,22 @@ Media Manager controlled explorer:
 - The explorer reuses `packages/shared` tone-word and playback UI, proxies selection through authenticated same-origin `/api/public/combos/select`, and shows requested/resolved mode, distance, predictor, fallback, and bounded-history diagnostics.
 - Playback completion walks automatically by default; manual walking and keyboard play/pause remain available.
 
+Darenkeck homepage explorer:
+
+- A safe-area curiosity control opens a one-time locally acknowledged explainer before revealing the shared adaptive picker.
+- Opening the explorer temporarily collapses the bulletin; closing it restores the prior bulletin state.
+- Selected words use the shared review-style submit pile. Submit remains available with no words, which switches playback to a fully random sequence.
+- `App` is the persistent React Router layout for `/` and `/dev`; it owns the fixed player, slot manager, mute state, picker state, and random/search/walk journey while child route content changes through an outlet.
+
 ## Public developer profile
 
 - Route: `/dev`
-- `apps/darenkeck/src/main.tsx` defines the public route table with React Router. Current routes are `/`, `/dev`, and `*`.
+- `apps/darenkeck/src/main.tsx` nests `/` and lazy `/dev` under the persistent `App` experience layout; `*` remains outside it.
 - CloudFront's existing `403/404 -> /index.html` fallback supports direct requests to the static SPA route.
 - The route lazy-loads `DevPage`, which imports fetched `content/resume.md` as a Vite raw asset and renders it with `react-markdown`, `remark-gfm`, and `remark-frontmatter`.
 - YAML frontmatter is recognized and omitted from the document output. Resume headings, lists, links, and typography are mapped to styled React components.
-- A print media stylesheet converts the dark web presentation to a compact white, black-text US Letter layout. Playwright prints `/dev` through a temporary Vite development server to `public/daren-keck-resume.pdf`; Vite then copies it into `dist`, and the page exposes it through a Download PDF action.
+- Normal `/dev` renders a scrolling translucent resume over the fixed playing combination and retains global mute/tone controls. A print media stylesheet converts it to a compact white, black-text US Letter layout.
+- Playwright prints internal route `/dev?print=1` through a temporary Vite development server to `public/daren-keck-resume.pdf`. Print mode skips combo initialization, media, scrims, and global controls; the generator fails if a combo or HLS request occurs.
 - The homepage links to the developer profile, and the route is included in `public/sitemap.xml`.
 
 ## Planned public content pipeline

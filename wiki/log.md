@@ -1,11 +1,35 @@
 # Wiki Log
 
+## [2026-08-03] web | persistent Darenkeck experience
+
+- Nested `/` and lazy `/dev` under the persistent Darenkeck `App` layout so the same player, audio state, tone selections, and random/search/walk journey survive SPA navigation and browser Back.
+- Rendered the scrolling resume as a translucent foreground over fixed continuing playback, retained global mute/tone controls, and made suppressed background video keyboard-inert.
+- Added `/dev?print=1` media suppression with generator request assertions plus a Playwright continuity smoke covering player identity, request count, mute state, and selected words.
+- Added left-aligned `Download` and a right-aligned homepage-style minimize control inside the resume card; print generation asserts that this control row is hidden.
+- Removed the homepage Links heading, added the boxed maximize icon to Dev work, and marked Wayfarer Records with an external-link arrow.
+- Added a subtle translucent black backdrop and blur behind selected tone-word chips for readability over resume content and varied media.
+- Applied the same translucent backdrop and blur to top tone-word suggestions while retaining a bright selected state.
+
+## [2026-08-03] web | Darenkeck tone explorer
+
+- Added a curiosity-gated homepage tone explorer with a versioned local first-use explainer, shared top keyword picker and bottom submit pile, bulletin collapse/restore, selected-word search, five-combo/three-audio automatic walking, and a fully random zero-word mode.
+- Generalized the Darenkeck slot manager around one serialized next-combo selector, moved explorer request/history and submit-pile behavior into `packages/shared`, and added focused journey, preference, and manager tests. Publishing and browser validation remain pending.
+- Replaced the global Darenkeck canvas gradient with solid black across all routes.
+- Kept the handwritten name beside the minimize control while expanded and beside the restored maximize control at viewport-right when minimized; Tone Submit uses matching viewport-left padding, selected words stack upward, and the active tone control changes to an `X`.
+- Added a crossfade/slide and borderless card expansion transition between minimized and expanded bulletin states; maximizing the bulletin now also exits tone mode.
+- Kept the tone picker mounted while its overlay is closed so the `X` hides the UI without clearing selected words or changing the active playback journey.
+
+## [2026-08-03] docs | future ideas backlog
+
+- Added a canonical deduplicated future-ideas page for tone extraction vNext and hybrid natural-language clip search across tone and concrete content.
+
 ## [2026-08-03] web/backend | shared tone explorer and search
 
 - Moved the duplicated 54-word review hierarchy and deterministic adaptive suggestion logic into browser-safe `tone-core`; added reusable `useToneWordPicker` and `ToneWordPicker` exports in `packages/shared` and migrated combo/audio/video reviews without changing their exploration modes.
 - Added sparse taxonomy-v2 tone queries, zero-filled approximate source retrieval, exact masked combo-tone distance, and target-conditioned complementary source queries bounded to three direct anchors per type and 20 counterpart matches per anchor.
 - Extended `POST /public/combos/select` with strict `mode="search"` requests and versioned search/fallback metadata while retaining existing walk contracts and random fallback.
 - Added a Media Manager `/combos` controlled explorer above the existing review list with initial random playback, combined tone-word search, manual and end-of-playback walking, five-combo/three-audio history, keyboard playback control, selection diagnostics, and review links.
+- Enabled sound by default in the Media Manager explorer, aligned tone selection with the combo review overlay, reused its submit control to establish a new walk anchor, moved the unmuted speaker waves up two pixels, and kept the mute control above the tone overlay.
 - Deployed the search backend with the final three-anchor complementary retrieval bound. A production `serene + loving` request returned `resolvedMode="search"` with masked distance and dimensions; walking from that result returned `resolvedMode="walk"` with new audio while retaining the video. The first post-deploy search took 5.4 seconds during cold start, while two warm searches took 1.2-1.5 seconds. The Media Manager web UI built locally but is not published from this repository.
 
 ## [2026-08-03] backend | predicted combo-tone walk endpoint

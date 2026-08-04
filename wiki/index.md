@@ -9,6 +9,7 @@ Quick LLM context hub for the current project state.
 - [Recent Changes](recent-changes.md) - high-signal commit timeline and behavior changes.
 - [Deploy and Ops](deploy-and-ops.md) - deploy commands, environments, and operational checks.
 - [Open Issues](open-issues.md) - active risks, TODOs, and likely next work.
+- [Future Ideas](future-ideas.md) - deduplicated ideas that are not active commitments.
 - [Log](log.md) - append-only timeline snapshots.
 
 ## Source Docs

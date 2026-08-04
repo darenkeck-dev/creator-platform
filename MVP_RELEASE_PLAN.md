@@ -407,18 +407,19 @@ Exit criteria:
 
 ## Phase 8: `darenkeck.com` Integration
 
-- [ ] Reuse the background `ComboPlayer` experience.
-- [ ] Add the adaptive tone keyword picker as the MVP query input.
-- [ ] Submit keyword input to the global tone-search mode.
-- [ ] On playback completion, request a walk continuation.
-- [ ] Reset walk state when new tone input is submitted.
-- [ ] Preserve recent combo/audio history across automatic transitions.
+- [x] Reuse the background `ComboPlayer` experience.
+- [x] Add the adaptive tone keyword picker as the MVP query input.
+- [x] Submit keyword input to the global tone-search mode.
+- [x] On playback completion, request a walk continuation.
+- [x] Reset walk state when new tone input is submitted.
+- [x] Preserve recent combo/audio history across automatic transitions.
+- [x] Preserve player, mute, tone selection, and walk state across homepage and `/dev` navigation.
 - [ ] Add public combo review submission to the current combination.
 - [ ] Show clear loading, retry, and no-result states.
-- [ ] Keep random playback available if tone search fails.
-- [ ] Ensure controls remain readable over varied video backgrounds.
-- [ ] Support keyboard input, focus visibility, and reduced-motion preferences.
-- [ ] Initially gate the explorer behind a mode, query parameter, or controlled rollout if needed.
+- [x] Keep random playback available if tone search fails.
+- [x] Ensure controls remain readable over varied video backgrounds.
+- [x] Support keyboard input, focus visibility, and reduced-motion preferences.
+- [x] Initially gate the explorer behind a mode, query parameter, or controlled rollout if needed.
 - [ ] Promote it to the default homepage behavior only after smoke validation.
 
 Free-text tone input is post-MVP unless it produces a deterministic, versioned `ToneQuery` in the same 10-dimensional space. The constrained keyword picker is the MVP input method.

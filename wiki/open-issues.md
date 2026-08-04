@@ -12,7 +12,7 @@
 - Decide whether existing `tone-taxonomy/v1` asset analyses should be reanalyzed or left historical now that new analyses emit `tone-taxonomy/v2`.
 - Compare a larger sample of deployed S3 Vectors walk results against exact local calculations before broad homepage rollout.
 - Calibrate a maximum acceptable masked search distance from controlled-explorer observations before broad homepage rollout.
-- Enable Darenkeck walk mode behind a controlled flag with bounded five-combo/three-audio history.
+- Publish and validate the persistent Darenkeck tone explorer/resume experience across the target desktop/mobile browser matrix; source integration, bounded history, route continuity smoke, and print isolation are complete.
 - Define deterministic file-to-route mapping and frontmatter metadata extraction for `/news`, `/dev/news`, and project/profile content; `/dev` already renders the fetched resume Markdown.
 - Add collection indexing for fetched `apps/darenkeck/.generated-content/content/`; defer MDX unless embedded React components become necessary.
 - Decide how content-repository commits trigger site deployment and how a private repository, if used, supplies read-only credentials.
