@@ -106,6 +106,7 @@
       "name": "@media-manager/shared",
       "version": "1.0.1",
       "dependencies": {
+        "@media-manager/contracts": "workspace:*",
         "@media-manager/tone-core": "workspace:*",
       },
       "devDependencies": {

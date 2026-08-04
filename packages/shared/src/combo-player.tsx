@@ -227,10 +227,10 @@ export function ComboPlayer({
               <path d="M21 9l-5 6" />
             </>
           ) : (
-            <>
+            <g transform="translate(0 -2)">
               <path d="M16 10.5c1 .8 1.5 2 1.5 3.5s-.5 2.7-1.5 3.5" />
               <path d="M18.8 7.7c1.7 1.5 2.7 3.8 2.7 6.3s-1 4.8-2.7 6.3" />
-            </>
+            </g>
           )}
         </svg>
       </button>
@@ -833,12 +833,12 @@ export function ComboPlayer({
       <section className={`relative h-full w-full overflow-hidden ${className ?? ""}`}>
         {showBuiltInMuteControl
           ? renderAudioToggleButton(
-              "pointer-events-auto absolute z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/40 bg-black/45 text-white shadow-lg backdrop-blur-sm",
+              "pointer-events-auto absolute z-[130] inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/40 bg-black/45 text-white shadow-lg backdrop-blur-sm",
               { left: 16, top: 16 }
             )
           : null}
         <video
-          aria-label={snapshot.isPlaying ? "Pause combo" : "Play combo"}
+          aria-label={suppressUi ? undefined : snapshot.isPlaying ? "Pause combo" : "Play combo"}
           className="h-full w-full object-cover will-change-transform"
           controls={false}
           disablePictureInPicture
@@ -868,25 +868,29 @@ export function ComboPlayer({
           }}
           onPause={() => handlePlaybackPausedSignal(ComboTrackKind.Video)}
           onPlay={handlePlaybackStartedSignal}
-          onClick={() => void togglePlayback()}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              void togglePlayback();
-            }
-          }}
+          onClick={suppressUi ? undefined : () => void togglePlayback()}
+          onKeyDown={
+            suppressUi
+              ? undefined
+              : (event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    void togglePlayback();
+                  }
+                }
+          }
           onTimeUpdate={() => {
             handleTimelineTimeUpdateSignal();
           }}
           ref={assignVideoElement}
-          role="button"
+          role={suppressUi ? undefined : "button"}
           style={{
             objectFit: "cover",
             objectPosition: "50% 50%",
             transform: "scale(1.08)",
             transformOrigin: "center center",
           }}
-          tabIndex={0}
+          tabIndex={suppressUi ? -1 : 0}
         />
         <audio
           muted={effectiveAudioMuted}

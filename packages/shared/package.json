@@ -20,6 +20,7 @@
     "react-dom": "^19.0.0"
   },
   "dependencies": {
+    "@media-manager/contracts": "workspace:*",
     "@media-manager/tone-core": "workspace:*"
   },
   "devDependencies": {

@@ -6,20 +6,22 @@ import {
   type PublicComboSelectionResponse,
   type PublicRandomComboResponse,
 } from "@media-manager/contracts";
-import { ToneWordPicker, useToneWordPicker } from "@media-manager/shared";
-import { ArrowRight, Search, X } from "lucide-react";
+import {
+  EMPTY_COMBO_EXPLORER_HISTORY,
+  ToneWordPicker,
+  ToneWordSubmitPile,
+  advanceComboExplorerHistory,
+  buildComboSearchRequest,
+  buildComboWalkRequest,
+  useToneWordPicker,
+  type ComboExplorerHistory,
+} from "@media-manager/shared";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
 import { ComboPlayer } from "@/components/combo-player";
 import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  EMPTY_COMBO_EXPLORER_HISTORY,
-  advanceComboExplorerHistory,
-  buildComboSearchRequest,
-  buildComboWalkRequest,
-  type ComboExplorerHistory,
-} from "@/lib/public-combo-explorer";
 import { cn } from "@/lib/utils";
 
 type ExplorerCombo = Pick<
@@ -32,6 +34,8 @@ type ExplorerCombo = Pick<
   | "videoSrc"
   | "audioSrc"
 >;
+
+const MIN_KEYWORDS_TO_SUBMIT = 3;
 
 export function ComboExplorer({
   initialCombo,
@@ -49,6 +53,7 @@ export function ComboExplorer({
   const picker = useToneWordPicker({
     seed: "combo-explorer",
     explorationMode: "distinct-other-roots",
+    maxSelectedWords: 6,
   });
 
   async function requestSelection(request: PublicComboSelectionRequest) {
@@ -129,7 +134,7 @@ export function ComboExplorer({
             autoPlay
             className="h-full w-full"
             comboId={combo.comboId}
-            defaultAudioMuted
+            defaultAudioMuted={false}
             key={combo.comboId}
             onTimelineEnded={() => {
               if (autoWalk) void walk();
@@ -146,7 +151,7 @@ export function ComboExplorer({
           </div>
         )}
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black via-black/80 to-transparent px-3 pb-5 pt-16 sm:px-6">
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-[120] px-4 py-4 sm:px-6 sm:py-6">
           <ToneWordPicker
             className="pointer-events-auto"
             onNext={picker.showNextSuggestions}
@@ -156,35 +161,36 @@ export function ComboExplorer({
             variant="combo-overlay"
           />
         </div>
+
+        {picker.selectedWords.length > 0 ? (
+          <div
+            className="pointer-events-none"
+            style={{
+              bottom: 24,
+              left: 24,
+              maxWidth: "calc(100% - 3rem)",
+              position: "absolute",
+              zIndex: 120,
+            }}
+          >
+            <ToneWordSubmitPile
+              maxColumns={2}
+              onSubmit={() => void search()}
+              onToggleWord={picker.toggleWord}
+              selectedWords={picker.selectedWords}
+              submitDisabled={
+                pendingMode !== null || picker.selectedWords.length < MIN_KEYWORDS_TO_SUBMIT
+              }
+              submitTitle="Start tone walk"
+              submitting={pendingMode === "search"}
+              wordTitle={(keyword) => `Remove ${keyword} from this walk.`}
+            />
+          </div>
+        ) : null}
       </div>
 
       <div className="space-y-4 p-4 sm:p-5">
-        <div className="flex min-h-8 flex-wrap gap-2">
-          {picker.selectedWords.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Select at least one tone word.</p>
-          ) : null}
-          {picker.selectedWords.map((word) => (
-            <button
-              className="inline-flex items-center gap-1 rounded-full border bg-muted px-2.5 py-1 text-xs font-medium transition hover:bg-muted/70"
-              key={word}
-              onClick={() => picker.toggleWord(word)}
-              type="button"
-            >
-              {word}
-              <X aria-hidden="true" className="h-3 w-3" />
-              <span className="sr-only">Remove {word}</span>
-            </button>
-          ))}
-        </div>
-
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            disabled={picker.selectedWords.length === 0 || pendingMode !== null}
-            onClick={search}
-          >
-            <Search aria-hidden="true" className="h-4 w-4" />
-            {pendingMode === "search" ? "Searching…" : "Find combo"}
-          </Button>
           <Button disabled={!combo || pendingMode !== null} onClick={walk} variant="outline">
             <ArrowRight aria-hidden="true" className="h-4 w-4" />
             {pendingMode === "walk" ? "Walking…" : "Walk nearby"}

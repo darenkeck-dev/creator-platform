@@ -82,5 +82,7 @@ export * from "./combo-playback";
 export * from "./combo-player-types";
 export * from "./combo-player";
 export * from "./combo-tone-review-player";
+export * from "./public-combo-explorer";
 export * from "./tone-word-picker";
+export * from "./tone-word-submit-pile";
 export * from "./browser-env";

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { ComboPlayer } from "./combo-player";
 import { ToneWordPicker, useToneWordPicker } from "./tone-word-picker";
+import { ToneWordSubmitPile } from "./tone-word-submit-pile";
 
 export type ComboToneReviewPayload = {
   targetType: "combo";
@@ -31,41 +32,9 @@ export type ComboToneReviewPlayerProps = {
 };
 
 const DEFAULT_MIN_KEYWORDS_TO_SUBMIT = 3;
-const MAX_KEYWORD_PILE_COLUMNS = 4;
 
 function cx(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
-}
-
-function keywordPilePlacements(keywords: string[]) {
-  const heights = [1, 0];
-
-  return keywords.map((keyword) => {
-    let column = 0;
-    const existingColumns = heights.map((height, index) => ({ height, index }));
-    const allExistingColumnsEven = heights.every((height) => height === heights[0]);
-
-    if (
-      allExistingColumnsEven &&
-      (heights[0] ?? 0) >= 2 &&
-      heights.length < MAX_KEYWORD_PILE_COLUMNS
-    ) {
-      column = heights.length;
-      heights.push(0);
-    } else {
-      const eligibleColumns = existingColumns.filter(({ index }) => {
-        return index === 0 || (heights[index - 1] ?? 0) > (heights[index] ?? 0);
-      });
-      column =
-        eligibleColumns.sort(
-          (left, right) => left.height - right.height || left.index - right.index
-        )[0]?.index ?? 0;
-    }
-
-    const rowFromBottom = heights[column] ?? 0;
-    heights[column] = rowFromBottom + 1;
-    return { column, keyword, rowFromBottom };
-  });
 }
 
 export function ComboToneReviewPlayer({
@@ -89,12 +58,6 @@ export function ComboToneReviewPlayer({
   });
   const [submitting, setSubmitting] = useState(false);
   const [submitSucceeded, setSubmitSucceeded] = useState(false);
-  const keywordPlacements = keywordPilePlacements(selectedKeywords);
-  const pileRows = Math.max(
-    1,
-    ...keywordPlacements.map((placement) => placement.rowFromBottom + 1)
-  );
-  const pileGridRows = pileRows + 1;
 
   useEffect(() => {
     setSubmitting(false);
@@ -122,52 +85,6 @@ export function ComboToneReviewPlayer({
       setSubmitting(false);
     }
   }
-
-  const submitButton =
-    selectedKeywords.length > 0 ? (
-      <button
-        className="inline-flex w-28 items-center justify-center rounded-full border border-sky-200/90 bg-sky-400 px-5 py-2 text-sm font-semibold text-black shadow-[0_0_24px_rgba(56,189,248,0.55)] transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:border-white/35 disabled:bg-black/55 disabled:text-white/60 disabled:shadow-none"
-        disabled={submitting || selectedKeywords.length < minKeywordsToSubmit}
-        onClick={() => void submitReview()}
-        title="Submit review"
-        type="button"
-      >
-        {submitting ? (
-          <svg aria-hidden="true" className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              d="M4 12a8 8 0 018-8"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeWidth="4"
-            />
-          </svg>
-        ) : submitSucceeded ? (
-          <svg
-            aria-hidden="true"
-            className="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2.5"
-            viewBox="0 0 24 24"
-          >
-            <path d="M20 6L9 17l-5-5" />
-          </svg>
-        ) : (
-          "Submit"
-        )}
-      </button>
-    ) : null;
 
   return (
     <div
@@ -230,27 +147,16 @@ export function ComboToneReviewPlayer({
             zIndex: 120,
           }}
         >
-          <div
-            className="pointer-events-auto grid items-end gap-2 overflow-visible"
-            style={{
-              gridTemplateColumns: `repeat(${Math.max(2, Math.min(MAX_KEYWORD_PILE_COLUMNS, keywordPlacements.length + 1))}, max-content)`,
-              gridTemplateRows: `repeat(${pileGridRows}, max-content)`,
-            }}
-          >
-            <div style={{ gridColumn: 1, gridRow: pileGridRows }}>{submitButton}</div>
-            {keywordPlacements.map(({ column, keyword, rowFromBottom }) => (
-              <button
-                className="rounded-full border border-sky-400 bg-transparent px-3 py-1.5 text-sm text-white shadow-sm transition hover:bg-sky-400/15"
-                key={keyword}
-                onClick={() => toggleReviewKeyword(keyword)}
-                style={{ gridColumn: column + 1, gridRow: pileGridRows - rowFromBottom }}
-                title={`Remove ${keyword} from this review.`}
-                type="button"
-              >
-                {keyword}
-              </button>
-            ))}
-          </div>
+          <ToneWordSubmitPile
+            onSubmit={() => void submitReview()}
+            onToggleWord={toggleReviewKeyword}
+            selectedWords={selectedKeywords}
+            submitDisabled={selectedKeywords.length < minKeywordsToSubmit}
+            submitSucceeded={submitSucceeded}
+            submitTitle="Submit review"
+            submitting={submitting}
+            wordTitle={(keyword) => `Remove ${keyword} from this review.`}
+          />
         </div>
       ) : null}
 

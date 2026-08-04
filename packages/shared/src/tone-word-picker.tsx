@@ -132,10 +132,10 @@ export function ToneWordPicker({
           return (
             <button
               className={cx(
-                "rounded-full border px-3 py-1.5 text-sm transition hover:border-white/70 hover:bg-white/20",
+                "rounded-full border px-3 py-1.5 text-sm backdrop-blur-sm transition hover:border-white/70",
                 selected
-                  ? "border-white/80 bg-white/85 text-black"
-                  : "border-white/30 bg-white/10 text-white"
+                  ? "border-white/80 bg-white/85 text-black hover:bg-white"
+                  : "border-white/40 bg-black/45 text-white hover:bg-black/60"
               )}
               key={word.label}
               onClick={() => onToggleWord(word.label)}

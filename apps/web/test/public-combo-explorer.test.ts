@@ -6,7 +6,7 @@ import {
   advanceComboExplorerHistory,
   buildComboSearchRequest,
   buildComboWalkRequest,
-} from "../lib/public-combo-explorer";
+} from "@media-manager/shared";
 
 describe("combo explorer state", () => {
   it("builds a combined tone-word search that resets history", () => {
