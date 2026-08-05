@@ -1,5 +1,13 @@
+import type { PublicComboPredictedTone } from "@media-manager/contracts";
 import { ToneWordPicker, ToneWordSubmitPile, useToneWordPicker } from "@media-manager/shared";
-import { useEffect, useEffectEvent, useRef, type RefObject } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type RefObject } from "react";
+
+import {
+  TONE_WHEEL_DIMENSIONS,
+  toneWheelPoints,
+  toneWheelPolygon,
+  toneWheelValues,
+} from "../lib/tone-wheel";
 
 type ToneExplorerProps = {
   disabled: boolean;
@@ -148,23 +156,63 @@ export function ToneExplorerExplainer({
   );
 }
 
-export function ToneExplorerIcon() {
+export function ToneExplorerIcon({ tone }: { tone?: PublicComboPredictedTone }) {
+  const [displayedValues, setDisplayedValues] = useState(() => toneWheelValues(tone));
+  const displayedValuesRef = useRef(displayedValues);
+  displayedValuesRef.current = displayedValues;
+
+  useEffect(() => {
+    const startValues = displayedValuesRef.current;
+    const targetValues = toneWheelValues(tone);
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const duration = reducedMotion ? 0 : 550;
+    const startedAt = performance.now();
+    let frameId = 0;
+
+    const animate = (now: number) => {
+      const progress = duration === 0 ? 1 : Math.min(1, (now - startedAt) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const nextValues = startValues.map(
+        (value, index) => value + ((targetValues[index] ?? value) - value) * eased
+      );
+      displayedValuesRef.current = nextValues;
+      setDisplayedValues(nextValues);
+      if (progress < 1) frameId = window.requestAnimationFrame(animate);
+    };
+
+    frameId = window.requestAnimationFrame(animate);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [tone]);
+
+  const points = toneWheelPoints(displayedValues);
+
   return (
     <svg
       aria-hidden="true"
+      data-tone-wheel={tone ? "predicted" : "fallback"}
       fill="none"
-      height="24"
+      height="36"
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
-      strokeWidth="1.7"
+      strokeWidth="1.2"
       viewBox="0 0 24 24"
-      width="24"
+      width="36"
     >
-      <circle cx="12" cy="12" r="2.4" />
-      <path d="M4.5 9.2c2.8-4.7 9.3-6.1 13.7-2.8 3.4 2.6 2.5 6.5-.8 8.8-3.6 2.6-9.5 2.7-12.7-.7-2.1-2.2-1.6-4.2-.2-5.3Z" />
-      <path d="M8.1 3.8c4.5 1 8.5 5.6 8.1 10.1-.3 3.7-3.3 6.8-6.4 5.7-3.5-1.3-4.8-7.1-3.1-11.4.8-2.1 1.3-3.4 1.4-4.4Z" />
-      <circle cx="18.8" cy="6.2" fill="currentColor" r="1" stroke="none" />
+      <circle cx="12" cy="12" opacity="0.2" r="5.8" strokeDasharray="1.2 1.8" />
+      {points.map((point, index) => (
+        <line
+          key={TONE_WHEEL_DIMENSIONS[index]}
+          opacity="0.45"
+          strokeWidth="0.7"
+          x1="12"
+          x2={point.x}
+          y1="12"
+          y2={point.y}
+        />
+      ))}
+      <polygon fill="currentColor" fillOpacity="0.12" points={toneWheelPolygon(points)} />
+      <circle cx="12" cy="12" fill="currentColor" r="1.5" stroke="none" />
     </svg>
   );
 }

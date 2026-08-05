@@ -34,6 +34,7 @@ export type ComboPayload = {
   audioTitle: string;
   videoSrc: string;
   audioSrc: string;
+  predictedTone?: PublicComboPredictedTone;
 };
 
 export type SlotPlaybackAssignment = {
@@ -250,3 +251,4 @@ export class SlotManager {
     });
   }
 }
+import type { PublicComboPredictedTone } from "@media-manager/contracts";

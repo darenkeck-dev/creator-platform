@@ -69,6 +69,30 @@ function audioAsset(id: string) {
   };
 }
 
+function assetWithTone<T extends ReturnType<typeof videoAsset>>(asset: T, tone: number): T {
+  return {
+    ...asset,
+    toneAnalysis: {
+      status: "ready",
+      profile: "openai-primary-v1",
+      toneTaxonomyVersion: "tone-taxonomy/v2",
+      scores: {
+        valence: tone,
+        arousal: tone,
+        dominance: tone,
+        warmth: tone,
+        tension: tone,
+        intimacy: tone,
+        instability: tone,
+        nostalgia: tone,
+        beauty: tone,
+        menace: tone,
+      },
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+  } as T;
+}
+
 function comboItem(id: string, overrides?: Record<string, unknown>) {
   return {
     id,
@@ -598,7 +622,7 @@ describe("api-combos lambda", () => {
           return {
             Items: [
               {
-                ...videoAsset("video-1"),
+                ...assetWithTone(videoAsset("video-1"), 0.5),
                 visibility: "public",
                 stream: { hlsMasterUrl: "https://cdn.example.com/video/master.m3u8" },
               },
@@ -610,7 +634,7 @@ describe("api-combos lambda", () => {
           return {
             Items: [
               {
-                ...audioAsset("audio-1"),
+                ...assetWithTone(audioAsset("audio-1"), -0.5),
                 visibility: "public",
                 stream: { hlsMasterUrl: "https://cdn.example.com/audio/master.m3u8" },
               },
@@ -632,6 +656,9 @@ describe("api-combos lambda", () => {
     expect(result.body).toContain('"comboId":"public-video-1-audio-1"');
     expect(result.body).toContain('"videoSrc":"https://cdn.example.com/video/master.m3u8"');
     expect(result.body).toContain('"audioSrc":"https://cdn.example.com/audio/master.m3u8"');
+    const predictedValues = Object.values(JSON.parse(result.body).predictedTone as object);
+    expect(predictedValues).toHaveLength(10);
+    for (const value of predictedValues) expect(value as number).toBeCloseTo(-0.1);
   });
 
   it("filters out previous audio asset id for derived random combos", async () => {

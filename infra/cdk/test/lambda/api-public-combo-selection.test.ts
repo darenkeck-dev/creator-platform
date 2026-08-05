@@ -120,6 +120,18 @@ describe("public combo selection API", () => {
       distance: expect.any(Number),
     });
     expect(body.selection.distance).toBeCloseTo(0.256);
+    expect(body.predictedTone).toEqual({
+      valence: 0.16,
+      arousal: 0.16,
+      dominance: 0.16,
+      warmth: 0.16,
+      tension: 0.16,
+      intimacy: 0.16,
+      instability: 0.16,
+      nostalgia: 0.16,
+      beauty: 0.16,
+      menace: 0.16,
+    });
     expect(metrics).toEqual([expect.objectContaining({ statusCode: 200, resolvedMode: "walk" })]);
   });
 

@@ -11,6 +11,18 @@ const combo = (id: string): ComboPayload => ({
   audioTitle: `Audio ${id}`,
   videoSrc: `https://example.com/video-${id}.m3u8`,
   audioSrc: `https://example.com/audio-${id}.m3u8`,
+  predictedTone: {
+    valence: 0.1,
+    arousal: 0.2,
+    dominance: 0.3,
+    warmth: 0.4,
+    tension: 0.5,
+    intimacy: 0.6,
+    instability: 0.7,
+    nostalgia: 0.8,
+    beauty: 0.9,
+    menace: 1,
+  },
 });
 
 describe("SlotManager", () => {
@@ -35,6 +47,7 @@ describe("SlotManager", () => {
 
     expect(reasons).toEqual(["init", "tone-submit", "slot-playback-ended"]);
     expect(assignments).toEqual(["combo-initial", "combo-next", "combo-next"]);
+    expect(manager.getCurrentCombo()?.predictedTone?.menace).toBe(1);
   });
 
   it("queues a manual tone request behind an automatic transition", async () => {

@@ -1,14 +1,6 @@
 import { ComboPlayer } from "@media-manager/shared";
 
-type ComboPayload = {
-  comboId: string;
-  videoAssetId: string;
-  audioAssetId: string;
-  videoTitle: string;
-  audioTitle: string;
-  videoSrc: string;
-  audioSrc: string;
-};
+import type { ComboPayload } from "../lib/slot-manager";
 
 type SingleComboSlotProps = {
   combo: ComboPayload;

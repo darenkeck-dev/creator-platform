@@ -37,6 +37,18 @@ try {
         audioTitle: "Continuity Audio",
         videoSrc: "https://media.invalid/video.m3u8",
         audioSrc: "https://media.invalid/audio.m3u8",
+        predictedTone: {
+          valence: 0.1,
+          arousal: 0.2,
+          dominance: 0.3,
+          warmth: 0.4,
+          tension: 0.5,
+          intimacy: 0.6,
+          instability: 0.7,
+          nostalgia: 0.8,
+          beauty: 0.9,
+          menace: 1,
+        },
       }),
     });
   });
@@ -44,6 +56,9 @@ try {
 
   await page.goto(`http://127.0.0.1:${address.port}/`, { waitUntil: "domcontentloaded" });
   await page.locator("video").waitFor({ state: "attached" });
+  await page
+    .locator('button[aria-label="Explore combinations by tone"] svg[data-tone-wheel="predicted"]')
+    .waitFor({ state: "visible" });
   await page.evaluate(() => {
     (window as Window & { continuityVideo?: HTMLVideoElement }).continuityVideo =
       document.querySelector("video") ?? undefined;

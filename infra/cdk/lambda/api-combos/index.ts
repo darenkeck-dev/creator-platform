@@ -37,6 +37,7 @@ import {
   safeReadAssetRecordWithUpgrade,
 } from "../shared/asset-record-versioning";
 import { materializeCuratorToneAdjustment } from "../shared/curator-tone-adjustment";
+import { predictPublicComboTone } from "../shared/public-combo-tone";
 import { enqueueVectorSyncMessage } from "../shared/vector-sync-message";
 
 type HttpEvent = {
@@ -69,6 +70,7 @@ type PublicRandomCandidate = {
   audioTitle: string;
   videoSrc: string;
   audioSrc: string;
+  predictedTone?: NonNullable<z.infer<typeof PublicRandomComboResponseSchema>["predictedTone"]>;
 };
 
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -1064,6 +1066,7 @@ async function pickDerivedPublicPairCandidate(
       audioTitle: audioAsset.title,
       videoSrc,
       audioSrc,
+      predictedTone: predictPublicComboTone({ audio: audioAsset, video: videoAsset }),
     };
   }
 
@@ -1117,6 +1120,7 @@ async function pickExistingPublicComboCandidate(
       audioTitle: audioAsset.title,
       videoSrc,
       audioSrc,
+      predictedTone: predictPublicComboTone({ audio: audioAsset, video: videoAsset }),
     };
   }
 
@@ -1146,6 +1150,7 @@ function buildPublicRandomPayload(
     audioTitle: candidate.audioTitle,
     videoSrc: candidate.videoSrc,
     audioSrc: candidate.audioSrc,
+    predictedTone: candidate.predictedTone,
   });
 }
 

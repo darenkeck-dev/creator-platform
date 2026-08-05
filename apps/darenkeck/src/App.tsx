@@ -1,4 +1,7 @@
-import type { PublicComboSelectionRequest } from "@media-manager/contracts";
+import type {
+  PublicComboPredictedTone,
+  PublicComboSelectionRequest,
+} from "@media-manager/contracts";
 import { lazy, Suspense, useEffect, useEffectEvent, useRef, useState } from "react";
 import { useLocation, useOutlet } from "react-router-dom";
 
@@ -27,6 +30,7 @@ import {
   hasAcknowledgedToneExplorer,
   type StorageLike,
 } from "./lib/tone-explorer-preference";
+import { TONE_WHEEL_DIMENSIONS } from "./lib/tone-wheel";
 
 const SingleComboSlot = lazy(async () => {
   const module = await import("./components/SingleComboSlot");
@@ -147,6 +151,22 @@ function getToneExplorerStorage(): StorageLike | null {
   }
 }
 
+function parsePredictedTone(value: unknown): PublicComboPredictedTone | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const candidate = value as Record<string, unknown>;
+  const entries = TONE_WHEEL_DIMENSIONS.map(
+    (dimension) => [dimension, candidate[dimension]] as const
+  );
+  if (
+    entries.some(
+      ([, score]) => typeof score !== "number" || !Number.isFinite(score) || score < -1 || score > 1
+    )
+  ) {
+    return undefined;
+  }
+  return Object.fromEntries(entries) as PublicComboPredictedTone;
+}
+
 function parseComboPayload(payload: unknown): ComboPayload | null {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -163,6 +183,7 @@ function parseComboPayload(payload: unknown): ComboPayload | null {
   ) {
     return null;
   }
+  const predictedTone = parsePredictedTone(candidate.predictedTone);
   return {
     comboId: candidate.comboId,
     videoAssetId: candidate.videoAssetId,
@@ -171,6 +192,7 @@ function parseComboPayload(payload: unknown): ComboPayload | null {
     audioTitle: candidate.audioTitle,
     videoSrc: candidate.videoSrc,
     audioSrc: candidate.audioSrc,
+    ...(predictedTone ? { predictedTone } : {}),
   };
 }
 
@@ -693,7 +715,7 @@ export function App() {
                 <path d="M18 6L6 18" />
               </svg>
             ) : (
-              <ToneExplorerIcon />
+              <ToneExplorerIcon tone={slotAssignment?.combo.predictedTone} />
             )}
           </button>
 

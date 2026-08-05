@@ -1,9 +1,24 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  PublicComboPredictedToneSchema,
   PublicComboSelectionRequestSchema,
   PublicComboSelectionResponseSchema,
+  PublicRandomComboResponseSchema,
 } from "../src/index.js";
+
+const predictedTone = {
+  valence: 0.1,
+  arousal: 0.2,
+  dominance: 0.3,
+  warmth: 0.4,
+  tension: 0.5,
+  intimacy: 0.6,
+  instability: 0.7,
+  nostalgia: 0.8,
+  beauty: 0.9,
+  menace: 1,
+};
 
 describe("public combo selection contracts", () => {
   it("parses a walk request with bounded default history", () => {
@@ -151,5 +166,31 @@ describe("public combo selection contracts", () => {
         },
       }).success
     ).toBe(false);
+  });
+
+  it("accepts complete predicted combo tone and rejects partial or unbounded values", () => {
+    const playback = {
+      comboId: "public-video-2-audio-2",
+      videoAssetId: "video-2",
+      audioAssetId: "audio-2",
+      videoTitle: "Video 2",
+      audioTitle: "Audio 2",
+      videoSrc: "https://example.com/video.m3u8",
+      audioSrc: "https://example.com/audio.m3u8",
+      predictedTone,
+    };
+
+    expect(
+      PublicRandomComboResponseSchema.safeParse({
+        ...playback,
+        source: "derived",
+        selection: "primary",
+      }).success
+    ).toBe(true);
+    expect(
+      PublicComboPredictedToneSchema.safeParse({ ...predictedTone, menace: 1.1 }).success
+    ).toBe(false);
+    const { menace: _menace, ...partialTone } = predictedTone;
+    expect(PublicComboPredictedToneSchema.safeParse(partialTone).success).toBe(false);
   });
 });

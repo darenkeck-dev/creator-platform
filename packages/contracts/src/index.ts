@@ -645,6 +645,8 @@ export const ComboDeleteResponseSchema = z.object({
   deleted: z.literal(true),
 });
 
+export const PublicComboPredictedToneSchema = AssetToneAnalysisScoresSchema.required().strict();
+
 export const PublicRandomComboResponseSchema = z.object({
   source: z.enum(["derived", "existing"]),
   selection: z.enum(["primary", "fallback"]),
@@ -655,6 +657,7 @@ export const PublicRandomComboResponseSchema = z.object({
   audioTitle: z.string().min(1),
   videoSrc: z.string().url(),
   audioSrc: z.string().url(),
+  predictedTone: PublicComboPredictedToneSchema.optional(),
 });
 
 const PublicComboSelectionHistorySchema = z
@@ -738,6 +741,7 @@ export const PublicComboSelectionResponseSchema = z
     audioTitle: z.string().min(1),
     videoSrc: z.string().url(),
     audioSrc: z.string().url(),
+    predictedTone: PublicComboPredictedToneSchema.optional(),
     selection: PublicComboSelectionMetadataSchema,
   })
   .strict();
@@ -814,6 +818,7 @@ export type ToneReviewListQuery = z.infer<typeof ToneReviewListQuerySchema>;
 export type ToneReviewListResponse = z.infer<typeof ToneReviewListResponseSchema>;
 export type ComboDeleteResponse = z.infer<typeof ComboDeleteResponseSchema>;
 export type PublicRandomComboResponse = z.infer<typeof PublicRandomComboResponseSchema>;
+export type PublicComboPredictedTone = NonNullable<PublicRandomComboResponse["predictedTone"]>;
 export type PublicComboSelectionRequest = z.infer<typeof PublicComboSelectionRequestSchema>;
 export type PublicComboSelectionFallbackReason = z.infer<
   typeof PublicComboSelectionFallbackReasonSchema

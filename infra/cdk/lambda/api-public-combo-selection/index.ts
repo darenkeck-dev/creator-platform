@@ -27,6 +27,7 @@ import {
 import { z } from "zod";
 
 import { assetToneVectorRecordForAsset } from "../shared/asset-tone-vector";
+import { predictPublicComboTone } from "../shared/public-combo-tone";
 import { S3VectorsIndex } from "../shared/s3-vectors-index";
 
 type HttpEvent = {
@@ -505,6 +506,7 @@ async function resolveCandidate(
     audioTitle: audio.title,
     videoSrc,
     audioSrc,
+    predictedTone: predictPublicComboTone({ audio, video }),
     selection,
   });
 }
