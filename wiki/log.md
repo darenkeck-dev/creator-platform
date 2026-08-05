@@ -1,5 +1,17 @@
 # Wiki Log
 
+## [2026-08-04] web/backend | predicted-tone wheel
+
+- Added optional complete `predictedTone` output to public random and controlled-selection contracts, computed from authoritative effective source vectors with `combo-tone-predictor/v0`.
+- Carried predicted tone through Darenkeck combo state and mapped signed values inward/outward around a neutral-radius ten-axis wheel with reduced-motion-aware profile interpolation.
+- Added contract, random/select Lambda, slot-state, wheel-mapping, and route-continuity coverage.
+- Deployed `MediaManagerApiStack`; production random and search responses each returned all ten finite `predictedTone` dimensions within `[-1, 1]`.
+
+## [2026-08-04] web | radial tone control icon
+
+- Replaced the abstract orbital tone control mark with a 36-pixel polar amplitude chart using varied radial samples, a neutral-radius guide, a lightweight connected profile, and a central hub without an outer bounding circle.
+- Darenkeck lint, type-check, and production build passed.
+
 ## [2026-08-04] web/backend | history-preserving fresh-source selection
 
 - Extended bounded selection history with three recent video IDs and carried prior history plus the departing combo into new tone searches.

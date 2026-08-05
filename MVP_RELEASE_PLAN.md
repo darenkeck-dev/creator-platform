@@ -368,6 +368,7 @@ Behavior:
 - [x] Use stable synthetic IDs: `public-<videoAssetId>-<audioAssetId>`.
 - [x] Return selected pair, playback URLs, algorithm version, and selection mode.
 - [x] Return requested/resolved mode, predictor version, exact distance, and explicit fallback reason.
+- [x] Return the complete predicted combo tone when both selected sources have eligible vectors.
 - [ ] Return optional matching keywords or concise selection explanation.
 - [x] Add CORS for the intended public origin.
 - [x] Add request throttling, payload limits, timeout handling, and metrics.

@@ -34,6 +34,7 @@
 15. The deployed walking backend uses `POST /public/combos/select` with explicit `mode="walk"`. S3 Vectors performs filtered Euclidean retrieval of audio/video source candidates; the application forms pairs, predicts transient 10-dimensional combo tones, and ranks them with exact squared Euclidean distance. Retrieval is capped at 100 eligible sources per type with no source-distance cutoff; the nearest five are sampled with weight `1 / (1 + distance)`. Vector queries abort after four seconds so the 15-second Lambda retains time for random fallback.
 16. The same endpoint supports `mode="search"`. Shared picker words map to a sparse taxonomy-v2 query; direct typed retrieval is supplemented by target-conditioned queries from three audio and three video anchors, then transient predicted combo tones are reranked by exact squared distance over requested dimensions only. Search establishes a new walk anchor while retaining bounded prior history.
 17. The Darenkeck homepage keeps one `SlotManager` as playback authority. Its curiosity-gated tone explorer submits selected words as a one-shot search, continues through bounded nearby walks, and uses the legacy random endpoint for both immediate and automatic transitions when no words are submitted.
+18. Public random and selection responses optionally expose the complete predicted combo tone when both source assets have eligible taxonomy-v2 vectors. Darenkeck carries that object through `SlotManager` and maps signed values around a neutral-radius polar wheel; no vector data is persisted on the client.
 
 Eventing note: EventBridge is the common router. Separate SQS queues keep conversion and tone analysis operationally isolated so tone retries/backlogs do not delay playback processing.
 
@@ -60,6 +61,7 @@ Deployed controlled walk path:
 - Current audio and video are always excluded from walks.
 - Client history retains five recent combo IDs plus three recent audio and video IDs.
 - The endpoint returns versioned selection metadata and may resolve to a random fallback.
+- Random and controlled responses include `predictedTone` when both selected source vectors can be rebuilt from authoritative asset records.
 - Fallback relaxes recent combo history first and recent source history second, while always prohibiting both current sources.
 - The legacy random endpoint remains the initialization and operational fallback during rollout.
 
