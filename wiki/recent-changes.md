@@ -2,15 +2,17 @@
 
 ## High-signal recent commits
 
-- `691cd45` - `ComboPlayer` uses audio as master timeline always.
-- `a7747d9` - random combo avoids repeating previous audio (API + darenkeck client), plus markdown source moves to `raw_sources/`.
-- `ce28017` - CloudFront security headers for darenkeck site stack.
-- `2e8a408` - upload UI improvements (type inference, filename title default, visibility control).
-- `3342a8c` - darenkeck site metadata/crawl baseline (robots/sitemap/favicon/meta tags).
-- `e25b0c5` - audio default profile switched to normalized HLS transcode path.
+- `03618a2` - documented the deployed predicted-tone wheel.
+- `6968082` - exposed predicted combo tone and rendered it as an animated radial profile.
+- `850f4ae` - documented fresh-source walk and history behavior.
+- `879a9c7` - added resume route enter/exit transitions.
+- `e86bbab` - preserved combo/audio/video history and required both walk sources to change.
+- `dcb50d1` - documented the persistent Darenkeck tone experience.
+- `c2349af` - persisted Darenkeck playback and tone state across `/` and `/dev`.
 
 ## Recent operational updates
 
+- Added maintained references for the ten tone dimensions, upload-processing dependency flow, curator review experience, and the current vector-backed walk algorithm.
 - Added optional authoritative predicted combo tone to public random/search/walk responses and mapped its ten signed dimensions into an animated Darenkeck polar wheel. Deployed the API and verified complete bounded profiles on production random and search responses.
 - Added bounded video history, history-preserving tone restarts, fresh-audio/fresh-video walk constraints across exact and fallback selection, and visible remove marks on selected tone chips. Deployed the API and verified both sources changed across a history-aware search and subsequent walk.
 - Centralized adaptive tone-word suggestions in `tone-core`, added reusable shared React picker state/UI, preserved review behavior, deployed combined tone-word search with exact masked combo reranking and bounded complementary retrieval, and added a locally built Media Manager `/combos` search/walk explorer.

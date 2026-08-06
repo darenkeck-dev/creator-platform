@@ -13,6 +13,8 @@
 - Compare a larger sample of deployed S3 Vectors walk results against exact local calculations before broad homepage rollout.
 - Calibrate a maximum acceptable masked search distance from controlled-explorer observations before broad homepage rollout.
 - Publish and validate the persistent Darenkeck tone explorer/resume experience across the target desktop/mobile browser matrix; source integration, bounded history, route continuity smoke, and print isolation are complete.
+- Before learning from combo reviews, capture server-derived sparse labels plus review-time audio/video effective vectors, source fingerprints, taxonomy version, and predictor/training schema versions. Unlabeled dimensions must remain unknown rather than neutral.
+- Add a separate anonymous public review boundary only after enforcing stable combo/source validation, minimum keyword rules, idempotency, rate limits, abuse controls, consent copy, and retention/deletion policy.
 - Define deterministic file-to-route mapping and frontmatter metadata extraction for `/news`, `/dev/news`, and project/profile content; `/dev` already renders the fetched resume Markdown.
 - Add collection indexing for fetched `apps/darenkeck/.generated-content/content/`; defer MDX unless embedded React components become necessary.
 - Decide how content-repository commits trigger site deployment and how a private repository, if used, supplies read-only credentials.

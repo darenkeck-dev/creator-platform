@@ -6,10 +6,14 @@ Quick LLM context hub for the current project state.
 
 - [Current State](current-state.md) - what is live, what changed recently, and what matters now.
 - [Architecture Map](architecture-map.md) - system layout (apps, APIs, infra, data flow).
+- [Upload Processing Flow](upload-processing-flow.md) - dependency diagram from browser upload through playback, tone analysis, and vector convergence.
+- [Current Walk Algorithm](walk-algorithm.md) - source-vector retrieval, transient combo prediction, exact ranking, sampling, exclusions, and fallback.
+- [Review Experience Notes](review-experience-notes.md) - current review interaction and rough design direction for vocabulary, playback, storage, and personalization.
 - [Recent Changes](recent-changes.md) - high-signal commit timeline and behavior changes.
 - [Deploy and Ops](deploy-and-ops.md) - deploy commands, environments, and operational checks.
 - [Open Issues](open-issues.md) - active risks, TODOs, and likely next work.
 - [Future Ideas](future-ideas.md) - deduplicated ideas that are not active commitments.
+- [Tone Vector Dimensions](tone-vector-dimensions.md) - concise definitions, poles, and interpretation notes for the ten canonical dimensions.
 - [Log](log.md) - append-only timeline snapshots.
 
 ## Source Docs

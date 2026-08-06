@@ -1,5 +1,26 @@
 # Wiki Log
 
+## [2026-08-06] docs | wiki architecture synthesis
+
+- Added and cross-linked maintained references for tone-vector dimensions, upload-processing dependencies, review experience, and the current S3 Vectors-backed walk algorithm.
+- Updated current/recent state, active risks, and future ideas with the latest commits, public review prerequisites, and the non-identifiable inverse-combo boundary.
+
+## [2026-08-06] docs | current walk algorithm
+
+- Added a detailed reference for walk requests, S3 Vectors source retrieval, effective vectors, transient 60/40 combo prediction, exact ten-dimension ranking, weighted top-five sampling, history exclusions, candidate resolution, and staged random fallback.
+
+## [2026-08-06] docs | review experience notes
+
+- Added rough product and architecture notes covering the current review flow, adaptive keyword selection, responsive behavior, combined playback synchronization, stored review data, and future privacy-aware personalization.
+
+## [2026-08-06] docs | upload processing architecture
+
+- Added a dependency-focused Mermaid diagram and reference tables covering upload confirmation, EventBridge fan-out, isolated conversion and tone-analysis branches, playback readiness, failure boundaries, and vector convergence.
+
+## [2026-08-06] docs | tone vector dimension reference
+
+- Added a concise table defining the ten canonical tone dimensions, signed poles, evidence notes, canonical range, and current combo weighting.
+
 ## [2026-08-04] web/backend | predicted-tone wheel
 
 - Added optional complete `predictedTone` output to public random and controlled-selection contracts, computed from authoritative effective source vectors with `combo-tone-predictor/v0`.

@@ -40,7 +40,7 @@ Eventing note: EventBridge is the common router. Separate SQS queues keep conver
 
 Job note: generic jobs are intended to cover long-running folder-wide actions such as recursive delete and future tone reprocessing. The web app creates/monitors jobs through same-origin Next API proxy routes, while backend execution happens in Lambda workers.
 
-See also: [Current State](current-state.md), [Recent Changes](recent-changes.md).
+See also: [Upload Processing Flow](upload-processing-flow.md), [Current Walk Algorithm](walk-algorithm.md), [Current State](current-state.md), [Recent Changes](recent-changes.md).
 
 ## Public combo path
 
