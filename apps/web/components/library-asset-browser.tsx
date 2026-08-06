@@ -331,9 +331,9 @@ export function LibraryAssetBrowser({ assets, containerId }: Props) {
                 <Link className="font-medium hover:underline" href={assetHref(asset)}>
                   {asset.title}
                 </Link>
-                <p className="truncate text-xs text-muted-foreground">
-                  {asset.type === "folder" ? asset.description || asset.id : asset.id}
-                </p>
+                {asset.type === "folder" && asset.description ? (
+                  <p className="truncate text-xs text-muted-foreground">{asset.description}</p>
+                ) : null}
               </div>
               <AssetTypeIcon asset={asset} />
               {asset.type === "folder" ? (
