@@ -1,5 +1,10 @@
 # Wiki Log
 
+## [2026-08-06] content | authored Mermaid SVG workflow
+
+- Added a pinned manual Mermaid-to-SVG authoring command, responsive light-card Markdown images, and PDF image-load failure checks.
+- Kept Mermaid out of the browser and deployment pipeline: `darenkeck-content` commits both source `.mmd` and generated `media/diagrams/*.svg`, and web/PDF consume the same static SVG.
+
 ## [2026-08-06] docs | wiki architecture synthesis
 
 - Added and cross-linked maintained references for tone-vector dimensions, upload-processing dependencies, review experience, and the current S3 Vectors-backed walk algorithm.

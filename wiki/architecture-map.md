@@ -96,6 +96,7 @@ Darenkeck homepage explorer:
 - `/dev` currently serves the resume. Intended collection routes include `/news`, `/news/:slug`, `/dev/news`, and `/dev/news/:slug`; final file-to-route conventions remain to be defined.
 - `scripts/fetch-darenkeck-content.sh` shallow-fetches `main` by default before darenkeck staging/prod builds, validates `content/`, `media/`, and non-empty `content/resume.md`, and records the resolved commit in `apps/darenkeck/.generated-content/REVISION`.
 - Fetched Markdown is stored under the gitignored `apps/darenkeck/.generated-content/content/`; media is copied to the gitignored `apps/darenkeck/public/media/` for Vite deployment.
+- Mermaid diagrams are authored as `.mmd` files outside the deployed tree and manually rendered with the pinned `diagram:svg` command into committed `media/diagrams/*.svg`. Markdown references `/media/diagrams/...`; the viewer uses responsive light-card image styling and the PDF generator fails on broken images.
 - `DARENKECK_CONTENT_REPO` and `DARENKECK_CONTENT_REF` override the private SSH repository and `main` defaults. Local access uses existing Git credentials; future CI requires read-only repository credentials.
 - Collection indexing and frontmatter metadata extraction remain pending. Use MDX only if content later needs embedded interactive React components.
 - The first version remains a client-rendered SPA. Static generation/prerendering and broader SEO work are deferred.

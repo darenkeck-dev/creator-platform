@@ -35,6 +35,15 @@ try {
   });
   await page.goto(`http://127.0.0.1:${address.port}/dev?print=1`, { waitUntil: "networkidle" });
   await page.locator(".resume-document").waitFor({ state: "visible" });
+  await page.waitForFunction(() => [...document.images].every((image) => image.complete));
+  const failedImages = await page.locator(".resume-document img").evaluateAll((images) =>
+    images
+      .filter((image) => image instanceof HTMLImageElement && image.naturalWidth === 0)
+      .map((image) => (image as HTMLImageElement).currentSrc || (image as HTMLImageElement).src)
+  );
+  if (failedImages.length > 0) {
+    throw new Error(`Resume contains images that failed to load: ${failedImages.join(", ")}`);
+  }
   if (unexpectedMediaRequests.length > 0) {
     throw new Error(`Resume print mode requested media: ${unexpectedMediaRequests.join(", ")}`);
   }

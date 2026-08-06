@@ -68,6 +68,16 @@ const resumeComponents: Components = {
       {children}
     </blockquote>
   ),
+  img: ({ alt, src, title }) => (
+    <img
+      alt={alt ?? ""}
+      className="my-6 block h-auto max-w-full rounded-xl bg-white p-3 shadow-lg print:my-[0.12in] print:max-h-[8in] print:break-inside-avoid print:rounded-none print:p-0 print:shadow-none"
+      decoding="async"
+      loading="eager"
+      src={src}
+      title={title}
+    />
+  ),
   hr: () => <hr className="my-10 border-white/20 print:border-gray-400" />,
 };
 

@@ -12,6 +12,7 @@
     "build:staging": "bunx --bun vite build --mode staging",
     "build:prod": "bunx --bun vite build --mode production",
     "check:route-continuity": "bun run scripts/check-route-continuity.ts",
+    "diagram:svg": "bash scripts/render-mermaid-svg.sh",
     "resume:pdf": "bun run scripts/generate-resume-pdf.ts",
     "preview": "bunx --bun vite preview --host 0.0.0.0 --port 3002",
     "lint": "bunx --bun eslint .",

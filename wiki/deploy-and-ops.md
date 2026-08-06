@@ -28,6 +28,7 @@
 - Local deployment uses existing Git SSH credentials. Future CI should use read-only access through a deploy key, GitHub App token, or fine-grained PAT.
 - `/dev` bundles fetched `content/resume.md` into the SPA and renders it with `react-markdown`; therefore a darenkeck build requires a successful content fetch first.
 - Collection parsing and news/blog route generation are not implemented yet.
+- Mermaid is not a runtime dependency. Render content-repository `.mmd` sources before committing with `bun run --cwd apps/darenkeck diagram:svg -- <input.mmd> <media/diagrams/output.svg>`; deployment copies the committed SVG through the existing `media/` path.
 - Initial output remains an SPA deployed through the existing S3 sync and CloudFront invalidation flow. SEO prerendering is deferred.
 
 ## Resume PDF
@@ -36,6 +37,7 @@
 - `bun run content:darenkeck:pdf` starts a temporary Vite development server, opens `/dev` with print media, and writes the two-page US Letter artifact to the gitignored `apps/darenkeck/public/daren-keck-resume.pdf`.
 - `bun run content:darenkeck:prepare` fetches content and regenerates the PDF for local development. Run it before `bun run dev:darenkeck` whenever resume content changes.
 - The darenkeck staging and production deploy commands run content fetch -> PDF generation -> Vite build -> S3 sync. Vite copies the public PDF into `dist`, so the local and deployed `/daren-keck-resume.pdf` URL serves the same artifact.
+- PDF generation waits for all resume images and fails when an image, including a committed diagram SVG, cannot load.
 - Static S3 sync uses `--no-follow-symlinks` as a final safeguard against publishing files outside the build output tree.
 - PDF generation uses white paper, black text, compact print spacing, hidden web actions, controlled page breaks, and no printed background graphics.
 

@@ -8,6 +8,7 @@
 - `darenkeck` static site is deployed on S3 + CloudFront with security headers and crawl metadata.
 - `apps/darenkeck` uses React Router for public routes. `/dev` is deployed and lazy-loads the fetched `content/resume.md` with styled Markdown components plus a generated print-friendly PDF download.
 - Public-site content lives as Pages CMS-managed Markdown in the private `darenkeck-dev/darenkeck-content` repository. Darenkeck deploys fetch and validate that content before building; news/blog collection routes remain pending.
+- Content diagrams use Mermaid only as an authoring format. A pinned manual command generates neutral, white-background SVG files that are committed under the content repository's `media/` tree; web and PDF render the same static asset without runtime Mermaid.
 
 See also: [Architecture Map](architecture-map.md), [Deploy and Ops](deploy-and-ops.md).
 
