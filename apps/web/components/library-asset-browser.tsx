@@ -9,10 +9,11 @@ import {
   FileImage,
   Film,
   Folder,
+  MessageSquareText,
   RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,6 @@ import { ReprocessAssetsDialog } from "@/components/reprocess-assets-dialog";
 import { updateBulkAssetVisibility } from "@/lib/bulk-asset-visibility";
 
 type Asset = AssetListResponse["assets"][number];
-type ViewMode = "grid" | "list";
 
 type Props = {
   assets: Asset[];
@@ -72,10 +72,6 @@ function AssetTypeIcon({ asset }: { asset: Asset }) {
 
 export function LibraryAssetBrowser({ assets, containerId }: Props) {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const initialView = searchParams.get("view") === "grid" ? "grid" : "list";
-  const [view, setView] = useState<ViewMode>(initialView);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
@@ -115,19 +111,6 @@ export function LibraryAssetBrowser({ assets, containerId }: Props) {
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [actionMenuOpen]);
-
-  function setViewMode(nextView: ViewMode) {
-    setView(nextView);
-    const params = new URLSearchParams(searchParams.toString());
-    if (nextView === "grid") {
-      params.set("view", "grid");
-    } else {
-      params.delete("view");
-    }
-    router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname, {
-      scroll: false,
-    });
-  }
 
   function toggleSelected(id: string) {
     setBulkMessage(null);
@@ -277,20 +260,6 @@ export function LibraryAssetBrowser({ assets, containerId }: Props) {
             <RefreshCw aria-hidden="true" className="h-4 w-4" />
             <span className="sr-only">Refresh status</span>
           </Button>
-          <Button
-            onClick={() => setViewMode("grid")}
-            type="button"
-            variant={view === "grid" ? "default" : "outline"}
-          >
-            Grid
-          </Button>
-          <Button
-            onClick={() => setViewMode("list")}
-            type="button"
-            variant={view === "list" ? "default" : "outline"}
-          >
-            List
-          </Button>
         </div>
       </div>
 
@@ -304,123 +273,79 @@ export function LibraryAssetBrowser({ assets, containerId }: Props) {
         <p className="text-sm text-muted-foreground">No items here yet.</p>
       ) : null}
 
-      {view === "list" ? (
-        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-          <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_8rem_8rem_7rem_8rem_8rem] gap-3 border-b px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground max-lg:grid-cols-[2.5rem_minmax(0,1fr)_7rem_7rem]">
-            <span>Select</span>
-            <span>Asset</span>
-            <span>Type</span>
-            <span>Status</span>
-            <span className="max-lg:hidden">Visibility</span>
-            <span className="max-lg:hidden">Conversion</span>
-            <span className="max-lg:hidden">Tone</span>
-          </div>
-          {assets.map((asset) => (
-            <div
-              className="grid grid-cols-[2.5rem_minmax(0,1fr)_8rem_8rem_7rem_8rem_8rem] items-center gap-3 border-b px-4 py-3 last:border-b-0 max-lg:grid-cols-[2.5rem_minmax(0,1fr)_7rem_7rem]"
-              key={asset.id}
-            >
-              <input
-                aria-label={`Select ${asset.title}`}
-                checked={selectedIds.has(asset.id)}
-                className="h-4 w-4"
-                onChange={() => toggleSelected(asset.id)}
-                type="checkbox"
-              />
-              <div className="min-w-0">
-                <Link className="font-medium hover:underline" href={assetHref(asset)}>
-                  {asset.title}
-                </Link>
-                {asset.type === "folder" && asset.description ? (
-                  <p className="truncate text-xs text-muted-foreground">{asset.description}</p>
-                ) : null}
-              </div>
-              <AssetTypeIcon asset={asset} />
-              {asset.type === "folder" ? (
-                <>
-                  <span aria-hidden="true" />
-                  <span aria-hidden="true" className="max-lg:hidden" />
-                  <span aria-hidden="true" className="max-lg:hidden" />
-                  <span aria-hidden="true" className="max-lg:hidden" />
-                </>
-              ) : (
-                <>
-                  <span className="text-sm capitalize">
-                    {asset.status}
-                    <span className="block text-xs text-muted-foreground lg:hidden">
-                      {asset.visibility}
-                    </span>
-                  </span>
-                  <span className="text-sm capitalize text-muted-foreground max-lg:hidden">
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <div className="grid grid-cols-[2.5rem_3rem_minmax(0,1fr)_6rem_8rem_7rem_8rem_8rem] gap-3 border-b px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground max-lg:grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_5rem_7rem]">
+          <span>Select</span>
+          <span>Type</span>
+          <span>Asset</span>
+          <span>Review</span>
+          <span>Status</span>
+          <span className="max-lg:hidden">Visibility</span>
+          <span className="max-lg:hidden">Conversion</span>
+          <span className="max-lg:hidden">Tone</span>
+        </div>
+        {assets.map((asset) => (
+          <div
+            className="grid grid-cols-[2.5rem_3rem_minmax(0,1fr)_6rem_8rem_7rem_8rem_8rem] items-center gap-3 border-b px-4 py-3 last:border-b-0 max-lg:grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_5rem_7rem]"
+            key={asset.id}
+          >
+            <input
+              aria-label={`Select ${asset.title}`}
+              checked={selectedIds.has(asset.id)}
+              className="h-4 w-4"
+              onChange={() => toggleSelected(asset.id)}
+              type="checkbox"
+            />
+            <AssetTypeIcon asset={asset} />
+            <div className="min-w-0">
+              <Link className="block truncate font-medium hover:underline" href={assetHref(asset)}>
+                {asset.title}
+              </Link>
+              {asset.type === "folder" && asset.description ? (
+                <p className="truncate text-xs text-muted-foreground">{asset.description}</p>
+              ) : null}
+            </div>
+            {asset.type === "audio" || asset.type === "video" ? (
+              <Link
+                aria-label={`Review ${asset.title}`}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+                href={`/review?targetType=${asset.type}&assetId=${encodeURIComponent(asset.id)}`}
+              >
+                <MessageSquareText aria-hidden="true" className="h-4 w-4" />
+                <span className="max-lg:sr-only">Review</span>
+              </Link>
+            ) : (
+              <span aria-hidden="true" />
+            )}
+            {asset.type === "folder" ? (
+              <>
+                <span aria-hidden="true" />
+                <span aria-hidden="true" className="max-lg:hidden" />
+                <span aria-hidden="true" className="max-lg:hidden" />
+                <span aria-hidden="true" className="max-lg:hidden" />
+              </>
+            ) : (
+              <>
+                <span className="text-sm capitalize">
+                  {asset.status}
+                  <span className="block text-xs text-muted-foreground lg:hidden">
                     {asset.visibility}
                   </span>
-                  <span className="text-sm capitalize text-muted-foreground max-lg:hidden">
-                    {statusText(asset.conversion?.status)}
-                  </span>
-                  <span className="text-sm capitalize text-muted-foreground max-lg:hidden">
-                    {statusText(asset.toneAnalysis?.status)}
-                  </span>
-                </>
-              )}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {assets.map((asset) => (
-            <article
-              className="rounded-xl border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
-              key={asset.id}
-            >
-              <div className="flex items-start gap-3">
-                <input
-                  aria-label={`Select ${asset.title}`}
-                  checked={selectedIds.has(asset.id)}
-                  className="mt-1 h-4 w-4"
-                  onChange={() => toggleSelected(asset.id)}
-                  type="checkbox"
-                />
-                <Link className="min-w-0 flex-1" href={assetHref(asset)}>
-                  <div className="flex items-center gap-2">
-                    <AssetTypeIcon asset={asset} />
-                    <p className="text-xs text-muted-foreground">
-                      {asset.type === "folder" ? "Folder" : `Origin: ${asset.origin ?? "uploaded"}`}
-                    </p>
-                  </div>
-                  <h2 className="mt-3 text-base font-medium">{asset.title}</h2>
-                  <p className="mt-3 truncate text-xs text-muted-foreground">ID: {asset.id}</p>
-                  {asset.type === "folder" ? (
-                    asset.description ? (
-                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                        {asset.description}
-                      </p>
-                    ) : null
-                  ) : (
-                    <>
-                      <p className="mt-1 text-xs text-muted-foreground">Status: {asset.status}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Visibility: {asset.visibility}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Conversion: {statusText(asset.conversion?.status)}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Tone: {statusText(asset.toneAnalysis?.status)}
-                      </p>
-                    </>
-                  )}
-                </Link>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                <span>Container: {asset.containerId ?? "root"}</span>
-                {asset.type === "folder" ? null : (
-                  <span>Sources: {asset.sourceAssetIds?.length ?? 0}</span>
-                )}
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
+                </span>
+                <span className="text-sm capitalize text-muted-foreground max-lg:hidden">
+                  {asset.visibility}
+                </span>
+                <span className="text-sm capitalize text-muted-foreground max-lg:hidden">
+                  {statusText(asset.conversion?.status)}
+                </span>
+                <span className="text-sm capitalize text-muted-foreground max-lg:hidden">
+                  {statusText(asset.toneAnalysis?.status)}
+                </span>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

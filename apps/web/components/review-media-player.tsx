@@ -51,7 +51,7 @@ export function ReviewMediaPlayer(props: ReviewMediaPlayerProps) {
           videoTitle={props.videoTitle}
         />
       ) : (
-        <AssetPlayer asset={props.asset} />
+        <AssetPlayer asset={props.asset} loop />
       )}
     </div>
   );

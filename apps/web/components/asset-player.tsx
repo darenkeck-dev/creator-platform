@@ -7,9 +7,10 @@ type Asset = AssetDetailResponse["asset"];
 
 type Props = {
   asset: Asset;
+  loop?: boolean;
 };
 
-export function AssetPlayer({ asset }: Props) {
+export function AssetPlayer({ asset, loop = false }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [directPlaybackUrl, setDirectPlaybackUrl] = useState<string | null>(null);
@@ -122,6 +123,7 @@ export function AssetPlayer({ asset }: Props) {
           ref={videoRef}
           controls
           className="w-full rounded-lg border bg-black"
+          loop={loop}
           poster={asset.stream?.posterUrl}
           preload="metadata"
         />
@@ -149,7 +151,9 @@ export function AssetPlayer({ asset }: Props) {
     }
 
     if (directPlaybackUrl) {
-      return <audio controls className="w-full" preload="metadata" src={directPlaybackUrl} />;
+      return (
+        <audio controls className="w-full" loop={loop} preload="metadata" src={directPlaybackUrl} />
+      );
     }
 
     return (
