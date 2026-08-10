@@ -1,5 +1,32 @@
 # Wiki Log
 
+## [2026-08-10] web | flatten sticky document navigation
+
+- Removed the sticky breadcrumb row's inset border, expanded it flush to the document's top and full width with matching top corners, and pinned it to the viewport top with an opaque-to-90%-transparent vertical background gradient.
+
+## [2026-08-10] web | keep document navigation visible
+
+- Made the shared resume/blog breadcrumb bar sticky below the fixed media controls with an opaque blurred surface.
+- Extended the browser continuity smoke to verify the bar remains visible while scrolling a blog entry.
+
+## [2026-08-10] web | remove Markdown image frames
+
+- Removed added backgrounds, borders, and padding from blog/resume Markdown images so screenshots and diagrams render edge-to-edge.
+
+## [2026-08-10] web | style Markdown tables
+
+- Added responsive horizontal overflow, borders, header contrast, row separation, and print styles for GFM tables shared by blog and resume documents.
+
+## [2026-08-10] content | render Mermaid diagrams for dark documents
+
+- Switched generated Mermaid SVGs to the dark theme with transparent backgrounds.
+- Applied the dark image frame only to generated diagram paths while preserving light cards for ordinary post images.
+
+## [2026-08-10] content | render fenced blog Mermaid diagrams
+
+- Extended content preparation to extract Mermaid fences from published blog posts, render deterministic static SVGs, and rewrite the generated Markdown to image links.
+- Verified the latest content revision produces two published posts and two SVG diagrams without shipping Mermaid runtime code.
+
 ## [2026-08-10] web | replace document minimize controls with breadcrumbs
 
 - Replaced the resume/blog minimize icon with upper-left breadcrumb navigation back to the homepage and blog index.

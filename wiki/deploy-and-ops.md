@@ -28,7 +28,7 @@
 - Local deployment uses existing Git SSH credentials. Future CI should use read-only access through a deploy key, GitHub App token, or fine-grained PAT.
 - `/dev` bundles fetched `content/resume.md` into the SPA and renders it with `react-markdown`; therefore a darenkeck build requires a successful content fetch first.
 - Blog posts under `content/posts/` require title/date frontmatter. `draft: true` and `*-draft.md` entries are absent from the generated manifest and production bundle; published entries are sorted newest-first and served at `/blog/:slug`.
-- Mermaid is not a runtime dependency. Deployment renders content-repository `diagrams/**/*.mmd` sources with the pinned CLI into ignored `public/media/diagrams/**/*.svg`; generated SVGs are never committed and stale outputs are cleared on each preparation.
+- Mermaid is not a runtime dependency. Deployment extracts fenced Mermaid blocks from published posts and also renders `diagrams/**/*.mmd` sources with the pinned CLI into ignored `public/media/diagrams/**/*.svg`; generated SVGs are never committed, draft blocks are skipped, and stale outputs are cleared on each preparation.
 - Initial output remains an SPA deployed through the existing S3 sync and CloudFront invalidation flow. SEO prerendering is deferred.
 
 ## Resume PDF
