@@ -30,5 +30,6 @@ Raw planning/checklist docs were moved to `raw_sources/` and are treated as sour
 
 ## Active Plans
 
-- `MVP_RELEASE_PLAN.md` - release milestones for corpus preparation, curator calibration, vector-backed tone selection, nearest-neighbor walking, public reviews, and launch readiness.
+- `MVP_RELEASE_PLAN.md` - launch milestones for corpus preparation, curator calibration, vector-backed tone selection, automatic tone walking, and release readiness; public reviews are deferred.
 - `TONE_REVIEW_PLAN.md` - deployed review behavior, trusted data boundaries, curator-adjusted asset scoring, operations, and future on-demand combo-tone prediction.
+- `CLEANUP.md` - deferred post-MVP React correctness, performance, accessibility, and test audit for both frontends and shared playback code.

@@ -77,6 +77,28 @@ Migration note:
   - `curl -I -H "Origin: https://darenkeck.com" https://<streaming-cloudfront>/derived/<asset>/hls/<manifest>.m3u8`
   - optional preflight check: `curl -i -X OPTIONS -H "Origin: https://darenkeck.com" -H "Access-Control-Request-Method: GET" -H "Access-Control-Request-Headers: range" https://<streaming-cloudfront>/derived/<asset>/hls/<manifest>.m3u8`
 
+## Release log checks
+
+Public selection writes one structured `public_combo_selection` outcome per handled request alongside its EMF values. Fields include `requestedMode`, `resolvedMode`, `outcome`, `statusCode`, `fallbackReason`, `latencyMs`, and API Gateway `requestId` when available.
+
+```text
+fields @timestamp, requestedMode, resolvedMode, outcome, statusCode, fallbackReason, latencyMs, requestId
+| filter event = "public_combo_selection"
+| sort @timestamp desc
+| limit 100
+```
+
+Vector convergence writes one structured `asset_vector_sync` result per attempted SQS or DynamoDB Stream operation. Fields include `source`, `assetId`, `action`, `attempts`, `outcome`, `latencyMs`, and the source message/event identifier.
+
+```text
+fields @timestamp, level, source, assetId, action, outcome, attempts, latencyMs, messageId, eventId, errorName, errorMessage
+| filter event = "asset_vector_sync"
+| sort @timestamp desc
+| limit 100
+```
+
+For MVP release smoke, confirm exact search, exact walk, random fallback, indexed-vector, and deleted-vector outcomes are queryable. Dashboards, additional alarms, notification actions, and automated vector-drift checks are deferred hardening.
+
 ## Tone analysis config
 
 - Upload processing uses one eventing pattern: S3 object-created events go to EventBridge, then EventBridge fans out to per-workflow SQS queues.

@@ -61,6 +61,7 @@ Deployed controlled walk path:
 - Current audio and video are always excluded from walks.
 - Client history retains five recent combo IDs plus three recent audio and video IDs.
 - The endpoint returns versioned selection metadata and may resolve to a random fallback.
+- Each handled selection emits one structured final-outcome log with requested/resolved mode, outcome, status, fallback reason, latency, and request ID; vector convergence emits one structured success/failure record per attempted asset operation.
 - Random and controlled responses include `predictedTone` when both selected source vectors can be rebuilt from authoritative asset records.
 - Fallback relaxes recent combo history first and recent source history second, while always prohibiting both current sources.
 - The legacy random endpoint remains the initialization and operational fallback during rollout.
@@ -122,5 +123,5 @@ Details: [Deploy and Ops](deploy-and-ops.md).
 - Combo capture uses `packages/shared` `ComboToneReviewPlayer`; app-specific loaders own target selection, review history, and submit callbacks.
 - Review capture starts with no selected keywords and has no score sliders. Audio/video review scores are derived server-side from selected keywords; source model values are not copied into review submissions.
 - Keyword capture shows five leaf keywords at a time. The initial set is target-seeded random; each `>` advances to a new set using the latest selected keyword as an anchor, preferring three taxonomy-adjacent leaves plus two random exploration leaves. Selected keywords remain removable from the bottom chip row.
-- `darenkeck.com` can reuse the shared combo review surface, but anonymous public review writes require a separate public submission endpoint from the authenticated Media Manager `POST /tone-reviews` path.
+- Anonymous public reviews are deferred until after the tone-selection and automatic-walk MVP. A later release can reuse the shared combo review surface but still requires a separate public submission endpoint from the authenticated Media Manager `POST /tone-reviews` path.
 - `/combos` is the all-combo-review index. It lists combo review records and links each record back to `/review?targetType=combo&comboId=...`, including source asset ids when available for synthetic/random combos.

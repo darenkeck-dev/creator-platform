@@ -1,5 +1,25 @@
 # Wiki Log
 
+## [2026-08-10] planning | defer React cleanup audit
+
+- Added a post-MVP source-audit plan for both React applications and the shared playback/review package.
+- Deferred audit-agent setup, remediation, and authenticated browser testing until after the tone-selection and automatic-walk release.
+
+## [2026-08-06] web | simplify asset browsing and review playback
+
+- Removed the underdeveloped asset card/grid view so library and folder contents always use the operational list view.
+- Added per-row Review links for audio/video assets and enabled review-only looping for standalone asset playback.
+
+## [2026-08-06] ops | prepare structured release logs
+
+- Added consistent final-outcome logs for public combo selection and per-operation success/failure logs for vector convergence.
+- Kept the existing Darenkeck busy indicator and random fallback for MVP; deferred new recovery UI, dashboards, alarms, notifications, and expanded cost controls.
+
+## [2026-08-06] planning | narrow MVP to tone selection and walking
+
+- Changed the MVP launch boundary to public keyword-driven tone selection plus automatic tone walking with random fallback.
+- Deferred anonymous public combination reviews, their UI, abuse/privacy controls, metrics, and operations to a separate post-MVP release.
+
 ## [2026-08-06] content | authored Mermaid SVG workflow
 
 - Added a pinned manual Mermaid-to-SVG authoring command, responsive light-card Markdown images, and PDF image-load failure checks.

@@ -41,7 +41,7 @@ Mobile also needs more defensive playback behavior. App switching, screen lockin
 
 A combination uses separate HTML video and audio elements. The video supplies the visible image and is always muted; the audio element supplies the soundtrack. Both sources are preloaded and the combo does not report itself ready until both can play.
 
-The background player treats the media as one experience. Clicking or keyboard-activating the video toggles the pair together, and a centered Play or Replay overlay appears when playback is paused or ended. Standalone Audio and Video reviews use the normal asset player rather than the combined background surface.
+The background player treats the media as one experience. Clicking or keyboard-activating the video toggles the pair together, and a centered Play or Replay overlay appears when playback is paused or ended. Standalone Audio and Video reviews use the normal asset player rather than the combined background surface, with review-only looping enabled so the asset continues while keywords are considered.
 
 ## How Synchronization and Playback Controls Work
 
