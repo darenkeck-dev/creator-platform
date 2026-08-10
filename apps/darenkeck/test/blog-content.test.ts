@@ -1,7 +1,7 @@
 // @ts-expect-error -- Bun supplies this runtime module; the browser app does not include Bun types.
 import { describe, expect, it } from "bun:test";
 
-import { buildBlogManifest, parseBlogPost } from "../scripts/blog-content";
+import { buildBlogManifest, extractEmbeddedMermaid, parseBlogPost } from "../scripts/blog-content";
 
 const post = (frontmatter: string, content = "Post body") =>
   `---\n${frontmatter}\n---\n${content}\n`;
@@ -79,5 +79,22 @@ describe("blog content preparation", () => {
     expect(() =>
       parseBlogPost(post("title: Invalid Date\ndate: 2026-02-31"), "/content/posts/invalid-date.md")
     ).toThrow("date must use a valid YYYY-MM-DD value");
+  });
+
+  it("replaces Mermaid fences with deterministic static diagram links", () => {
+    const extracted = extractEmbeddedMermaid(
+      "Before\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\nAfter",
+      "example-post",
+      "Example Post"
+    );
+    expect(extracted.content).toBe(
+      "Before\n\n![Example Post diagram 1](/media/diagrams/posts/example-post/diagram-1.svg)\n\nAfter"
+    );
+    expect(extracted.diagrams).toEqual([
+      {
+        relativeOutputPath: "posts/example-post/diagram-1.svg",
+        source: "flowchart LR\n  A --> B",
+      },
+    ]);
   });
 });

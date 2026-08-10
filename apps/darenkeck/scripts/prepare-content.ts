@@ -1,10 +1,11 @@
 import { execFile } from "node:child_process";
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
-import { buildBlogManifest } from "./blog-content";
+import { buildBlogManifest, extractEmbeddedMermaid } from "./blog-content";
 
 const execFileAsync = promisify(execFile);
 const appDir = fileURLToPath(new URL("..", import.meta.url));
@@ -33,36 +34,60 @@ async function regularFiles(root: string, extension: string): Promise<string[]> 
   }
 }
 
-async function writeManifest(): Promise<number> {
+async function renderDiagram(inputPath: string, outputPath: string): Promise<void> {
+  await mkdir(path.dirname(outputPath), { recursive: true });
+  await execFileAsync("bash", [renderScript, inputPath, outputPath], { cwd: appDir });
+  const output = await stat(outputPath);
+  if (!output.isFile() || output.size === 0) {
+    throw new Error(`Mermaid rendering did not create ${outputPath}`);
+  }
+}
+
+async function writeManifest(): Promise<{ publishedPosts: number; embeddedDiagrams: number }> {
   const postPaths = await regularFiles(postsDir, ".md");
   const files = await Promise.all(
     postPaths.map(async (filePath) => ({ filePath, source: await readFile(filePath, "utf8") }))
   );
   const manifest = buildBlogManifest(files);
+  const temporaryDiagramDir = await mkdtemp(path.join(os.tmpdir(), "darenkeck-mermaid."));
+  let embeddedDiagrams = 0;
+
+  try {
+    for (const post of manifest.posts) {
+      const extracted = extractEmbeddedMermaid(post.content, post.slug, post.title);
+      post.content = extracted.content;
+      for (const diagram of extracted.diagrams) {
+        embeddedDiagrams += 1;
+        const inputPath = path.join(temporaryDiagramDir, `${post.slug}-${embeddedDiagrams}.mmd`);
+        const outputPath = path.join(publicDiagramsDir, diagram.relativeOutputPath);
+        await writeFile(inputPath, `${diagram.source}\n`, "utf8");
+        await renderDiagram(inputPath, outputPath);
+      }
+    }
+  } finally {
+    await rm(temporaryDiagramDir, { recursive: true, force: true });
+  }
+
   const temporaryPath = `${manifestPath}.tmp`;
   await writeFile(temporaryPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   await rename(temporaryPath, manifestPath);
-  return manifest.posts.length;
+  return { publishedPosts: manifest.posts.length, embeddedDiagrams };
 }
 
-async function renderDiagrams(): Promise<number> {
-  await rm(publicDiagramsDir, { recursive: true, force: true });
-  await mkdir(publicDiagramsDir, { recursive: true });
+async function renderSourceDiagrams(): Promise<number> {
   const diagramPaths = await regularFiles(diagramsDir, ".mmd");
   for (const inputPath of diagramPaths) {
     const relativePath = path.relative(diagramsDir, inputPath).replace(/\.mmd$/, ".svg");
-    const outputPath = path.join(publicDiagramsDir, relativePath);
-    await mkdir(path.dirname(outputPath), { recursive: true });
-    await execFileAsync("bash", [renderScript, inputPath, outputPath], { cwd: appDir });
-    const output = await stat(outputPath);
-    if (!output.isFile() || output.size === 0) {
-      throw new Error(`Mermaid rendering did not create ${outputPath}`);
-    }
+    await renderDiagram(inputPath, path.join(publicDiagramsDir, relativePath));
   }
   return diagramPaths.length;
 }
 
 await mkdir(generatedDir, { recursive: true });
-const publishedPosts = await writeManifest();
-const renderedDiagrams = await renderDiagrams();
-console.log(`Prepared ${publishedPosts} published blog posts and ${renderedDiagrams} diagrams.`);
+await rm(publicDiagramsDir, { recursive: true, force: true });
+await mkdir(publicDiagramsDir, { recursive: true });
+const sourceDiagrams = await renderSourceDiagrams();
+const { publishedPosts, embeddedDiagrams } = await writeManifest();
+console.log(
+  `Prepared ${publishedPosts} published blog posts and ${sourceDiagrams + embeddedDiagrams} diagrams.`
+);

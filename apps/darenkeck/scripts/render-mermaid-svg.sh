@@ -34,8 +34,8 @@ trap cleanup EXIT
 bunx "@mermaid-js/mermaid-cli@${MERMAID_CLI_VERSION}" \
   --input "${INPUT_PATH}" \
   --output "${TEMP_OUTPUT}" \
-  --theme neutral \
-  --backgroundColor white \
+  --theme dark \
+  --backgroundColor transparent \
   --quiet
 
 if [[ ! -s "${TEMP_OUTPUT}" ]] || ! grep -q '<svg' "${TEMP_OUTPUT}"; then

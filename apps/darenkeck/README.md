@@ -42,7 +42,20 @@ The content preparation step validates metadata, rejects duplicate slugs, sorts 
 
 ## Mermaid diagrams at build time
 
-The site does not render Mermaid in the browser. Keep `.mmd` source in the `darenkeck-content` repository under `diagrams/`. Content preparation renders every source with the pinned Mermaid CLI into ignored static assets under `public/media/diagrams/`, preserving relative paths:
+The site does not render Mermaid in the browser. Use fenced `mermaid` blocks directly in published blog Markdown, or keep standalone `.mmd` source in the `darenkeck-content` repository under `diagrams/`. Content preparation extracts published-post blocks and renders every source with the pinned Mermaid CLI into ignored static assets under `public/media/diagrams/`.
+
+Fenced blog diagrams are rewritten to deterministic paths:
+
+````markdown
+```mermaid
+flowchart LR
+  A --> B
+```
+
+-> /media/diagrams/posts/<post-slug>/diagram-1.svg
+````
+
+Standalone sources preserve relative paths:
 
 ```bash
 diagrams/posts/upload-flow.mmd -> /media/diagrams/posts/upload-flow.svg
@@ -56,7 +69,7 @@ Reference the generated SVG from Markdown:
 
 `bun run content:darenkeck:build` generates the published blog manifest and all diagram SVGs from already-fetched content. The full `bun run content:darenkeck:prepare` workflow fetches content, builds posts and diagrams, then generates the resume PDF.
 
-The renderer uses Mermaid CLI `11.16.0`, the neutral theme, a white background, and atomic output replacement. `public/media/diagrams/` is replaced on every preparation, so removed sources cannot leave stale SVGs. Invalid Mermaid fails the deployment. The first invocation may download the pinned authoring package and its headless-browser dependency.
+Draft-post Mermaid blocks are never rendered. The renderer uses Mermaid CLI `11.16.0`, the dark theme, a transparent background, and atomic output replacement. Images render without an added background, border, or padding. `public/media/diagrams/` is replaced on every preparation, so removed sources cannot leave stale SVGs. Invalid Mermaid fails the deployment. The first invocation may download the pinned authoring package and its headless-browser dependency.
 
 Use `accTitle` and `accDescr` in Mermaid source where supported, and always provide useful Markdown alt text. Generated SVGs are not committed to either application source or the content repository.
 

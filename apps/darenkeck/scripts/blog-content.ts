@@ -10,6 +10,11 @@ export type PublishedBlogPost = {
   content: string;
 };
 
+export type EmbeddedMermaidDiagram = {
+  relativeOutputPath: string;
+  source: string;
+};
+
 type BlogFrontmatter = {
   title: string;
   date: string;
@@ -130,4 +135,22 @@ export function buildBlogManifest(files: Array<{ filePath: string; source: strin
     slugs.add(post.slug);
   }
   return { posts };
+}
+
+export function extractEmbeddedMermaid(
+  content: string,
+  slug: string,
+  title: string
+): { content: string; diagrams: EmbeddedMermaidDiagram[] } {
+  const diagrams: EmbeddedMermaidDiagram[] = [];
+  const transformed = content.replace(
+    /^```mermaid[\t ]*\n([\s\S]*?)\n```[\t ]*$/gm,
+    (_block, source: string) => {
+      const diagramNumber = diagrams.length + 1;
+      const relativeOutputPath = `posts/${slug}/diagram-${diagramNumber}.svg`;
+      diagrams.push({ relativeOutputPath, source: source.trim() });
+      return `![${title} diagram ${diagramNumber}](/media/diagrams/${relativeOutputPath})`;
+    }
+  );
+  return { content: transformed, diagrams };
 }
