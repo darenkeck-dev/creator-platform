@@ -19,16 +19,8 @@ export function BlogIndexPage() {
       breadcrumbs={[{ label: "darenkeck", to: "/" }, { label: "blog" }]}
       className="blog-document"
     >
-      <header>
-        <p className="text-xs font-medium uppercase tracking-[0.2em] text-cyan-200/80">Writing</p>
-        <h1 className="mt-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">Blog</h1>
-        <p className="mt-4 max-w-2xl leading-7 text-white/70">
-          Notes on software, music, and experiments in how media creates tone.
-        </p>
-      </header>
-
       {blogPosts.length ? (
-        <ol className="mt-10 divide-y divide-white/15 border-y border-white/15">
+        <ol className="divide-y divide-white/15 border-y border-white/15">
           {blogPosts.map((post) => (
             <li key={post.slug}>
               <Link
@@ -54,9 +46,7 @@ export function BlogIndexPage() {
           ))}
         </ol>
       ) : (
-        <p className="mt-10 border-y border-white/15 py-8 text-white/65">
-          No published entries yet.
-        </p>
+        <p className="border-y border-white/15 py-8 text-white/65">No published entries yet.</p>
       )}
     </DocumentShell>
   );

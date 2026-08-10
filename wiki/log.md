@@ -1,5 +1,9 @@
 # Wiki Log
 
+## [2026-08-10] web | simplify blog index
+
+- Removed the `/blog` headline and introduction so the dated entry list begins directly below the blog breadcrumb.
+
 ## [2026-08-10] web | flatten sticky document navigation
 
 - Removed the sticky breadcrumb row's inset border, expanded it flush to the document's top and full width with matching top corners, and pinned it to the viewport top with an opaque-to-90%-transparent vertical background gradient.
