@@ -13,6 +13,7 @@ Frontend-only Vite + React + TypeScript app for the next version of the darenkec
 2. Start dev server:
 
    ```bash
+   bun run content:darenkeck:prepare
    bun run --cwd apps/darenkeck dev
    ```
 
@@ -23,27 +24,41 @@ Frontend-only Vite + React + TypeScript app for the next version of the darenkec
 - This proxy behavior is **dev-only** and does not exist in production builds.
 - If you change `.env` or `vite.config.ts`, restart the dev server.
 
-## Mermaid diagrams as committed SVG
+## Blog content
 
-The site does not render Mermaid at runtime. Mermaid is an authoring format; the website and resume PDF display the same committed SVG asset.
-
-Keep Mermaid source in the `darenkeck-content` repository under `diagrams/`, and write generated SVG files under `media/diagrams/`. From this repository, render with the exact pinned CLI version through:
-
-```bash
-bun run --cwd apps/darenkeck diagram:svg -- \
-  /path/to/darenkeck-content/diagrams/upload-flow.mmd \
-  /path/to/darenkeck-content/media/diagrams/upload-flow.svg
-```
-
-Then reference the committed SVG from content Markdown:
+Blog entries live in the separate `darenkeck-content` repository under `content/posts/`. Each Markdown file requires frontmatter:
 
 ```markdown
-![Asset upload processing flow](/media/diagrams/upload-flow.svg)
+---
+title: Post title
+date: 2026-08-10
+slug: optional-custom-slug
+summary: Optional index and metadata summary (excerpt is also accepted)
+draft: false
+---
 ```
 
-The wrapper uses Mermaid CLI `11.16.0`, the neutral theme, a white background, and atomic output replacement. Invalid Mermaid fails before replacing an existing SVG. The first invocation may download the pinned authoring package and its headless-browser dependency.
+The content preparation step validates metadata, rejects duplicate slugs, sorts posts newest-first, and writes an ignored generated manifest. Entries with `draft: true` are omitted completely from that manifest and the production bundle. Files ending in `-draft.md` are also excluded as a safety fallback.
 
-Use `accTitle` and `accDescr` in Mermaid source where supported, and always provide useful Markdown alt text. Regenerate and commit the SVG whenever its `.mmd` source changes.
+## Mermaid diagrams at build time
+
+The site does not render Mermaid in the browser. Keep `.mmd` source in the `darenkeck-content` repository under `diagrams/`. Content preparation renders every source with the pinned Mermaid CLI into ignored static assets under `public/media/diagrams/`, preserving relative paths:
+
+```bash
+diagrams/posts/upload-flow.mmd -> /media/diagrams/posts/upload-flow.svg
+```
+
+Reference the generated SVG from Markdown:
+
+```markdown
+![Asset upload processing flow](/media/diagrams/posts/upload-flow.svg)
+```
+
+`bun run content:darenkeck:build` generates the published blog manifest and all diagram SVGs from already-fetched content. The full `bun run content:darenkeck:prepare` workflow fetches content, builds posts and diagrams, then generates the resume PDF.
+
+The renderer uses Mermaid CLI `11.16.0`, the neutral theme, a white background, and atomic output replacement. `public/media/diagrams/` is replaced on every preparation, so removed sources cannot leave stale SVGs. Invalid Mermaid fails the deployment. The first invocation may download the pinned authoring package and its headless-browser dependency.
+
+Use `accTitle` and `accDescr` in Mermaid source where supported, and always provide useful Markdown alt text. Generated SVGs are not committed to either application source or the content repository.
 
 ## Static deploy (S3 + CloudFront)
 
@@ -73,9 +88,11 @@ bun run build:darenkeck:prod
 
 ### Deploy outline
 
-1. Build the target env.
-2. Upload `apps/darenkeck/dist` to the environment's S3 bucket.
-3. Invalidate CloudFront cache (at minimum `/index.html`; commonly `/*` for first rollout).
+1. Fetch `darenkeck-content`.
+2. Generate the published blog manifest, Mermaid SVGs, and resume PDF.
+3. Build the target environment.
+4. Upload `apps/darenkeck/dist` to the environment's S3 bucket.
+5. Invalidate CloudFront cache.
 
 Example AWS CLI shape:
 

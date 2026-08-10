@@ -19,6 +19,25 @@ const router = createBrowserRouter([
           return { Component: DevPage };
         },
       },
+      {
+        path: "blog",
+        children: [
+          {
+            index: true,
+            lazy: async () => {
+              const { BlogIndexPage } = await import("./components/BlogIndexPage");
+              return { Component: BlogIndexPage };
+            },
+          },
+          {
+            path: ":slug",
+            lazy: async () => {
+              const { BlogPostPage } = await import("./components/BlogPostPage");
+              return { Component: BlogPostPage };
+            },
+          },
+        ],
+      },
     ],
   },
   { path: "*", element: <NotFoundPage /> },

@@ -71,8 +71,15 @@ try {
   await page.getByRole("button", { name: "Close tone explorer" }).click();
   const requestCountBeforeNavigation = randomRequests;
 
-  await page.getByRole("link", { name: "Dev work" }).click();
+  await page.getByRole("link", { name: "Resume" }).click();
   await page.locator(".resume-document").waitFor({ state: "visible" });
+  const resumeBreadcrumbs = page.getByRole("navigation", { name: "Breadcrumb" });
+  await resumeBreadcrumbs.getByRole("link", { name: "darenkeck" }).waitFor({ state: "visible" });
+  await resumeBreadcrumbs.getByText("resume", { exact: true }).waitFor({ state: "visible" });
+  await page.getByRole("link", { name: "Download" }).waitFor({ state: "visible" });
+  if ((await page.getByTitle("Minimize").count()) > 0) {
+    throw new Error("Document routes must not render the old minimize control.");
+  }
 
   const sameVideo = await page.evaluate(
     () =>
@@ -100,6 +107,40 @@ try {
       document.querySelector("video")
   );
   if (!sameVideoAfterBack) throw new Error("ComboPlayer remounted after browser Back.");
+
+  await page.getByRole("link", { name: "Blog" }).click();
+  await page.locator(".blog-document").waitFor({ state: "visible" });
+  const blogBreadcrumbs = page.getByRole("navigation", { name: "Breadcrumb" });
+  await blogBreadcrumbs.getByRole("link", { name: "darenkeck" }).waitFor({ state: "visible" });
+  await blogBreadcrumbs.getByText("blog", { exact: true }).waitFor({ state: "visible" });
+  const sameVideoOnBlog = await page.evaluate(
+    () =>
+      (window as Window & { continuityVideo?: HTMLVideoElement }).continuityVideo ===
+      document.querySelector("video")
+  );
+  if (!sameVideoOnBlog) throw new Error("ComboPlayer remounted while navigating to /blog.");
+  if (randomRequests !== requestCountBeforeNavigation) {
+    throw new Error("Navigating to /blog triggered another random combo request.");
+  }
+
+  const blogEntries = page.locator('.blog-document a[href^="/blog/"]');
+  if ((await blogEntries.count()) > 0) {
+    await blogEntries.first().click();
+    await page
+      .locator(".blog-document article, .blog-document h1")
+      .first()
+      .waitFor({ state: "visible" });
+    await page
+      .getByRole("navigation", { name: "Breadcrumb" })
+      .getByRole("link", { name: "blog" })
+      .waitFor({ state: "visible" });
+    const sameVideoOnEntry = await page.evaluate(
+      () =>
+        (window as Window & { continuityVideo?: HTMLVideoElement }).continuityVideo ===
+        document.querySelector("video")
+    );
+    if (!sameVideoOnEntry) throw new Error("ComboPlayer remounted while opening a blog entry.");
+  }
 
   console.log("Darenkeck route continuity check passed");
 } finally {

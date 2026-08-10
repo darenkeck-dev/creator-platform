@@ -1,7 +1,7 @@
 // @ts-expect-error -- Bun supplies this runtime module; the browser app does not include Bun types.
 import { describe, expect, it } from "bun:test";
 
-import { isHomePath, isResumePrintMode } from "../src/lib/route-mode";
+import { isDocumentPath, isHomePath, isResumePrintMode } from "../src/lib/route-mode";
 
 describe("route mode", () => {
   it("classifies only the index route as home", () => {
@@ -13,5 +13,13 @@ describe("route mode", () => {
     expect(isResumePrintMode("/dev", "?print=1")).toBe(true);
     expect(isResumePrintMode("/dev", "")).toBe(false);
     expect(isResumePrintMode("/", "?print=1")).toBe(false);
+  });
+
+  it("classifies persistent document routes", () => {
+    expect(isDocumentPath("/dev")).toBe(true);
+    expect(isDocumentPath("/blog")).toBe(true);
+    expect(isDocumentPath("/blog/first-post")).toBe(true);
+    expect(isDocumentPath("/")).toBe(false);
+    expect(isDocumentPath("/blogroll")).toBe(false);
   });
 });

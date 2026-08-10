@@ -36,7 +36,7 @@ validate_tracked_files() {
       100644|100755) ;;
       *) fail "Content repository contains unsupported tracked file type at ${path} (mode ${mode})." ;;
     esac
-  done < <(git -C "${SOURCE_DIR}" ls-files --stage -z -- content media)
+  done < <(git -C "${SOURCE_DIR}" ls-files --stage -z -- content media diagrams)
 }
 
 validate_staged_tree() {
@@ -68,6 +68,9 @@ CONTENT_COMMIT="$(git -C "${SOURCE_DIR}" rev-parse HEAD)"
 
 mkdir -p "${NEXT_GENERATED_DIR}" "${NEXT_PUBLIC_MEDIA_DIR}"
 cp -R "${SOURCE_DIR}/content" "${NEXT_GENERATED_DIR}/content"
+if [[ -d "${SOURCE_DIR}/diagrams" ]]; then
+  cp -R "${SOURCE_DIR}/diagrams" "${NEXT_GENERATED_DIR}/diagrams"
+fi
 cp -R "${SOURCE_DIR}/media/." "${NEXT_PUBLIC_MEDIA_DIR}/"
 printf '%s\n' "${CONTENT_COMMIT}" > "${NEXT_GENERATED_DIR}/REVISION"
 validate_staged_tree "${NEXT_GENERATED_DIR}"
