@@ -56,11 +56,15 @@ function makeHarness(items: Array<Record<string, unknown> | undefined>) {
   const dbCalls: unknown[] = [];
   const upserts: unknown[] = [];
   const deletes: string[] = [];
+  const logs: Array<Record<string, unknown>> = [];
   let read = 0;
 
   const dependencies: VectorSyncDependencies = {
     tableName: "Assets-test",
     now: () => "2026-08-02T00:00:00.000Z",
+    log(entry) {
+      logs.push(entry);
+    },
     db: {
       async send(command) {
         dbCalls.push(command);
@@ -80,7 +84,7 @@ function makeHarness(items: Array<Record<string, unknown> | undefined>) {
     },
   };
 
-  return { dependencies, dbCalls, upserts, deletes };
+  return { dependencies, dbCalls, upserts, deletes, logs };
 }
 
 function event(assetId = "audio-1", messageId = "message-1") {
@@ -152,6 +156,19 @@ describe("vector-sync lambda", () => {
       Key: { pk: "ASSET#audio-1", sk: "META" },
       ConsistentRead: true,
     });
+    expect(harness.logs).toEqual([
+      expect.objectContaining({
+        level: "info",
+        event: "asset_vector_sync",
+        source: "sqs",
+        messageId: "message-1",
+        assetId: "audio-1",
+        action: "indexed",
+        attempts: 1,
+        outcome: "succeeded",
+        latencyMs: expect.any(Number),
+      }),
+    ]);
 
     const update = harness.dbCalls[1] as UpdateCommand;
     expect(update).toBeInstanceOf(UpdateCommand);
@@ -279,6 +296,26 @@ describe("vector-sync lambda", () => {
 
     expect(result).toEqual({ batchItemFailures: [{ itemIdentifier: "bad" }] });
     expect(harness.upserts).toHaveLength(1);
+    expect(harness.logs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          event: "asset_vector_sync",
+          source: "sqs",
+          messageId: "bad",
+          outcome: "failed",
+        }),
+        expect.objectContaining({
+          level: "info",
+          event: "asset_vector_sync",
+          source: "sqs",
+          messageId: "good",
+          assetId: "audio-1",
+          action: "indexed",
+          outcome: "succeeded",
+        }),
+      ])
+    );
   });
 
   it("rereads and converges when the asset changes before the state update", async () => {
@@ -289,6 +326,7 @@ describe("vector-sync lambda", () => {
     const dependencies: VectorSyncDependencies = {
       tableName: "Assets-test",
       now: () => "2026-08-02T00:00:00.000Z",
+      log() {},
       db: {
         async send(command) {
           if (command instanceof GetCommand) {

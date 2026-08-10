@@ -47,6 +47,12 @@ export type VectorSyncDependencies = {
   vectorIndex: VectorIndex;
   tableName: string;
   now?: () => string;
+  log?: (entry: Record<string, unknown>) => void;
+};
+
+type ConvergenceResult = {
+  action: "indexed" | "deleted";
+  attempts: number;
 };
 
 const VectorSyncMessageSchema = z.object({ assetId: z.string().min(1) }).strict();
@@ -190,12 +196,15 @@ function shouldConvergeStreamRecord(record: DynamoDbStreamRecord): boolean {
   );
 }
 
-async function convergeAsset(dependencies: VectorSyncDependencies, assetId: string): Promise<void> {
+async function convergeAsset(
+  dependencies: VectorSyncDependencies,
+  assetId: string
+): Promise<ConvergenceResult> {
   for (let attempt = 0; attempt < MAX_CONVERGENCE_ATTEMPTS; attempt += 1) {
     const current = await readAsset(dependencies.db, dependencies.tableName, assetId);
     if (!current) {
       await dependencies.vectorIndex.delete(assetId);
-      return;
+      return { action: "deleted", attempts: attempt + 1 };
     }
 
     const record = assetToneVectorRecordForAsset(current.asset);
@@ -212,12 +221,26 @@ async function convergeAsset(dependencies: VectorSyncDependencies, assetId: stri
         current.item,
         record ? "indexed" : "deleted"
       );
-      return;
+      return { action: record ? "indexed" : "deleted", attempts: attempt + 1 };
     } catch (error) {
       if (!isConditionalCheckFailure(error) || attempt === MAX_CONVERGENCE_ATTEMPTS - 1) {
         throw error;
       }
     }
+  }
+  throw new Error(`Asset vector synchronization exhausted for ${assetId}`);
+}
+
+function writeSyncLog(dependencies: VectorSyncDependencies, entry: Record<string, unknown>): void {
+  if (dependencies.log) {
+    dependencies.log(entry);
+    return;
+  }
+  const serialized = JSON.stringify(entry);
+  if (entry.level === "error") {
+    console.error(serialized);
+  } else {
+    console.log(serialized);
   }
 }
 
@@ -231,7 +254,33 @@ export function createHandler(dependencies: VectorSyncDependencies) {
         (records as DynamoDbStreamRecord[]).map(async (record) => {
           const assetId = streamAssetId(record);
           if (assetId && shouldConvergeStreamRecord(record)) {
-            await convergeAsset(dependencies, assetId);
+            const startedAt = Date.now();
+            try {
+              const result = await convergeAsset(dependencies, assetId);
+              writeSyncLog(dependencies, {
+                level: "info",
+                event: "asset_vector_sync",
+                source: "dynamodb_stream",
+                eventId: record.eventID,
+                assetId,
+                ...result,
+                outcome: "succeeded",
+                latencyMs: Date.now() - startedAt,
+              });
+            } catch (error) {
+              writeSyncLog(dependencies, {
+                level: "error",
+                event: "asset_vector_sync",
+                source: "dynamodb_stream",
+                eventId: record.eventID,
+                assetId,
+                outcome: "failed",
+                latencyMs: Date.now() - startedAt,
+                errorName: error instanceof Error ? error.name : undefined,
+                errorMessage: error instanceof Error ? error.message : "Unknown error",
+              });
+              throw error;
+            }
           }
         })
       );
@@ -242,19 +291,34 @@ export function createHandler(dependencies: VectorSyncDependencies) {
 
     await Promise.all(
       (records as NonNullable<SqsEvent["Records"]>).map(async (record) => {
+        const startedAt = Date.now();
+        let assetId: string | undefined;
         try {
           const message = VectorSyncMessageSchema.parse(JSON.parse(record.body));
-          await convergeAsset(dependencies, message.assetId);
+          assetId = message.assetId;
+          const result = await convergeAsset(dependencies, assetId);
+          writeSyncLog(dependencies, {
+            level: "info",
+            event: "asset_vector_sync",
+            source: "sqs",
+            messageId: record.messageId,
+            assetId,
+            ...result,
+            outcome: "succeeded",
+            latencyMs: Date.now() - startedAt,
+          });
         } catch (error) {
-          console.error(
-            JSON.stringify({
-              level: "error",
-              message: "Asset vector synchronization failed",
-              messageId: record.messageId,
-              errorName: error instanceof Error ? error.name : undefined,
-              errorMessage: error instanceof Error ? error.message : "Unknown error",
-            })
-          );
+          writeSyncLog(dependencies, {
+            level: "error",
+            event: "asset_vector_sync",
+            source: "sqs",
+            messageId: record.messageId,
+            assetId,
+            outcome: "failed",
+            latencyMs: Date.now() - startedAt,
+            errorName: error instanceof Error ? error.name : undefined,
+            errorMessage: error instanceof Error ? error.message : "Unknown error",
+          });
           batchItemFailures.push({ itemIdentifier: record.messageId });
         }
       })

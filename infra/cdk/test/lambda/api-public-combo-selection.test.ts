@@ -15,6 +15,7 @@ import {
 
 const event = (body: unknown) => ({
   requestContext: {
+    requestId: "request-1",
     http: { method: "POST" },
     routeKey: "POST /public/combos/select",
   },
@@ -132,7 +133,15 @@ describe("public combo selection API", () => {
       beauty: 0.16,
       menace: 0.16,
     });
-    expect(metrics).toEqual([expect.objectContaining({ statusCode: 200, resolvedMode: "walk" })]);
+    expect(metrics).toEqual([
+      expect.objectContaining({
+        requestedMode: "walk",
+        resolvedMode: "walk",
+        outcome: "selected",
+        statusCode: 200,
+        requestId: "request-1",
+      }),
+    ]);
   });
 
   it("searches by exact masked predicted combo tone", async () => {
@@ -324,7 +333,9 @@ describe("public combo selection API", () => {
     expect(metrics).toEqual([
       expect.objectContaining({
         statusCode: 200,
+        requestedMode: "walk",
         resolvedMode: "random",
+        outcome: "fallback",
         fallbackReason: "vector_query_failed",
       }),
     ]);

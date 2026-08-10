@@ -32,6 +32,7 @@ import { S3VectorsIndex } from "../shared/s3-vectors-index";
 
 type HttpEvent = {
   requestContext?: {
+    requestId?: string;
     http?: { method?: string };
     routeKey?: string;
   };
@@ -59,10 +60,13 @@ export type PublicComboSelectionDependencies = {
 };
 
 type PublicComboSelectionMetric = {
+  requestedMode: "search" | "walk" | "unknown";
   statusCode: number;
   resolvedMode: "search" | "walk" | "random" | "unavailable";
+  outcome: "selected" | "fallback" | "rejected" | "unavailable" | "failed";
   fallbackReason?: PublicComboSelectionFallbackReason;
   latencyMs: number;
+  requestId?: string;
 };
 
 const SOURCE_CANDIDATE_LIMIT = 100;
@@ -89,7 +93,9 @@ export function createHandler(
       return finishResponse(
         response(413, { message: "Public combo selection request is too large" }),
         resolvedDependencies,
-        startedAt
+        startedAt,
+        "unknown",
+        event.requestContext?.requestId
       );
     }
 
@@ -101,7 +107,9 @@ export function createHandler(
         return finishResponse(
           response(400, { message: "Invalid public combo selection request" }),
           resolvedDependencies,
-          startedAt
+          startedAt,
+          "unknown",
+          event.requestContext?.requestId
         );
       }
       throw error;
@@ -111,14 +119,18 @@ export function createHandler(
       return finishResponse(
         await selectPublicCombo(request, resolvedDependencies),
         resolvedDependencies,
-        startedAt
+        startedAt,
+        request.mode,
+        event.requestContext?.requestId
       );
     } catch (error) {
-      console.error("Public combo selection failed", { error });
+      logSelectionError("Public combo selection failed", request.mode, error);
       return finishResponse(
         response(500, { message: "Public combo selection failed" }),
         resolvedDependencies,
-        startedAt
+        startedAt,
+        request.mode,
+        event.requestContext?.requestId
       );
     }
   };
@@ -175,7 +187,7 @@ async function walkPublicCombo(
       }),
     ]);
   } catch (error) {
-    console.error("Public combo vector query failed", { error });
+    logSelectionError("Public combo vector query failed", "walk", error);
     return await randomFallback(request, dependencies, "vector_query_failed");
   }
 
@@ -278,7 +290,7 @@ async function searchPublicCombo(
     ]);
   } catch (error) {
     clearTimeout(retrievalTimeout);
-    console.error("Public combo search vector query failed", { error });
+    logSelectionError("Public combo search vector query failed", "search", error);
     return await randomFallback(request, dependencies, "vector_query_failed");
   }
 
@@ -369,9 +381,15 @@ async function searchPublicCombo(
     (result) => result.status === "rejected"
   ).length;
   if (complementaryFailures > 0) {
-    console.error("Public combo complementary retrieval partially failed", {
-      failures: complementaryFailures,
-    });
+    console.error(
+      JSON.stringify({
+        level: "error",
+        event: "public_combo_selection_partial_failure",
+        message: "Public combo complementary retrieval partially failed",
+        requestedMode: "search",
+        failures: complementaryFailures,
+      })
+    );
   }
 
   const selected = sampleNearestComboToneCandidate(
@@ -658,7 +676,9 @@ function requiredEnv(
 function finishResponse(
   result: HttpResponse,
   dependencies: PublicComboSelectionDependencies,
-  startedAt: number
+  startedAt: number,
+  requestedMode: PublicComboSelectionMetric["requestedMode"],
+  requestId?: string
 ): HttpResponse {
   const body = JSON.parse(result.body) as {
     fallbackReason?: PublicComboSelectionFallbackReason;
@@ -667,13 +687,46 @@ function finishResponse(
       fallbackReason?: PublicComboSelectionFallbackReason;
     };
   };
+  const resolvedMode = body.selection?.resolvedMode ?? "unavailable";
   dependencies.emitMetric({
+    requestedMode,
     statusCode: result.statusCode,
-    resolvedMode: body.selection?.resolvedMode ?? "unavailable",
+    resolvedMode,
+    outcome: selectionOutcome(result.statusCode, resolvedMode),
     fallbackReason: body.selection?.fallbackReason ?? body.fallbackReason,
     latencyMs: Date.now() - startedAt,
+    requestId,
   });
   return result;
+}
+
+function selectionOutcome(
+  statusCode: number,
+  resolvedMode: PublicComboSelectionMetric["resolvedMode"]
+): PublicComboSelectionMetric["outcome"] {
+  if (statusCode >= 500) return "failed";
+  if (statusCode === 404) return "unavailable";
+  if (statusCode >= 400) return "rejected";
+  if (resolvedMode === "random") return "fallback";
+  if (resolvedMode === "unavailable") return "unavailable";
+  return "selected";
+}
+
+function logSelectionError(
+  message: string,
+  requestedMode: "search" | "walk",
+  error: unknown
+): void {
+  console.error(
+    JSON.stringify({
+      level: "error",
+      event: "public_combo_selection_error",
+      message,
+      requestedMode,
+      errorName: error instanceof Error ? error.name : undefined,
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
+    })
+  );
 }
 
 function emitMetric(metric: PublicComboSelectionMetric): void {
@@ -697,6 +750,14 @@ function emitMetric(metric: PublicComboSelectionMetric): void {
       ResolvedMode: metric.resolvedMode,
       StatusCode: String(metric.statusCode),
       FallbackReason: fallbackReason,
+      event: "public_combo_selection",
+      requestedMode: metric.requestedMode,
+      resolvedMode: metric.resolvedMode,
+      outcome: metric.outcome,
+      statusCode: metric.statusCode,
+      fallbackReason,
+      latencyMs: metric.latencyMs,
+      requestId: metric.requestId,
       Requests: 1,
       Errors: metric.statusCode >= 400 ? 1 : 0,
       Latency: metric.latencyMs,
