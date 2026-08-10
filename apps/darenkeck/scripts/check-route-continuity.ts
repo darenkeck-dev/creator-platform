@@ -77,6 +77,25 @@ try {
   await resumeBreadcrumbs.getByRole("link", { name: "darenkeck" }).waitFor({ state: "visible" });
   await resumeBreadcrumbs.getByText("resume", { exact: true }).waitFor({ state: "visible" });
   await page.getByRole("link", { name: "Download" }).waitFor({ state: "visible" });
+  const resumeCardBox = await page.locator(".resume-document").boundingBox();
+  const resumeNavBox = await page.locator("[data-document-nav]").boundingBox();
+  if (!resumeCardBox || !resumeNavBox || Math.abs(resumeCardBox.y - resumeNavBox.y) > 1) {
+    throw new Error(
+      `Document navigation is not flush with its container: ${JSON.stringify({ resumeCardBox, resumeNavBox })}`
+    );
+  }
+  const matchingTopCorners = await page.evaluate(() => {
+    const card = document.querySelector(".resume-document");
+    const nav = document.querySelector("[data-document-nav]");
+    if (!card || !nav) return false;
+    return (
+      getComputedStyle(card).borderTopLeftRadius === getComputedStyle(nav).borderTopLeftRadius &&
+      getComputedStyle(card).borderTopRightRadius === getComputedStyle(nav).borderTopRightRadius
+    );
+  });
+  if (!matchingTopCorners) {
+    throw new Error("Document navigation corners do not match the container.");
+  }
   if ((await page.getByTitle("Minimize").count()) > 0) {
     throw new Error("Document routes must not render the old minimize control.");
   }
@@ -134,6 +153,17 @@ try {
       .getByRole("navigation", { name: "Breadcrumb" })
       .getByRole("link", { name: "blog" })
       .waitFor({ state: "visible" });
+    const documentNav = page.locator("[data-document-nav]");
+    await page.evaluate(() => window.scrollTo(0, 900));
+    await page.waitForFunction(() => window.scrollY > 0);
+    const stickyNavBox = await documentNav.boundingBox();
+    if (!stickyNavBox || stickyNavBox.y < -1 || stickyNavBox.y > 1) {
+      throw new Error(`Document navigation did not remain sticky: ${JSON.stringify(stickyNavBox)}`);
+    }
+    const markdownTable = page.locator("[data-markdown-table]").first();
+    if ((await markdownTable.count()) > 0) {
+      await markdownTable.locator("table thead th").first().waitFor({ state: "visible" });
+    }
     const sameVideoOnEntry = await page.evaluate(
       () =>
         (window as Window & { continuityVideo?: HTMLVideoElement }).continuityVideo ===

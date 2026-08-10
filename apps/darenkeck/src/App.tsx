@@ -638,7 +638,7 @@ export function App() {
   ];
 
   return (
-    <div className="relative isolate min-h-dvh overflow-x-hidden">
+    <div className="relative isolate min-h-dvh overflow-x-clip">
       {playerEnabled && !printMode ? (
         <Suspense fallback={null}>
           {slotAssignment ? (

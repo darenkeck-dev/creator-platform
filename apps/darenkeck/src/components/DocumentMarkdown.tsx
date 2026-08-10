@@ -60,10 +60,41 @@ const documentComponents: Components = {
       {children}
     </blockquote>
   ),
+  table: ({ children }) => (
+    <div
+      className="my-7 overflow-x-auto rounded-xl border border-white/20 print:overflow-visible print:rounded-none print:border-gray-400"
+      data-markdown-table
+    >
+      <table className="w-full min-w-[38rem] border-collapse text-left text-sm print:min-w-0 print:text-[8.5pt]">
+        {children}
+      </table>
+    </div>
+  ),
+  thead: ({ children }) => (
+    <thead className="border-b border-white/25 bg-white/10 text-white print:border-gray-500 print:bg-gray-100 print:text-black">
+      {children}
+    </thead>
+  ),
+  tbody: ({ children }) => (
+    <tbody className="divide-y divide-white/15 text-white/75 print:divide-gray-300 print:text-black">
+      {children}
+    </tbody>
+  ),
+  tr: ({ children }) => <tr className="align-top">{children}</tr>,
+  th: ({ children }) => (
+    <th className="px-4 py-3 font-semibold leading-5 text-white print:px-[0.08in] print:py-[0.05in] print:text-black">
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td className="px-4 py-3 leading-6 print:px-[0.08in] print:py-[0.05in] print:leading-[1.25]">
+      {children}
+    </td>
+  ),
   img: ({ alt, src, title }) => (
     <img
       alt={alt ?? ""}
-      className="my-6 block h-auto max-w-full rounded-xl bg-white p-3 shadow-lg print:my-[0.12in] print:max-h-[8in] print:break-inside-avoid print:rounded-none print:p-0 print:shadow-none"
+      className="my-6 block h-auto max-w-full rounded-xl shadow-lg print:my-[0.12in] print:max-h-[8in] print:break-inside-avoid print:rounded-none print:shadow-none"
       decoding="async"
       loading="eager"
       src={src}
