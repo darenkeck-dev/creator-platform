@@ -82,7 +82,7 @@ Darenkeck homepage explorer:
 ## Public developer profile
 
 - Route: `/dev`
-- `apps/darenkeck/src/main.tsx` nests `/` and lazy `/dev` under the persistent `App` experience layout; `*` remains outside it.
+- `apps/darenkeck/src/main.tsx` nests `/`, lazy `/dev`, `/blog`, and `/blog/:slug` under the persistent `App` experience layout; `*` remains outside it.
 - CloudFront's existing `403/404 -> /index.html` fallback supports direct requests to the static SPA route.
 - The route lazy-loads `DevPage`, which imports fetched `content/resume.md` as a Vite raw asset and renders it with `react-markdown`, `remark-gfm`, and `remark-frontmatter`.
 - YAML frontmatter is recognized and omitted from the document output. Resume headings, lists, links, and typography are mapped to styled React components.
@@ -96,10 +96,11 @@ Darenkeck homepage explorer:
 - Initial content includes general news plus developer news, resume, and project/profile material.
 - `/dev` currently serves the resume. Intended collection routes include `/news`, `/news/:slug`, `/dev/news`, and `/dev/news/:slug`; final file-to-route conventions remain to be defined.
 - `scripts/fetch-darenkeck-content.sh` shallow-fetches `main` by default before darenkeck staging/prod builds, validates `content/`, `media/`, and non-empty `content/resume.md`, and records the resolved commit in `apps/darenkeck/.generated-content/REVISION`.
-- Fetched Markdown is stored under the gitignored `apps/darenkeck/.generated-content/content/`; media is copied to the gitignored `apps/darenkeck/public/media/` for Vite deployment.
-- Mermaid diagrams are authored as `.mmd` files outside the deployed tree and manually rendered with the pinned `diagram:svg` command into committed `media/diagrams/*.svg`. Markdown references `/media/diagrams/...`; the viewer uses responsive light-card image styling and the PDF generator fails on broken images.
+- Fetched Markdown and Mermaid sources are stored under gitignored `apps/darenkeck/.generated-content/`; media is copied to gitignored `apps/darenkeck/public/media/` for Vite deployment.
+- Content preparation validates post frontmatter, omits `draft: true` and `*-draft.md` entries, rejects duplicate slugs, and writes a generated published-only blog manifest consumed by the SPA.
+- Mermaid diagrams are authored as `.mmd` files under the content repository's `diagrams/` tree and rendered during content preparation with the pinned CLI into `public/media/diagrams/*.svg`. Relative paths are preserved, stale output is removed before rendering, and invalid Mermaid fails deployment.
 - `DARENKECK_CONTENT_REPO` and `DARENKECK_CONTENT_REF` override the private SSH repository and `main` defaults. Local access uses existing Git credentials; future CI requires read-only repository credentials.
-- Collection indexing and frontmatter metadata extraction remain pending. Use MDX only if content later needs embedded interactive React components.
+- Blog collection indexing and frontmatter extraction are implemented for plain Markdown. Use MDX only if content later needs embedded interactive React components.
 - The first version remains a client-rendered SPA. Static generation/prerendering and broader SEO work are deferred.
 
 ## Deployment model

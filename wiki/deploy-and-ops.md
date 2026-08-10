@@ -24,11 +24,11 @@
 - Pages CMS edits and commits Markdown in the separate `darenkeck-content` repository.
 - `bun run content:darenkeck:fetch` shallow-fetches `git@github.com:darenkeck-dev/darenkeck-content.git` at `main`; override with `DARENKECK_CONTENT_REPO` or `DARENKECK_CONTENT_REF`.
 - Fetching accepts only regular Git file modes under `content/` and `media/`, requires a regular non-empty `content/resume.md`, and rechecks staged trees for non-regular files before replacement. The resolved commit SHA is written to `apps/darenkeck/.generated-content/REVISION`.
-- `deploy:darenkeck:staging` and `deploy:darenkeck:prod` run the fetch before Vite builds, and fail instead of building when fetch or validation fails.
+- `deploy:darenkeck:staging` and `deploy:darenkeck:prod` run content fetch, published-post/diagram preparation, resume PDF generation, and the Vite build in order. Any validation or Mermaid rendering failure stops deployment.
 - Local deployment uses existing Git SSH credentials. Future CI should use read-only access through a deploy key, GitHub App token, or fine-grained PAT.
 - `/dev` bundles fetched `content/resume.md` into the SPA and renders it with `react-markdown`; therefore a darenkeck build requires a successful content fetch first.
-- Collection parsing and news/blog route generation are not implemented yet.
-- Mermaid is not a runtime dependency. Render content-repository `.mmd` sources before committing with `bun run --cwd apps/darenkeck diagram:svg -- <input.mmd> <media/diagrams/output.svg>`; deployment copies the committed SVG through the existing `media/` path.
+- Blog posts under `content/posts/` require title/date frontmatter. `draft: true` and `*-draft.md` entries are absent from the generated manifest and production bundle; published entries are sorted newest-first and served at `/blog/:slug`.
+- Mermaid is not a runtime dependency. Deployment renders content-repository `diagrams/**/*.mmd` sources with the pinned CLI into ignored `public/media/diagrams/**/*.svg`; generated SVGs are never committed and stale outputs are cleared on each preparation.
 - Initial output remains an SPA deployed through the existing S3 sync and CloudFront invalidation flow. SEO prerendering is deferred.
 
 ## Resume PDF

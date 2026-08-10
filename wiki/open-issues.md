@@ -17,8 +17,8 @@
 - After MVP, build dashboards/alarms/notifications and automated vector-drift checks from the structured selection and vector-sync logs now emitted for manual release checks.
 - Before learning from combo reviews, capture server-derived sparse labels plus review-time audio/video effective vectors, source fingerprints, taxonomy version, and predictor/training schema versions. Unlabeled dimensions must remain unknown rather than neutral.
 - Add a separate anonymous public review boundary only after enforcing stable combo/source validation, minimum keyword rules, idempotency, rate limits, abuse controls, consent copy, and retention/deletion policy.
-- Define deterministic file-to-route mapping and frontmatter metadata extraction for `/news`, `/dev/news`, and project/profile content; `/dev` already renders the fetched resume Markdown.
-- Add collection indexing for fetched `apps/darenkeck/.generated-content/content/`; defer MDX unless embedded React components become necessary.
+- Define deterministic file-to-route mapping and frontmatter metadata extraction for future `/news`, `/dev/news`, and project/profile collections; `/dev` and the generated `/blog` collection are implemented.
+- Defer MDX unless future content requires embedded interactive React components; current resume and blog content use plain Markdown.
 - Decide how content-repository commits trigger site deployment and how a private repository, if used, supplies read-only credentials.
 - Ensure future CI/deployment runners install Playwright Chromium with `bun run setup:darenkeck:pdf` before darenkeck deployment.
 - Revisit prerendering, sitemap generation from content, metadata, and other SEO work after the SPA content routes are working.

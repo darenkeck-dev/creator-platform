@@ -1,5 +1,16 @@
 # Wiki Log
 
+## [2026-08-10] web | replace document minimize controls with breadcrumbs
+
+- Replaced the resume/blog minimize icon with upper-left breadcrumb navigation back to the homepage and blog index.
+- Moved Resume's PDF download action to the upper-right of the shared document header.
+
+## [2026-08-10] web/content | add persistent generated blog
+
+- Added persistent `/blog` and `/blog/:slug` document routes that retain combo playback and share the resume card and Markdown styling.
+- Added deploy-time post validation/indexing with published-only generated output, explicit and filename-based draft exclusion, and newest-first ordering.
+- Moved Mermaid SVG generation into content preparation so fetched `.mmd` sources are the single source of truth and stale or invalid diagrams cannot deploy.
+
 ## [2026-08-10] planning | reconcile MVP implementation status
 
 - Marked implementation-order items 3 through 7 complete and deployed, with Darenkeck integration complete in source for item 8.
