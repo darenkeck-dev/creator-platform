@@ -2,7 +2,7 @@
 
 Monorepo for media ingestion, processing, tone analysis, combo playback, and collection/review tools.
 
-Release status: pre-release. The next release milestone is not public launch; it is reaching the point where combo tone input can be collected from real users.
+Release status: pre-release. The MVP milestone is a public tone-selection experience with automatic tone walking; public combination reviews are deferred to a later release.
 
 ## Repo Shape
 
@@ -37,9 +37,9 @@ Release status: pre-release. The next release milestone is not public launch; it
 - Deploy processing stack: `FFMPEG_LAYER_ARN="<your ffmpeg layer arn>" bun run deploy:processing`
 - Deploy darenkeck static site: `bun run deploy:darenkeck:prod`
 
-## Roadmap To User Input Collection
+## Roadmap To MVP Launch
 
-Release milestone: start collecting user input on combos so combo-level tone, delta, and affect data can be studied.
+Release milestone: publish reliable keyword-driven tone selection and automatic tone walking on `darenkeck.com`.
 
 1. **Media Manager UI cleanup** - complete
    - Library and folder views support list mode, multi-select, and bulk job actions.
@@ -47,30 +47,24 @@ Release milestone: start collecting user input on combos so combo-level tone, de
    - Folder navigation, contextual add/upload, breadcrumbs, folder management, and asset moves are cleaned up.
    - Folder deletes expand server-side through descendants before deletion.
 
-2. **Tone review input** - started
-    - Reusable keyword/tone score review input is in place for standalone audio/video assets and combo pages.
-    - Media Manager has a dedicated `Review` tab that defaults to a random public combo, can switch to fresh random audio/video assets, starts muted playback, and uses a 3-level emotion tree to select tone keywords.
-    - Combo pages can submit reviews for the combo, just the video source, or just the audio source.
-    - Reviews are stored through `POST /tone-reviews` as target-centered records without raw reviewer PII.
-    - Reviewed combos can be listed through `GET /tone-reviews` for paginated review traversal.
-   - Next: compute and display human-vs-model deltas.
-   - Use those deltas to tune keyword weights, strength scales, and tone metric mappings.
+2. **Tone-based combo selection** - backend deployed, public client rollout pending
+   - Keyword input maps deterministically into the ten-dimensional tone space.
+   - S3 Vectors bounds audio/video candidates before exact predicted-combo reranking.
+   - The selected combination becomes the starting point for subsequent walking.
 
-3. **Combo traversal**
-   - Implement nearest-neighbor or related traversal methods for moving from combo to combo.
-   - Use tone vectors, combo deltas, and interaction features as traversal inputs.
-   - Keep traversal explainable enough to debug why one combo follows another.
+3. **Automatic tone walk** - backend deployed, public client rollout pending
+   - Playback completion selects a nearby predicted combination.
+   - Both audio and video change, with bounded recent history to reduce loops.
+   - Vector failures fall back to valid random public playback.
 
-4. **Tone-based combo retrieval**
-   - Define how user tone input becomes a query vector.
-   - Fetch combos that match the provided tonal input.
-   - Support both direct keyword input and later higher-level prompt/input forms.
-   - Record query, selected combo, and feedback so retrieval quality can be evaluated.
+4. **Public release gates**
+   - Complete the initial media corpus and curator calibration pass.
+   - Validate playback, transitions, failure recovery, accessibility, and target browsers.
+   - Verify structured search, walk, fallback, and vector-sync logs during release smoke checks.
+   - Defer richer recovery UI, dashboards, new alarms, notifications, and expanded cost controls until post-MVP hardening.
 
-5. **Data collection loop**
-   - Store combo-level user tone input and feedback.
-   - Compare user input against extracted audio/video tone and combo deltas.
-   - Use accumulated data to refine tone-taxonomy mappings, combo scoring, and retrieval.
+5. **Public combination reviews** - post-MVP
+   - Add anonymous review submission, validation, idempotency, abuse controls, privacy behavior, and operational procedures in a later release.
 
 ## Session Context
 

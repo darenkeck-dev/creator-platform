@@ -6,11 +6,10 @@ Release a public tone-driven audio/video experience on `darenkeck.com` that can:
 
 1. Play a reliable initial catalog of public media.
 2. Accept curator tone input for source audio and video assets.
-3. Accept anonymous public keyword reviews for combinations.
-4. Start from a combination close to a user's requested tone.
-5. Continue automatically through a nearest-neighbor walk after each combination ends.
+3. Start from a combination close to a visitor's requested tone.
+4. Continue automatically through a tone walk after each combination ends.
 
-This is an MVP for collecting useful tone and combination data. It is not expected to be a complete recommendation, personalization, or model-training system.
+The MVP goal is to release tone selection and the tone walk as a reliable public experience. Public combination reviews and user-feedback collection are deferred to a later release; this MVP is not expected to be a complete recommendation, personalization, or model-training system.
 
 ## MVP User Journey
 
@@ -20,24 +19,22 @@ This is an MVP for collecting useful tone and combination data. It is not expect
 4. The result is fuzzed among a small set of strong matches so the same request does not always return the same pair.
 5. When playback completes without new tone input, the next pair is chosen from the current combination's nearest neighbors.
 6. Neighbor steps must use both new audio and new video.
-7. The visitor can submit a keyword-only review of the current combination.
-8. Playback and random selection remain available as fallbacks when search or review APIs fail.
+7. Playback and random selection remain available as fallbacks when tone search or walking fails.
 
 ## MVP Principles
 
-- DynamoDB remains the source of truth for assets and reviews.
+- DynamoDB remains the source of truth for assets and curator reviews.
 - A vector database stores derived, disposable asset search vectors.
 - Only audio and video asset vectors are indexed; combinations are not prepopulated.
 - Candidate combinations are generated dynamically from audio/video vector lookups.
 - `{ ...scores, ...adjustedScores }` is the effective asset tone vector because curator adjustments are sparse by dimension.
-- Public combination reviews never adjust source audio or video assets.
-- Public reviews are collection-only during MVP and do not immediately alter retrieval.
 - Algorithms, vectors, taxonomy mappings, and index records are versioned.
-- The public experience must remain usable when review, vector search, or traversal fails.
+- The public experience must remain usable when vector search or traversal fails.
 
 ## Explicit Non-Goals
 
 - User accounts or cross-device personalization.
+- Anonymous public combination reviews or other public feedback capture.
 - Real-time retraining from public reviews.
 - Public audio/video source reviews.
 - Precomputed or persisted records for every possible combination.
@@ -74,7 +71,6 @@ source retrieval metric: Euclidean, no initial maximum-distance cutoff
 walk ranking metric: squared Euclidean over predicted combo tone
 initial combo predictor: combo-tone-predictor/v0
 top-five sampling weight: 1 / (1 + squared Euclidean distance)
-public reviews affecting live retrieval: disabled
 initial rollout: controlled explorer route or gated mode
 ```
 
@@ -375,7 +371,9 @@ Behavior:
 - [ ] Cache the eligible public asset catalog and invalidate it safely.
 - [x] Keep the current random endpoint as an operational fallback.
 
-## Phase 7: Public Combination Reviews
+## Post-MVP Release: Public Combination Reviews
+
+Public review capture does not block the MVP launch and is not part of its acceptance checklist. A later release can add the following separate feedback boundary after tone selection and walking are operating publicly.
 
 Add a separate unauthenticated write path, for example:
 
@@ -383,7 +381,7 @@ Add a separate unauthenticated write path, for example:
 POST /public/tone-reviews
 ```
 
-MVP rules:
+Later-release rules:
 
 - Accept only `targetType=combo`.
 - Accept approved keywords, not client-derived scores.
@@ -391,7 +389,7 @@ MVP rules:
 - Require stable synthetic combo ID and both source asset IDs.
 - Verify source assets are public and the pair matches the combo ID.
 - Never apply combo reviews to source audio/video scores.
-- Store reviews for analysis only; do not alter live retrieval during MVP.
+- Store reviews for analysis only at first; do not alter live retrieval until a separately validated learning release.
 - Store taxonomy, query/retrieval algorithm, and combo-analysis versions.
 - Store server-derived review-time audio/video tone snapshots and source fingerprints for future training provenance; do not store predicted combo tones.
 - Avoid raw reviewer PII.
@@ -399,14 +397,14 @@ MVP rules:
 - Add rate limits and basic abuse controls.
 - Log submission success/failure metrics without reviewer PII.
 
-Exit criteria:
+Later-release exit criteria:
 
 - Anonymous visitors can submit a valid combo review.
 - Invalid/private/source-mismatched combinations are rejected.
 - Duplicate client retries do not create duplicate evidence.
 - Review failures do not interrupt playback.
 
-## Phase 8: `darenkeck.com` Integration
+## Phase 7: `darenkeck.com` Integration
 
 - [x] Reuse the background `ComboPlayer` experience.
 - [x] Add the adaptive tone keyword picker as the MVP query input.
@@ -415,8 +413,7 @@ Exit criteria:
 - [x] Reset walk state when new tone input is submitted.
 - [x] Preserve recent combo/audio history across automatic transitions.
 - [x] Preserve player, mute, tone selection, and walk state across homepage and `/dev` navigation.
-- [ ] Add public combo review submission to the current combination.
-- [ ] Show clear loading, retry, and no-result states.
+- [x] Keep the existing top-of-screen busy indicator for selection waits.
 - [x] Keep random playback available if tone search fails.
 - [x] Ensure controls remain readable over varied video backgrounds.
 - [x] Support keyboard input, focus visibility, and reduced-motion preferences.
@@ -425,32 +422,31 @@ Exit criteria:
 
 Free-text tone input is post-MVP unless it produces a deterministic, versioned `ToneQuery` in the same 10-dimensional space. The constrained keyword picker is the MVP input method.
 
-## Phase 9: Playback And Browser Release Gate
+Richer retry, no-result, fallback-notice, and playback-recovery UI is post-MVP hardening. The initial release keeps the existing busy indicator and random fallback rather than adding a new status surface.
+
+## Phase 8: Playback And Browser Release Gate
 
 - [ ] Validate Chrome, Safari, and Firefox desktop playback.
 - [ ] Validate iOS Safari and Android Chrome playback.
 - [ ] Validate muted start, unmute, pause, replay, and automatic next transitions.
 - [ ] Validate interruption paths: app switch, screen lock, background/foreground, and native media controls.
 - [ ] Validate long/short audio-video duration mismatches.
-- [ ] Validate same-video/new-audio transitions.
+- [ ] Validate automatic transitions where both audio and video change.
 - [ ] Confirm no immediate audio repeats through at least 20 automatic transitions.
 - [ ] Resolve or explicitly accept the current end-state frame-jump issue.
 - [ ] Verify public controls remain accessible on mobile viewport sizes.
 
 The mobile focus-loss and native play/pause issues in `wiki/open-issues.md` are MVP risks because playback is the primary product behavior.
 
-## Phase 10: Operations, Privacy, And Cost
+## Phase 9: Operations And Cost
 
-- [ ] Add API success/error/latency metrics for search, walk, and public review submission.
-- [ ] Add vector index synchronization and stale-index metrics.
-- [ ] Add alarms for elevated public API errors and queue/DLQ backlog.
-- [ ] Add API and vector backend cost limits or alerts.
+- [x] Emit structured final-outcome logs for public search and walk requests.
+- [x] Emit structured success/failure logs for asset vector convergence.
+- [x] Document CloudWatch Logs Insights queries for selection and vector checks.
 - [x] Document vector index rebuild and reconciliation commands.
-- [ ] Document review export, backup, and purge procedures.
-- [ ] Add concise privacy copy for anonymous tone feedback.
-- [ ] Confirm logs do not intentionally store raw reviewer PII.
-- [ ] Document deploy order, smoke checks, and rollback procedure.
 - [ ] Ensure the current public random path remains available during rollback.
+
+Dashboards, new alarms, notification email, expanded cost controls, automated stale-index detection, and a fuller rollback system are post-MVP hardening. The MVP prepares consistent logs for that work without making new monitoring infrastructure a launch dependency.
 
 ## Release Acceptance Checklist
 
@@ -471,29 +467,21 @@ The mobile focus-loss and native play/pause issues in `wiki/open-issues.md` are 
 ### Walk
 
 - [ ] Automatic next selection uses exact distance from the current predicted combo tone.
-- [ ] Every transition changes audio.
-- [ ] Same-video transitions are allowed.
+- [ ] Every transition changes both audio and video.
 - [ ] Recent-history exclusions prevent obvious loops.
 - [ ] Walk failure falls back to a playable pair.
 
-### Reviews
-
-- [ ] Curator reviews affect only audio/video effective vectors.
-- [ ] Public reviews affect only combo review data.
-- [ ] Public submission is anonymous, idempotent, validated, and rate-limited.
-- [ ] Public reviews do not change retrieval during MVP.
-
 ### Experience
 
-- [ ] Homepage playback, tone selection, automatic walk, and combo review work on the target browser/device matrix.
-- [ ] Loading and failure states recover without requiring a page reload.
+- [ ] Homepage playback, tone selection, and automatic walk work on the target browser/device matrix.
+- [x] Selection waits retain the existing top-of-screen busy indicator.
+- [ ] Search and walk failures preserve playable random fallback behavior.
 - [ ] Public controls are keyboard-accessible and readable over media.
 
 ### Operations
 
-- [ ] Search, walk, review, and vector sync metrics are visible.
-- [ ] Index rebuild, review export, deployment, smoke test, and rollback procedures are documented.
-- [ ] Public API and vector database costs have alerts or limits.
+- [ ] Structured search, walk, fallback, and vector-sync logs are visible after production smoke traffic.
+- [x] Index reconciliation and log-query procedures are documented.
 
 ## Recommended Implementation Order
 
@@ -502,11 +490,13 @@ The mobile focus-loss and native play/pause issues in `wiki/open-issues.md` are 
 3. Select the vector backend and define `asset-tone-vector/v1`.
 4. Implement vector lifecycle synchronization and initial asset backfill.
 5. Implement dynamic global tone search with exact reranking and fuzzing.
-6. Implement dynamic neighbor walking with new-audio enforcement.
+6. Implement dynamic neighbor walking with both-source change enforcement.
 7. Add the unified public combo selection endpoint.
-8. Add the anonymous combo review endpoint and abuse controls.
-9. Integrate search, walking, and review capture into `darenkeck.com`.
-10. Complete browser, playback, privacy, observability, cost, and rollback gates.
+8. Integrate tone selection and automatic walking into `darenkeck.com`.
+9. Complete browser/playback validation and verify structured release logs.
+10. Promote the validated tone selection and walk experience to the public homepage.
+
+After the MVP release, implement the anonymous combo review endpoint, abuse controls, consent/privacy behavior, review operations, and public review UI as a separate release.
 
 ## Related Documents
 
