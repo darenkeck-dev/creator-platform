@@ -1,5 +1,10 @@
 # Wiki Log
 
+## [2026-08-10] planning | reconcile MVP implementation status
+
+- Marked implementation-order items 3 through 7 complete and deployed, with Darenkeck integration complete in source for item 8.
+- Kept item 9 open for client publishing, target browser/playback validation, and production structured-log smoke verification.
+
 ## [2026-08-10] planning | defer React cleanup audit
 
 - Added a post-MVP source-audit plan for both React applications and the shared playback/review package.

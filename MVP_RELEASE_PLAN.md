@@ -302,7 +302,7 @@ Use exact squared Euclidean distance over all ten predicted combo-tone dimension
 
 - [x] Sample among the nearest valid candidates rather than always selecting rank one.
 - [x] Prevent immediate audio and video repeats at the API level.
-- [ ] Maintain a short client/API recent-history list to prevent loops.
+- [x] Maintain a short client/API recent-history list to prevent loops.
 - [x] Add an escape path when all local candidates are excluded.
 - [x] Fall back to a valid random public pair if vector lookup fails.
 
@@ -411,7 +411,7 @@ Later-release exit criteria:
 - [x] Submit keyword input to the global tone-search mode.
 - [x] On playback completion, request a walk continuation.
 - [x] Reset walk state when new tone input is submitted.
-- [x] Preserve recent combo/audio history across automatic transitions.
+- [x] Preserve recent combo/audio/video history across automatic transitions.
 - [x] Preserve player, mute, tone selection, and walk state across homepage and `/dev` navigation.
 - [x] Keep the existing top-of-screen busy indicator for selection waits.
 - [x] Keep random playback available if tone search fails.
@@ -444,7 +444,7 @@ The mobile focus-loss and native play/pause issues in `wiki/open-issues.md` are 
 - [x] Emit structured success/failure logs for asset vector convergence.
 - [x] Document CloudWatch Logs Insights queries for selection and vector checks.
 - [x] Document vector index rebuild and reconciliation commands.
-- [ ] Ensure the current public random path remains available during rollback.
+- [x] Ensure the current public random path remains available during rollback.
 
 Dashboards, new alarms, notification email, expanded cost controls, automated stale-index detection, and a fuller rollback system are post-MVP hardening. The MVP prepares consistent logs for that work without making new monitoring infrastructure a launch dependency.
 
@@ -458,18 +458,18 @@ Dashboards, new alarms, notification email, expanded cost controls, automated st
 
 ### Search
 
-- [ ] Keyword input starts a new global search independent of the current combo.
+- [x] Keyword input starts a new global search independent of the current combo.
 - [ ] Results are close to requested dimensions under exact masked distance.
-- [ ] Repeated identical requests can produce controlled variation.
-- [ ] Complementary audio/video candidates are represented.
-- [ ] Search failure falls back to a playable random pair.
+- [x] Repeated identical requests can produce controlled variation.
+- [x] Complementary audio/video candidates are represented.
+- [x] Search failure falls back to a playable random pair.
 
 ### Walk
 
-- [ ] Automatic next selection uses exact distance from the current predicted combo tone.
-- [ ] Every transition changes both audio and video.
-- [ ] Recent-history exclusions prevent obvious loops.
-- [ ] Walk failure falls back to a playable pair.
+- [x] Automatic next selection uses exact distance from the current predicted combo tone.
+- [x] Every transition changes both audio and video.
+- [x] Recent-history exclusions prevent obvious loops.
+- [x] Walk failure falls back to a playable pair.
 
 ### Experience
 
@@ -487,13 +487,13 @@ Dashboards, new alarms, notification email, expanded cost controls, automated st
 
 1. Complete the 20/20 media corpus.
 2. Complete one curator pass over every source asset.
-3. Select the vector backend and define `asset-tone-vector/v1`.
-4. Implement vector lifecycle synchronization and initial asset backfill.
-5. Implement dynamic global tone search with exact reranking and fuzzing.
-6. Implement dynamic neighbor walking with both-source change enforcement.
-7. Add the unified public combo selection endpoint.
-8. Integrate tone selection and automatic walking into `darenkeck.com`.
-9. Complete browser/playback validation and verify structured release logs.
+3. [x] Select S3 Vectors and define `asset-tone-vector/v1`.
+4. [x] Implement vector lifecycle synchronization, reconciliation, and the initial production backfill.
+5. [x] Implement and deploy dynamic global tone search with complementary retrieval, exact masked reranking, and weighted top-five fuzzing.
+6. [x] Implement and deploy dynamic neighbor walking with exact predicted-combo ranking, both-source change enforcement, bounded history, and random fallback.
+7. [x] Add and deploy the unified `POST /public/combos/select` endpoint for explicit search and walk modes.
+8. [x] Integrate tone selection and automatic walking into the persistent Darenkeck application. The source implementation and local route-continuity smoke are complete; publishing remains part of the release gate.
+9. [ ] Complete the desktop/mobile browser and playback matrix, publish the integrated client, and verify the structured selection/vector-sync logs against production smoke traffic. Log emission and Logs Insights queries are complete in source.
 10. Promote the validated tone selection and walk experience to the public homepage.
 
 After the MVP release, implement the anonymous combo review endpoint, abuse controls, consent/privacy behavior, review operations, and public review UI as a separate release.
