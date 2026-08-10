@@ -53,5 +53,9 @@
     "prettier": "^3.5.3",
     "turbo": "^2.4.4",
     "typescript": "^5.8.2"
+  },
+  "dependencies": {
+    "@agent-native/skills": "^0.2.490",
+    "add": "^2.0.9"
   }
 }
