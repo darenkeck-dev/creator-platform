@@ -1,5 +1,20 @@
 # Wiki Log
 
+## [2026-08-10] web | center responsive document breadcrumbs
+
+- Centered Resume/Blog breadcrumbs whenever media controls are embedded in the sticky row, retaining left alignment only when controls float at desktop widths.
+
+## [2026-08-10] web | expand responsive document controls
+
+- Made Resume/Blog cards edge-to-edge below the desktop breakpoint and embedded controls at mobile and medium widths.
+- Positioned audio left of the breadcrumbs and tone right, retaining Resume Download in the right action group.
+- Added 390px and 820px browser coverage for full-width layout, control ordering, sticky scrolling, and playback continuity.
+
+## [2026-08-10] web | embed mobile media controls in document navigation
+
+- Moved the single mute and tone control group into the sticky Resume/Blog breadcrumb row on mobile while retaining floating controls on the homepage and desktop.
+- Added mobile browser coverage for placement, mute/tone interaction, sticky scrolling, route continuity, and media-element identity.
+
 ## [2026-08-10] web | simplify blog index
 
 - Removed the `/blog` headline and introduction so the dated entry list begins directly below the blog breadcrumb.
