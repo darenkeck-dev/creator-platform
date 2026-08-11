@@ -1,5 +1,9 @@
 # Wiki Log
 
+## [2026-08-10] web | amplify first-use tone control
+
+- Replaced the unacknowledged tone control's subtle pulse with a softly moving cyan glow that slowly oscillates in brightness, retaining a static treatment for reduced-motion users.
+
 ## [2026-08-10] web | center responsive document breadcrumbs
 
 - Centered Resume/Blog breadcrumbs whenever media controls are embedded in the sticky row, retaining left alignment only when controls float at desktop widths.

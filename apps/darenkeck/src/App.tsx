@@ -383,7 +383,7 @@ function ToneControl({
           ? "border-sky-300 text-sky-200 shadow-[0_0_24px_rgba(56,189,248,0.45)]"
           : toneExplorerAcknowledged
             ? "border-white/40"
-            : "border-sky-200/70 text-sky-100 shadow-[0_0_24px_rgba(56,189,248,0.35)] motion-safe:animate-pulse"
+            : "tone-control-first-use border-sky-200/70 text-sky-100"
       }`}
       data-tone-control
       onClick={onToneToggle}

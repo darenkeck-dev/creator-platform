@@ -71,6 +71,25 @@ body {
   }
 }
 
+.tone-control-first-use {
+  animation: tone-control-first-use 4.2s ease-in-out infinite;
+}
+
+@keyframes tone-control-first-use {
+  0%,
+  100% {
+    box-shadow:
+      2px -2px 20px 3px rgb(56 189 248 / 0.24),
+      -3px 3px 32px 5px rgb(14 165 233 / 0.14);
+  }
+
+  50% {
+    box-shadow:
+      -3px 2px 30px 7px rgb(56 189 248 / 0.48),
+      4px -3px 42px 9px rgb(14 165 233 / 0.26);
+  }
+}
+
 @page {
   size: Letter;
   margin: 0.55in 0.6in;
@@ -100,6 +119,13 @@ body {
     animation: none;
     border-color: rgba(255, 255, 255, 0.8);
     background: transparent;
+  }
+
+  .tone-control-first-use {
+    animation: none;
+    box-shadow:
+      0 0 24px 5px rgb(56 189 248 / 0.34),
+      0 0 34px 7px rgb(14 165 233 / 0.2);
   }
 
   .transition-all {
