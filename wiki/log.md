@@ -1,5 +1,36 @@
 # Wiki Log
 
+## [2026-08-10] web | hold tone submit confirmation
+
+- Showed the tone submit success check for one second before closing the full-screen explorer and restoring compact document controls.
+- Extended mobile browser coverage to verify the success state remains readable for the intended interval and submission still starts the next random journey.
+
+## [2026-08-10] web | separate compact tone close control
+
+- Kept the compact document bar's tone icon launcher-only, hid its embedded mute control during tone selection, and added a dedicated close control above the full-screen overlay.
+- Updated mobile browser coverage for launcher identity, mute-control removal, overlay close placement, and control restoration after closing.
+
+## [2026-08-10] web | expand tone selection overlay
+
+- Added a full-screen translucent tone-selection backdrop and moved suggested keywords to roughly one-third of the viewport height while preserving top media controls and the bottom selected-keyword pile.
+- Extended mobile browser coverage to verify the backdrop fills the viewport and suggestions do not obstruct the close control.
+
+## [2026-08-10] web | bottom-align blog index
+
+- Positioned the blog entry list near the viewport bottom to match the homepage card while keeping individual posts and the resume top-aligned.
+
+## [2026-08-10] deploy | publish tone article and resume update
+
+- Published Darenkeck production from content revision `c394fc13683cd9a4194147b5bbcbd197469e16b4` and completed CloudFront invalidation `IA4N7J51L9S28MNY01GX0PXV0B`.
+- Generated two published blog posts and one Mermaid SVG, including the newly published `/blog/audio-visual-tone-exploration` article.
+- Verified the homepage, blog index, tone article, generated diagram, updated resume, PDF, and persistent playback through live browser navigation.
+
+## [2026-08-10] deploy | publish blog and tone integration
+
+- Published Darenkeck production from content revision `26783ccfe35c6967fbb04abe098adbd048579010` and completed CloudFront invalidation `I18836UGI00VNSZ3RIX3PSJ4W8`.
+- Verified homepage, blog index, direct post, resume, PDF, public random API, persistent playback navigation, visible tone controls, exact search, and a subsequent walk that changed both sources.
+- Published one blog post; `audio-visual-tone-exploration.md` remained excluded because its canonical frontmatter still sets `draft: true`.
+
 ## [2026-08-10] web | amplify first-use tone control
 
 - Replaced the unacknowledged tone control's subtle pulse with a softly moving cyan glow that slowly oscillates in brightness, retaining a static treatment for reduced-motion users.
