@@ -2,10 +2,11 @@ import type {
   PublicComboPredictedTone,
   PublicComboSelectionRequest,
 } from "@media-manager/contracts";
-import { lazy, Suspense, useEffect, useEffectEvent, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useEffectEvent, useRef, useState, type RefObject } from "react";
 import { useLocation, useOutlet } from "react-router-dom";
 
 import { BulletinSection } from "./components/BulletinSection";
+import { DocumentControlsProvider } from "./components/DocumentControlsContext";
 import { LinksSection } from "./components/LinksSection";
 import { ShellLoader } from "./components/ShellLoader";
 import { ToneExplorer, ToneExplorerExplainer, ToneExplorerIcon } from "./components/ToneExplorer";
@@ -40,6 +41,7 @@ const SingleComboSlot = lazy(async () => {
 const ENABLE_DEBUG_LOGS = false;
 const SHOW_LOCAL_DEBUG_CONTROLS = false;
 const DOCUMENT_TRANSITION_MS = 400;
+type AudioLevel = "muted" | "full";
 
 function DocumentRouteTransition({
   pathname,
@@ -278,12 +280,143 @@ function DarenKeckWordmark() {
   );
 }
 
-export function App() {
-  type AudioLevel = "muted" | "full";
+function useCompactDocumentViewport(): boolean {
+  const [compact, setCompact] = useState(() => window.matchMedia("(max-width: 1023px)").matches);
 
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 1023px)");
+    const update = (event: MediaQueryListEvent) => setCompact(event.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  return compact;
+}
+
+type AudioControlProps = {
+  audioButtonTitle: string;
+  audioLevel: AudioLevel;
+  embedded: boolean;
+  onAudioToggle: () => void;
+};
+
+function AudioControl({
+  audioButtonTitle,
+  audioLevel,
+  embedded,
+  onAudioToggle,
+}: AudioControlProps) {
+  const sizeClass = embedded ? "h-10 w-10" : "h-12 w-12";
+  const positionClass = embedded
+    ? "relative"
+    : "fixed z-[130] [left:max(1.5rem,env(safe-area-inset-left))] [top:max(1.5rem,env(safe-area-inset-top))]";
+
+  return (
+    <button
+      aria-label={audioButtonTitle}
+      className={`pointer-events-auto inline-flex ${sizeClass} ${positionClass} items-center justify-center rounded-full border border-white/40 bg-black/45 text-white shadow-lg backdrop-blur-sm print:hidden`}
+      data-audio-control
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onAudioToggle();
+      }}
+      title={audioButtonTitle}
+      type="button"
+    >
+      <svg
+        aria-hidden="true"
+        fill="none"
+        height="24"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        viewBox="0 0 24 24"
+        width="24"
+      >
+        <path d="M11 5L6 9H3v6h3l5 4V5z" />
+        {audioLevel === "muted" ? (
+          <>
+            <path d="M16 9l5 6" />
+            <path d="M21 9l-5 6" />
+          </>
+        ) : (
+          <g transform="translate(0 -2)">
+            <path d="M16 10.5c1 .8 1.5 2 1.5 3.5s-.5 2.7-1.5 3.5" />
+            <path d="M18.8 7.7c1.7 1.5 2.7 3.8 2.7 6.3s-1 4.8-2.7 6.3" />
+          </g>
+        )}
+      </svg>
+    </button>
+  );
+}
+
+type ToneControlProps = {
+  embedded: boolean;
+  onToneToggle: () => void;
+  predictedTone?: PublicComboPredictedTone;
+  toneExplorerAcknowledged: boolean;
+  toneExplorerButtonRef: RefObject<HTMLButtonElement | null>;
+  toneExplorerOpen: boolean;
+};
+
+function ToneControl({
+  embedded,
+  onToneToggle,
+  predictedTone,
+  toneExplorerAcknowledged,
+  toneExplorerButtonRef,
+  toneExplorerOpen,
+}: ToneControlProps) {
+  const sizeClass = embedded ? "h-10 w-10" : "h-12 w-12";
+  const positionClass = embedded
+    ? "relative"
+    : "fixed z-[130] [right:max(1.5rem,env(safe-area-inset-right))] [top:max(1.5rem,env(safe-area-inset-top))]";
+
+  return (
+    <button
+      aria-expanded={toneExplorerOpen}
+      aria-label={toneExplorerOpen ? "Close tone explorer" : "Explore combinations by tone"}
+      className={`pointer-events-auto inline-flex ${sizeClass} ${positionClass} items-center justify-center rounded-full border bg-black/45 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/65 print:hidden ${
+        toneExplorerOpen
+          ? "border-sky-300 text-sky-200 shadow-[0_0_24px_rgba(56,189,248,0.45)]"
+          : toneExplorerAcknowledged
+            ? "border-white/40"
+            : "border-sky-200/70 text-sky-100 shadow-[0_0_24px_rgba(56,189,248,0.35)] motion-safe:animate-pulse"
+      }`}
+      data-tone-control
+      onClick={onToneToggle}
+      ref={toneExplorerButtonRef}
+      title={toneExplorerOpen ? "Close tone explorer" : "Explore by tone"}
+      type="button"
+    >
+      {toneExplorerOpen ? (
+        <svg
+          aria-hidden="true"
+          fill="none"
+          height="24"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeWidth="2"
+          viewBox="0 0 24 24"
+          width="24"
+        >
+          <path d="M6 6l12 12" />
+          <path d="M18 6L6 18" />
+        </svg>
+      ) : (
+        <ToneExplorerIcon tone={predictedTone} />
+      )}
+    </button>
+  );
+}
+
+export function App() {
   const location = useLocation();
   const isHome = isHomePath(location.pathname);
   const printMode = isResumePrintMode(location.pathname, location.search);
+  const compactDocumentViewport = useCompactDocumentViewport();
   const [slotAssignment, setSlotAssignment] = useState<SlotPlaybackAssignment | null>(null);
   const [comboLoading, setComboLoading] = useState(false);
   const [comboError, setComboError] = useState<string | null>(null);
@@ -602,6 +735,26 @@ export function App() {
   const audioButtonTitle = nextAudioLevel === "full" ? "Unmute audio" : "Mute audio";
   const audioDebugSnapshot = formatMediaSnapshot(audioElementRef.current);
   const videoDebugSnapshot = formatMediaSnapshot(videoElementRef.current);
+  const embedMediaControls =
+    compactDocumentViewport && isDocumentPath(location.pathname) && !printMode;
+  const audioControl = (
+    <AudioControl
+      audioButtonTitle={audioButtonTitle}
+      audioLevel={audioLevel}
+      embedded={embedMediaControls}
+      onAudioToggle={handleAudioLevelToggle}
+    />
+  );
+  const toneControl = (
+    <ToneControl
+      embedded={embedMediaControls}
+      onToneToggle={handleToneExplorerToggle}
+      predictedTone={slotAssignment?.combo.predictedTone}
+      toneExplorerAcknowledged={toneExplorerAcknowledged}
+      toneExplorerButtonRef={toneExplorerButtonRef}
+      toneExplorerOpen={isToneExplorerOpen}
+    />
+  );
 
   const linkItems = [
     { label: "Resume", href: "/dev", external: false },
@@ -662,76 +815,12 @@ export function App() {
       ) : null}
       {!printMode ? (
         <>
-          <button
-            aria-label={audioButtonTitle}
-            className="pointer-events-auto fixed z-[130] inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/40 bg-black/45 text-white shadow-lg backdrop-blur-sm [left:max(1.5rem,env(safe-area-inset-left))] [top:max(1.5rem,env(safe-area-inset-top))] print:hidden"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              handleAudioLevelToggle();
-            }}
-            title={audioButtonTitle}
-            type="button"
-          >
-            <svg
-              aria-hidden="true"
-              fill="none"
-              height="24"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-              width="24"
-            >
-              <path d="M11 5L6 9H3v6h3l5 4V5z" />
-              {audioLevel === "muted" ? (
-                <>
-                  <path d="M16 9l5 6" />
-                  <path d="M21 9l-5 6" />
-                </>
-              ) : (
-                <g transform="translate(0 -2)">
-                  <path d="M16 10.5c1 .8 1.5 2 1.5 3.5s-.5 2.7-1.5 3.5" />
-                  <path d="M18.8 7.7c1.7 1.5 2.7 3.8 2.7 6.3s-1 4.8-2.7 6.3" />
-                </g>
-              )}
-            </svg>
-          </button>
-
-          <button
-            aria-expanded={isToneExplorerOpen}
-            aria-label={isToneExplorerOpen ? "Close tone explorer" : "Explore combinations by tone"}
-            className={`pointer-events-auto fixed z-[130] inline-flex h-12 w-12 items-center justify-center rounded-full border bg-black/45 text-white shadow-lg backdrop-blur-sm transition [right:max(1.5rem,env(safe-area-inset-right))] [top:max(1.5rem,env(safe-area-inset-top))] hover:bg-black/65 print:hidden ${
-              isToneExplorerOpen
-                ? "border-sky-300 text-sky-200 shadow-[0_0_24px_rgba(56,189,248,0.45)]"
-                : toneExplorerAcknowledged
-                  ? "border-white/40"
-                  : "border-sky-200/70 text-sky-100 shadow-[0_0_24px_rgba(56,189,248,0.35)] motion-safe:animate-pulse"
-            }`}
-            onClick={handleToneExplorerToggle}
-            ref={toneExplorerButtonRef}
-            title={isToneExplorerOpen ? "Close tone explorer" : "Explore by tone"}
-            type="button"
-          >
-            {isToneExplorerOpen ? (
-              <svg
-                aria-hidden="true"
-                fill="none"
-                height="24"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeWidth="2"
-                viewBox="0 0 24 24"
-                width="24"
-              >
-                <path d="M6 6l12 12" />
-                <path d="M18 6L6 18" />
-              </svg>
-            ) : (
-              <ToneExplorerIcon tone={slotAssignment?.combo.predictedTone} />
-            )}
-          </button>
+          {embedMediaControls ? null : (
+            <div className="contents" data-media-controls>
+              {audioControl}
+              {toneControl}
+            </div>
+          )}
 
           <ToneExplorer
             disabled={!slotAssignment}
@@ -756,7 +845,11 @@ export function App() {
       ) : null}
 
       <div className="relative z-20 min-h-dvh">
-        <DocumentRouteTransition pathname={location.pathname} printMode={printMode} />
+        <DocumentControlsProvider
+          value={embedMediaControls ? { leading: audioControl, trailing: toneControl } : null}
+        >
+          <DocumentRouteTransition pathname={location.pathname} printMode={printMode} />
+        </DocumentControlsProvider>
       </div>
 
       {isHome ? (

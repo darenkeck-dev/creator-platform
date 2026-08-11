@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 
-import { chromium, type Browser } from "playwright";
+import { chromium, type Browser, type Page } from "playwright";
 import { createServer } from "vite";
 
 const appDir = fileURLToPath(new URL("..", import.meta.url));
@@ -19,40 +19,57 @@ if (!address || typeof address === "string") {
 
 let browser: Browser | undefined;
 
+const continuityCombo = {
+  source: "derived",
+  selection: "primary",
+  comboId: "continuity-combo",
+  videoAssetId: "continuity-video",
+  audioAssetId: "continuity-audio",
+  videoTitle: "Continuity Video",
+  audioTitle: "Continuity Audio",
+  videoSrc: "https://media.invalid/video.m3u8",
+  audioSrc: "https://media.invalid/audio.m3u8",
+  predictedTone: {
+    valence: 0.1,
+    arousal: 0.2,
+    dominance: 0.3,
+    warmth: 0.4,
+    tension: 0.5,
+    intimacy: 0.6,
+    instability: 0.7,
+    nostalgia: 0.8,
+    beauty: 0.9,
+    menace: 1,
+  },
+};
+
+async function configurePlaybackRoutes(page: Page, onRandomRequest: () => void): Promise<void> {
+  await page.route("**/public/combos/random**", async (route) => {
+    onRandomRequest();
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(continuityCombo),
+    });
+  });
+  await page.route("https://media.invalid/**", (route) => route.abort());
+}
+
+async function scrollDocument(page: Page, label: string): Promise<void> {
+  const scrollY = await page.evaluate(async () => {
+    window.scrollTo(0, 900);
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    return window.scrollY;
+  });
+  if (scrollY <= 0) throw new Error(`${label} document did not become scrollable.`);
+}
+
 try {
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
   let randomRequests = 0;
-  await page.route("**/public/combos/random**", async (route) => {
+  await configurePlaybackRoutes(page, () => {
     randomRequests += 1;
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        source: "derived",
-        selection: "primary",
-        comboId: "continuity-combo",
-        videoAssetId: "continuity-video",
-        audioAssetId: "continuity-audio",
-        videoTitle: "Continuity Video",
-        audioTitle: "Continuity Audio",
-        videoSrc: "https://media.invalid/video.m3u8",
-        audioSrc: "https://media.invalid/audio.m3u8",
-        predictedTone: {
-          valence: 0.1,
-          arousal: 0.2,
-          dominance: 0.3,
-          warmth: 0.4,
-          tension: 0.5,
-          intimacy: 0.6,
-          instability: 0.7,
-          nostalgia: 0.8,
-          beauty: 0.9,
-          menace: 1,
-        },
-      }),
-    });
   });
-  await page.route("https://media.invalid/**", (route) => route.abort());
 
   await page.goto(`http://127.0.0.1:${address.port}/`, { waitUntil: "domcontentloaded" });
   await page.locator("video").waitFor({ state: "attached" });
@@ -154,8 +171,7 @@ try {
       .getByRole("link", { name: "blog" })
       .waitFor({ state: "visible" });
     const documentNav = page.locator("[data-document-nav]");
-    await page.evaluate(() => window.scrollTo(0, 900));
-    await page.waitForFunction(() => window.scrollY > 0);
+    await scrollDocument(page, "Desktop blog");
     const stickyNavBox = await documentNav.boundingBox();
     if (!stickyNavBox || stickyNavBox.y < -1 || stickyNavBox.y > 1) {
       throw new Error(`Document navigation did not remain sticky: ${JSON.stringify(stickyNavBox)}`);
@@ -170,6 +186,185 @@ try {
         document.querySelector("video")
     );
     if (!sameVideoOnEntry) throw new Error("ComboPlayer remounted while opening a blog entry.");
+  }
+
+  const mobilePage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  let mobileRandomRequests = 0;
+  await configurePlaybackRoutes(mobilePage, () => {
+    mobileRandomRequests += 1;
+  });
+  await mobilePage.goto(`http://127.0.0.1:${address.port}/`, {
+    waitUntil: "domcontentloaded",
+  });
+  await mobilePage.locator("video").waitFor({ state: "attached" });
+  await mobilePage.evaluate(() => {
+    (window as Window & { mobileContinuityVideo?: HTMLVideoElement }).mobileContinuityVideo =
+      document.querySelector("video") ?? undefined;
+  });
+  const mobileHomeControls = mobilePage.locator("[data-media-controls]");
+  await mobileHomeControls.waitFor({ state: "visible" });
+  const homeControlPosition = await mobileHomeControls
+    .getByRole("button", { name: "Unmute audio" })
+    .evaluate((button) => getComputedStyle(button).position);
+  if (homeControlPosition !== "fixed") {
+    throw new Error(
+      `Mobile homepage controls must remain floating, received ${homeControlPosition}.`
+    );
+  }
+
+  await mobilePage.getByRole("link", { name: "Resume" }).click();
+  const mobileResumeNav = mobilePage.locator("[data-document-nav]");
+  const mobileAudioControl = mobileResumeNav.locator("[data-document-audio-control]");
+  const mobileToneControl = mobileResumeNav.locator("[data-document-tone-control]");
+  await mobileAudioControl.waitFor({ state: "visible" });
+  await mobileToneControl.waitFor({ state: "visible" });
+  const mobileResumeCardBox = await mobilePage.locator(".resume-document").boundingBox();
+  if (!mobileResumeCardBox || Math.abs(mobileResumeCardBox.width - 390) > 1) {
+    throw new Error(
+      `Mobile resume card did not fill the viewport: ${JSON.stringify(mobileResumeCardBox)}`
+    );
+  }
+  const embeddedControlPosition = await mobileAudioControl
+    .getByRole("button", { name: "Unmute audio" })
+    .evaluate((button) => getComputedStyle(button).position);
+  if (embeddedControlPosition !== "relative") {
+    throw new Error(
+      `Mobile document controls must be embedded, received ${embeddedControlPosition}.`
+    );
+  }
+  const mobileAudioBox = await mobileAudioControl.boundingBox();
+  const mobileBreadcrumb = mobileResumeNav.getByRole("navigation", { name: "Breadcrumb" });
+  const mobileBreadcrumbBox = await mobileBreadcrumb.boundingBox();
+  const mobileToneBox = await mobileToneControl.boundingBox();
+  if (
+    !mobileAudioBox ||
+    !mobileBreadcrumbBox ||
+    !mobileToneBox ||
+    mobileAudioBox.x + mobileAudioBox.width > mobileBreadcrumbBox.x ||
+    mobileBreadcrumbBox.x + mobileBreadcrumbBox.width > mobileToneBox.x
+  ) {
+    throw new Error(
+      `Mobile controls do not flank breadcrumbs: ${JSON.stringify({ mobileAudioBox, mobileBreadcrumbBox, mobileToneBox })}`
+    );
+  }
+  const mobileBreadcrumbJustification = await mobileBreadcrumb
+    .locator("ol")
+    .evaluate((list) => getComputedStyle(list).justifyContent);
+  if (mobileBreadcrumbJustification !== "center") {
+    throw new Error(`Mobile breadcrumbs are not centered: ${mobileBreadcrumbJustification}.`);
+  }
+  await mobileAudioControl.getByRole("button", { name: "Unmute audio" }).click();
+  await mobileAudioControl
+    .getByRole("button", { name: "Mute audio" })
+    .waitFor({ state: "visible" });
+  await mobileToneControl.getByRole("button", { name: "Explore combinations by tone" }).click();
+  const mobileExplainerAccept = mobilePage.getByRole("button", { name: "OK" });
+  if (await mobileExplainerAccept.isVisible()) await mobileExplainerAccept.click();
+  await mobileToneControl
+    .getByRole("button", { name: "Close tone explorer" })
+    .waitFor({ state: "visible" });
+  await mobileToneControl.getByRole("button", { name: "Close tone explorer" }).click();
+
+  await scrollDocument(mobilePage, "Mobile resume");
+  const mobileStickyNavBox = await mobileResumeNav.boundingBox();
+  const mobileStickyAudioBox = await mobileAudioControl.boundingBox();
+  const mobileStickyToneBox = await mobileToneControl.boundingBox();
+  if (
+    !mobileStickyNavBox ||
+    !mobileStickyAudioBox ||
+    !mobileStickyToneBox ||
+    mobileStickyNavBox.y < -1 ||
+    mobileStickyNavBox.y > 1 ||
+    mobileStickyAudioBox.y < mobileStickyNavBox.y ||
+    mobileStickyToneBox.y < mobileStickyNavBox.y ||
+    mobileStickyAudioBox.y + mobileStickyAudioBox.height >
+      mobileStickyNavBox.y + mobileStickyNavBox.height ||
+    mobileStickyToneBox.y + mobileStickyToneBox.height >
+      mobileStickyNavBox.y + mobileStickyNavBox.height
+  ) {
+    throw new Error(
+      `Mobile media controls did not remain inside sticky navigation: ${JSON.stringify({ mobileStickyNavBox, mobileStickyAudioBox, mobileStickyToneBox })}`
+    );
+  }
+  const sameMobileVideo = await mobilePage.evaluate(
+    () =>
+      (window as Window & { mobileContinuityVideo?: HTMLVideoElement }).mobileContinuityVideo ===
+      document.querySelector("video")
+  );
+  if (!sameMobileVideo) throw new Error("ComboPlayer remounted on the mobile resume route.");
+
+  await mobileResumeNav.getByRole("link", { name: "darenkeck" }).click();
+  await mobilePage.getByRole("link", { name: "Blog" }).click();
+  await mobilePage.locator("[data-document-audio-control]").waitFor({ state: "visible" });
+  await mobilePage.locator("[data-document-tone-control]").waitFor({ state: "visible" });
+  if (mobileRandomRequests !== 1) {
+    throw new Error("Mobile document navigation triggered another random combo request.");
+  }
+
+  const mediumPage = await browser.newPage({ viewport: { width: 820, height: 600 } });
+  let mediumRandomRequests = 0;
+  await configurePlaybackRoutes(mediumPage, () => {
+    mediumRandomRequests += 1;
+  });
+  await mediumPage.goto(`http://127.0.0.1:${address.port}/`, { waitUntil: "domcontentloaded" });
+  await mediumPage.locator("video").waitFor({ state: "attached" });
+  await mediumPage.evaluate(() => {
+    (window as Window & { mediumContinuityVideo?: HTMLVideoElement }).mediumContinuityVideo =
+      document.querySelector("video") ?? undefined;
+  });
+  await mediumPage.getByRole("link", { name: "Blog" }).click();
+  const mediumBlogCard = mediumPage.locator(".blog-document");
+  await mediumBlogCard.waitFor({ state: "visible" });
+  const mediumCardBox = await mediumBlogCard.boundingBox();
+  if (!mediumCardBox || Math.abs(mediumCardBox.width - 820) > 1) {
+    throw new Error(`Medium blog card did not fill the viewport: ${JSON.stringify(mediumCardBox)}`);
+  }
+  const mediumEntries = mediumPage.locator('.blog-document a[href^="/blog/"]');
+  if ((await mediumEntries.count()) > 0) {
+    await mediumEntries.first().click();
+    await mediumPage.waitForURL(/\/blog\/.+/);
+    await mediumPage.locator(".blog-document h1").waitFor({ state: "visible" });
+  }
+  const mediumNav = mediumPage.locator("[data-document-nav]");
+  const mediumAudio = mediumNav.locator("[data-document-audio-control]");
+  const mediumTone = mediumNav.locator("[data-document-tone-control]");
+  await mediumAudio.waitFor({ state: "visible" });
+  await mediumTone.waitFor({ state: "visible" });
+  const mediumAudioBox = await mediumAudio.boundingBox();
+  const mediumBreadcrumb = mediumNav.getByRole("navigation", { name: "Breadcrumb" });
+  const mediumBreadcrumbBox = await mediumBreadcrumb.boundingBox();
+  const mediumToneBox = await mediumTone.boundingBox();
+  if (
+    !mediumAudioBox ||
+    !mediumBreadcrumbBox ||
+    !mediumToneBox ||
+    mediumAudioBox.x + mediumAudioBox.width > mediumBreadcrumbBox.x ||
+    mediumBreadcrumbBox.x + mediumBreadcrumbBox.width > mediumToneBox.x
+  ) {
+    throw new Error(
+      `Medium controls do not flank breadcrumbs: ${JSON.stringify({ mediumAudioBox, mediumBreadcrumbBox, mediumToneBox })}`
+    );
+  }
+  const mediumBreadcrumbJustification = await mediumBreadcrumb
+    .locator("ol")
+    .evaluate((list) => getComputedStyle(list).justifyContent);
+  if (mediumBreadcrumbJustification !== "center") {
+    throw new Error(`Medium breadcrumbs are not centered: ${mediumBreadcrumbJustification}.`);
+  }
+  await scrollDocument(mediumPage, "Medium blog");
+  const mediumStickyNavBox = await mediumNav.boundingBox();
+  if (!mediumStickyNavBox || mediumStickyNavBox.y < -1 || mediumStickyNavBox.y > 1) {
+    throw new Error(
+      `Medium document navigation did not remain sticky: ${JSON.stringify(mediumStickyNavBox)}`
+    );
+  }
+  const sameMediumVideo = await mediumPage.evaluate(
+    () =>
+      (window as Window & { mediumContinuityVideo?: HTMLVideoElement }).mediumContinuityVideo ===
+      document.querySelector("video")
+  );
+  if (!sameMediumVideo || mediumRandomRequests !== 1) {
+    throw new Error("Medium blog navigation did not preserve playback continuity.");
   }
 
   console.log("Darenkeck route continuity check passed");
