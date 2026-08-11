@@ -16,6 +16,7 @@ export function BlogIndexPage() {
 
   return (
     <DocumentShell
+      bottomAligned
       breadcrumbs={[{ label: "darenkeck", to: "/" }, { label: "blog" }]}
       className="blog-document"
     >

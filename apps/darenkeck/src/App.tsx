@@ -369,6 +369,7 @@ function ToneControl({
   toneExplorerButtonRef,
   toneExplorerOpen,
 }: ToneControlProps) {
+  const closeState = toneExplorerOpen && !embedded;
   const sizeClass = embedded ? "h-10 w-10" : "h-12 w-12";
   const positionClass = embedded
     ? "relative"
@@ -377,21 +378,23 @@ function ToneControl({
   return (
     <button
       aria-expanded={toneExplorerOpen}
-      aria-label={toneExplorerOpen ? "Close tone explorer" : "Explore combinations by tone"}
+      aria-label={closeState ? "Close tone explorer" : "Explore combinations by tone"}
       className={`pointer-events-auto inline-flex ${sizeClass} ${positionClass} items-center justify-center rounded-full border bg-black/45 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/65 print:hidden ${
-        toneExplorerOpen
+        closeState
           ? "border-sky-300 text-sky-200 shadow-[0_0_24px_rgba(56,189,248,0.45)]"
           : toneExplorerAcknowledged
             ? "border-white/40"
             : "tone-control-first-use border-sky-200/70 text-sky-100"
       }`}
       data-tone-control
-      onClick={onToneToggle}
+      onClick={() => {
+        if (!embedded || !toneExplorerOpen) onToneToggle();
+      }}
       ref={toneExplorerButtonRef}
-      title={toneExplorerOpen ? "Close tone explorer" : "Explore by tone"}
+      title={closeState ? "Close tone explorer" : "Explore by tone"}
       type="button"
     >
-      {toneExplorerOpen ? (
+      {closeState ? (
         <svg
           aria-hidden="true"
           fill="none"
@@ -826,8 +829,10 @@ export function App() {
             disabled={!slotAssignment}
             error={comboError}
             loading={comboLoading}
+            onClose={closeToneExplorer}
             onSubmit={handleToneSubmit}
             open={isToneExplorerOpen}
+            showCloseControl={embedMediaControls}
           />
 
           {showToneExplorerExplainer ? (
@@ -846,7 +851,11 @@ export function App() {
 
       <div className="relative z-20 min-h-dvh">
         <DocumentControlsProvider
-          value={embedMediaControls ? { leading: audioControl, trailing: toneControl } : null}
+          value={
+            embedMediaControls
+              ? { leading: isToneExplorerOpen ? null : audioControl, trailing: toneControl }
+              : null
+          }
         >
           <DocumentRouteTransition pathname={location.pathname} printMode={printMode} />
         </DocumentControlsProvider>

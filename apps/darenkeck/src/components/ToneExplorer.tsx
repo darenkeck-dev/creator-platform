@@ -14,21 +14,89 @@ type ToneExplorerProps = {
   loading: boolean;
   error: string | null;
   open: boolean;
+  onClose: () => void;
   onSubmit: (keywords: string[]) => void;
+  showCloseControl: boolean;
 };
 
-export function ToneExplorer({ disabled, loading, error, open, onSubmit }: ToneExplorerProps) {
+export function ToneExplorer({
+  disabled,
+  loading,
+  error,
+  open,
+  onClose,
+  onSubmit,
+  showCloseControl,
+}: ToneExplorerProps) {
+  const closeTimerRef = useRef<number | null>(null);
+  const [submitSucceeded, setSubmitSucceeded] = useState(false);
   const picker = useToneWordPicker({
     seed: "darenkeck-tone-explorer",
     explorationMode: "distinct-other-roots",
     maxSelectedWords: 6,
   });
 
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+    },
+    []
+  );
+
+  const closeExplorer = () => {
+    if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = null;
+    setSubmitSucceeded(false);
+    onClose();
+  };
+
+  const submitTone = () => {
+    setSubmitSucceeded(true);
+    onSubmit(picker.selectedWords);
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null;
+      setSubmitSucceeded(false);
+      onClose();
+    }, 1000);
+  };
+
   return (
     <>
       <div
+        aria-hidden="true"
+        className={`pointer-events-none fixed inset-0 z-[110] bg-black/55 backdrop-blur-[2px] transition-opacity duration-300 print:hidden ${open ? "visible opacity-100" : "invisible opacity-0"}`}
+        data-tone-explorer-backdrop
+      />
+
+      {showCloseControl && open ? (
+        <button
+          aria-label="Close tone explorer"
+          className="pointer-events-auto fixed z-[130] inline-flex h-10 w-10 items-center justify-center rounded-full border border-sky-300 bg-black/55 text-sky-200 shadow-[0_0_24px_rgba(56,189,248,0.45)] backdrop-blur-sm transition hover:bg-black/75 [right:max(1.5rem,env(safe-area-inset-right))] [top:max(1.5rem,env(safe-area-inset-top))] print:hidden"
+          data-tone-explorer-close
+          onClick={closeExplorer}
+          title="Close tone explorer"
+          type="button"
+        >
+          <svg
+            aria-hidden="true"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeWidth="2"
+            viewBox="0 0 24 24"
+            width="24"
+          >
+            <path d="M6 6l12 12" />
+            <path d="M18 6L6 18" />
+          </svg>
+        </button>
+      ) : null}
+
+      <div
         aria-hidden={!open}
-        className={`pointer-events-none fixed inset-x-0 top-[calc(max(1.5rem,env(safe-area-inset-top))+4rem)] z-[120] px-3 transition-opacity duration-200 sm:top-[max(1.5rem,env(safe-area-inset-top))] sm:px-20 print:hidden ${open ? "visible opacity-100" : "invisible opacity-0"}`}
+        className={`pointer-events-none fixed inset-x-0 top-[33dvh] z-[120] -translate-y-1/2 px-3 transition-opacity duration-200 sm:px-20 print:hidden ${open ? "visible opacity-100" : "invisible opacity-0"}`}
+        data-tone-explorer-suggestions
       >
         <ToneWordPicker
           className="pointer-events-auto"
@@ -46,13 +114,14 @@ export function ToneExplorer({ disabled, loading, error, open, onSubmit }: ToneE
       >
         <ToneWordSubmitPile
           maxColumns={1}
-          onSubmit={() => onSubmit(picker.selectedWords)}
+          onSubmit={submitTone}
           onToggleWord={picker.toggleWord}
           selectedWords={picker.selectedWords}
           showWhenEmpty
-          submitDisabled={disabled || loading}
+          submitDisabled={disabled || loading || submitSucceeded}
+          submitSucceeded={submitSucceeded}
           submitTitle={picker.selectedWords.length > 0 ? "Start tone walk" : "Start random walk"}
-          submitting={loading}
+          submitting={loading && !submitSucceeded}
           wordTitle={(keyword) => `Remove ${keyword} from this walk.`}
         />
         {error ? (

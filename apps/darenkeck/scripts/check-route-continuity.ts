@@ -149,6 +149,17 @@ try {
   const blogBreadcrumbs = page.getByRole("navigation", { name: "Breadcrumb" });
   await blogBreadcrumbs.getByRole("link", { name: "darenkeck" }).waitFor({ state: "visible" });
   await blogBreadcrumbs.getByText("blog", { exact: true }).waitFor({ state: "visible" });
+  const blogIndexCardBox = await page.locator(".blog-document").boundingBox();
+  const desktopViewport = page.viewportSize();
+  if (
+    !blogIndexCardBox ||
+    !desktopViewport ||
+    Math.abs(blogIndexCardBox.y + blogIndexCardBox.height - (desktopViewport.height - 40)) > 1
+  ) {
+    throw new Error(
+      `Blog index card is not bottom aligned: ${JSON.stringify({ blogIndexCardBox, desktopViewport })}`
+    );
+  }
   const sameVideoOnBlog = await page.evaluate(
     () =>
       (window as Window & { continuityVideo?: HTMLVideoElement }).continuityVideo ===
@@ -261,9 +272,57 @@ try {
   const mobileExplainerAccept = mobilePage.getByRole("button", { name: "OK" });
   if (await mobileExplainerAccept.isVisible()) await mobileExplainerAccept.click();
   await mobileToneControl
-    .getByRole("button", { name: "Close tone explorer" })
+    .getByRole("button", { name: "Explore combinations by tone" })
     .waitFor({ state: "visible" });
-  await mobileToneControl.getByRole("button", { name: "Close tone explorer" }).click();
+  if ((await mobileResumeNav.locator("[data-document-audio-control]").count()) !== 0) {
+    throw new Error("Embedded mute control remained visible while tone selection was open.");
+  }
+  const mobileOverlayClose = mobilePage.locator("[data-tone-explorer-close]");
+  await mobileOverlayClose.waitFor({ state: "visible" });
+  const mobileToneBackdropBox = await mobilePage
+    .locator("[data-tone-explorer-backdrop]")
+    .boundingBox();
+  const mobileToneSuggestionsBox = await mobilePage
+    .locator("[data-tone-explorer-suggestions]")
+    .boundingBox();
+  const mobileOpenToneBox = await mobileOverlayClose.boundingBox();
+  if (
+    !mobileToneBackdropBox ||
+    mobileToneBackdropBox.x !== 0 ||
+    mobileToneBackdropBox.y !== 0 ||
+    Math.abs(mobileToneBackdropBox.width - 390) > 1 ||
+    Math.abs(mobileToneBackdropBox.height - 844) > 1 ||
+    !mobileToneSuggestionsBox ||
+    !mobileOpenToneBox ||
+    mobileToneSuggestionsBox.y < 844 * 0.25 ||
+    mobileToneSuggestionsBox.y < mobileOpenToneBox.y + mobileOpenToneBox.height
+  ) {
+    throw new Error(
+      `Mobile tone explorer is not full-screen or its suggestions obstruct controls: ${JSON.stringify({ mobileToneBackdropBox, mobileToneSuggestionsBox, mobileOpenToneBox })}`
+    );
+  }
+  await mobileOverlayClose.click();
+  await mobileAudioControl.waitFor({ state: "visible" });
+
+  await mobileToneControl.getByRole("button", { name: "Explore combinations by tone" }).click();
+  await mobileOverlayClose.waitFor({ state: "visible" });
+  const toneSubmittedAt = Date.now();
+  await mobilePage.getByTitle("Start random walk").click();
+  await mobilePage
+    .locator('[data-submit-state="succeeded"]')
+    .waitFor({ state: "visible", timeout: 500 });
+  await mobileOverlayClose.waitFor({ state: "hidden", timeout: 2000 });
+  const toneSuccessDuration = Date.now() - toneSubmittedAt;
+  if (toneSuccessDuration < 900) {
+    throw new Error(
+      `Tone explorer closed before its success check was readable: ${toneSuccessDuration}ms.`
+    );
+  }
+  await mobileAudioControl.waitFor({ state: "visible" });
+  await mobilePage.evaluate(() => {
+    (window as Window & { mobileContinuityVideo?: HTMLVideoElement }).mobileContinuityVideo =
+      document.querySelector("video") ?? undefined;
+  });
 
   await scrollDocument(mobilePage, "Mobile resume");
   const mobileStickyNavBox = await mobileResumeNav.boundingBox();
@@ -297,7 +356,7 @@ try {
   await mobilePage.getByRole("link", { name: "Blog" }).click();
   await mobilePage.locator("[data-document-audio-control]").waitFor({ state: "visible" });
   await mobilePage.locator("[data-document-tone-control]").waitFor({ state: "visible" });
-  if (mobileRandomRequests !== 1) {
+  if (mobileRandomRequests !== 2) {
     throw new Error("Mobile document navigation triggered another random combo request.");
   }
 

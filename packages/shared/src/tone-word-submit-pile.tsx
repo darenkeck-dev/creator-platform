@@ -79,6 +79,7 @@ export function ToneWordSubmitPile({
       <div style={{ gridColumn: 1, gridRow: pileGridRows }}>
         <button
           className="inline-flex w-28 items-center justify-center rounded-full border border-sky-200/90 bg-sky-400 px-5 py-2 text-sm font-semibold text-black shadow-[0_0_24px_rgba(56,189,248,0.55)] transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:border-white/35 disabled:bg-black/55 disabled:text-white/60 disabled:shadow-none"
+          data-submit-state={submitting ? "submitting" : submitSucceeded ? "succeeded" : "idle"}
           disabled={submitting || submitDisabled}
           onClick={onSubmit}
           title={submitTitle}

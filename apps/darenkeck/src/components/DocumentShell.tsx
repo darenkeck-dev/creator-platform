@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { useDocumentControls } from "./DocumentControlsContext";
 
 type DocumentShellProps = {
+  bottomAligned?: boolean;
   breadcrumbs: Array<{ label: string; to?: string }>;
   children: ReactNode;
   className?: string;
@@ -11,6 +12,7 @@ type DocumentShellProps = {
 };
 
 export function DocumentShell({
+  bottomAligned = false,
   breadcrumbs,
   children,
   className = "",
@@ -19,7 +21,9 @@ export function DocumentShell({
   const documentControls = useDocumentControls();
 
   return (
-    <main className="min-h-dvh px-0 pb-6 pt-24 lg:px-6 lg:pb-10 print:min-h-0 print:p-0">
+    <main
+      className={`min-h-dvh px-0 pb-6 pt-24 lg:px-6 lg:pb-10 print:min-h-0 print:p-0 ${bottomAligned ? "flex items-end" : ""}`}
+    >
       <div className="mx-auto w-full max-w-4xl">
         <article
           className={`${className} rounded-none border-y bg-black/65 px-6 pb-8 pt-5 shadow-2xl shadow-black/30 backdrop-blur-[10px] sm:px-10 sm:pb-12 sm:pt-6 lg:rounded-2xl lg:border lg:px-14 print:rounded-none print:border-0 print:bg-transparent print:p-0 print:text-black print:shadow-none print:backdrop-blur-none`}
