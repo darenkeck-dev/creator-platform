@@ -1,5 +1,26 @@
 # Wiki Log
 
+## [2026-08-13] deploy | publish resume update
+
+- Published Darenkeck production from content revision `8ddcf96d6e0f7eaf1fbe86069d195967f7f2755c` and completed CloudFront invalidation `I9DQLQWX57UYCM92BLH5RHNCLD`.
+- The first PDF-generation attempt timed out waiting for local `networkidle`; a clean retry completed the full fetch, preparation, PDF, build, sync, and invalidation workflow.
+- Verified the live homepage, resume, generated PDF, and blog routes, including browser rendering of the updated resume.
+
+## [2026-08-10] deploy | publish tone scroll lock
+
+- Published Darenkeck production from content revision `9bdcd466e525ce4502a52f81cac107acc8ac9a47` and completed CloudFront invalidation `I85LJMQV64C28VP7XL9MDTDJRA`.
+- Verified homepage, blog, tone article, resume, and PDF routes, plus live compact tone selection locking and restoring a scrolled document at its exact prior offset.
+
+## [2026-08-10] web | lock tone overlay scrolling
+
+- Locked document scrolling at its current position while the full-screen tone explorer is open, absorbed backdrop touch/overscroll input, and restored prior styles and scroll position on close.
+- Extended mobile browser coverage to verify the fixed-body lock and exact scroll restoration.
+
+## [2026-08-10] deploy | publish refined tone overlay
+
+- Published Darenkeck production from content revision `138959fbd3095fc2a33a1e60cc397449c8bc9250` and completed CloudFront invalidation `IDJWFM8XNDTYGX4MRFM91LACNA`.
+- Verified homepage, blog, tone article, resume, and PDF routes, plus compact tone mode hiding mute, exposing its separate close control, holding the submit check for about one second, and restoring document controls.
+
 ## [2026-08-10] web | hold tone submit confirmation
 
 - Showed the tone submit success check for one second before closing the full-screen explorer and restoring compact document controls.
