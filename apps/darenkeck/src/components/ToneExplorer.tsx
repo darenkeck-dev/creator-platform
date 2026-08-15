@@ -43,6 +43,46 @@ export function ToneExplorer({
     []
   );
 
+  useEffect(() => {
+    if (!open) return;
+
+    const root = document.documentElement;
+    const body = document.body;
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    const scrollbarWidth = window.innerWidth - root.clientWidth;
+    const previousRootOverflow = root.style.overflow;
+    const previousRootOverscrollBehavior = root.style.overscrollBehavior;
+    const previousBodyStyles = {
+      left: body.style.left,
+      overflow: body.style.overflow,
+      overscrollBehavior: body.style.overscrollBehavior,
+      paddingRight: body.style.paddingRight,
+      position: body.style.position,
+      right: body.style.right,
+      top: body.style.top,
+      touchAction: body.style.touchAction,
+    };
+
+    root.style.overflow = "hidden";
+    root.style.overscrollBehavior = "none";
+    body.style.left = "0";
+    body.style.overflow = "hidden";
+    body.style.overscrollBehavior = "none";
+    if (scrollbarWidth > 0) body.style.paddingRight = `${scrollbarWidth}px`;
+    body.style.position = "fixed";
+    body.style.right = "0";
+    body.style.top = `-${scrollY}px`;
+    body.style.touchAction = "none";
+
+    return () => {
+      root.style.overflow = previousRootOverflow;
+      root.style.overscrollBehavior = previousRootOverscrollBehavior;
+      Object.assign(body.style, previousBodyStyles);
+      window.scrollTo(scrollX, scrollY);
+    };
+  }, [open]);
+
   const closeExplorer = () => {
     if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
     closeTimerRef.current = null;
@@ -64,7 +104,7 @@ export function ToneExplorer({
     <>
       <div
         aria-hidden="true"
-        className={`pointer-events-none fixed inset-0 z-[110] bg-black/55 backdrop-blur-[2px] transition-opacity duration-300 print:hidden ${open ? "visible opacity-100" : "invisible opacity-0"}`}
+        className={`fixed inset-0 z-[110] touch-none overscroll-none bg-black/55 backdrop-blur-[2px] transition-opacity duration-300 print:hidden ${open ? "visible pointer-events-auto opacity-100" : "invisible pointer-events-none opacity-0"}`}
         data-tone-explorer-backdrop
       />
 

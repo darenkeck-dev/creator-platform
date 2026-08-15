@@ -264,6 +264,8 @@ try {
   if (mobileBreadcrumbJustification !== "center") {
     throw new Error(`Mobile breadcrumbs are not centered: ${mobileBreadcrumbJustification}.`);
   }
+  await scrollDocument(mobilePage, "Mobile resume before tone selection");
+  const mobileScrollBeforeTone = await mobilePage.evaluate(() => window.scrollY);
   await mobileAudioControl.getByRole("button", { name: "Unmute audio" }).click();
   await mobileAudioControl
     .getByRole("button", { name: "Mute audio" })
@@ -286,6 +288,11 @@ try {
     .locator("[data-tone-explorer-suggestions]")
     .boundingBox();
   const mobileOpenToneBox = await mobileOverlayClose.boundingBox();
+  const mobileScrollLock = await mobilePage.evaluate(() => ({
+    bodyPosition: document.body.style.position,
+    bodyTop: document.body.style.top,
+    rootOverflow: document.documentElement.style.overflow,
+  }));
   if (
     !mobileToneBackdropBox ||
     mobileToneBackdropBox.x !== 0 ||
@@ -295,14 +302,31 @@ try {
     !mobileToneSuggestionsBox ||
     !mobileOpenToneBox ||
     mobileToneSuggestionsBox.y < 844 * 0.25 ||
-    mobileToneSuggestionsBox.y < mobileOpenToneBox.y + mobileOpenToneBox.height
+    mobileToneSuggestionsBox.y < mobileOpenToneBox.y + mobileOpenToneBox.height ||
+    mobileScrollLock.rootOverflow !== "hidden" ||
+    mobileScrollLock.bodyPosition !== "fixed" ||
+    mobileScrollLock.bodyTop !== `-${mobileScrollBeforeTone}px`
   ) {
     throw new Error(
-      `Mobile tone explorer is not full-screen or its suggestions obstruct controls: ${JSON.stringify({ mobileToneBackdropBox, mobileToneSuggestionsBox, mobileOpenToneBox })}`
+      `Mobile tone explorer layout or scroll lock is invalid: ${JSON.stringify({ mobileToneBackdropBox, mobileToneSuggestionsBox, mobileOpenToneBox, mobileScrollLock, mobileScrollBeforeTone })}`
     );
   }
   await mobileOverlayClose.click();
   await mobileAudioControl.waitFor({ state: "visible" });
+  const mobileScrollAfterTone = await mobilePage.evaluate(() => ({
+    bodyPosition: document.body.style.position,
+    rootOverflow: document.documentElement.style.overflow,
+    scrollY: window.scrollY,
+  }));
+  if (
+    mobileScrollAfterTone.bodyPosition !== "" ||
+    mobileScrollAfterTone.rootOverflow !== "" ||
+    mobileScrollAfterTone.scrollY !== mobileScrollBeforeTone
+  ) {
+    throw new Error(
+      `Mobile tone explorer did not restore page scrolling: ${JSON.stringify({ mobileScrollAfterTone, mobileScrollBeforeTone })}`
+    );
+  }
 
   await mobileToneControl.getByRole("button", { name: "Explore combinations by tone" }).click();
   await mobileOverlayClose.waitFor({ state: "visible" });
