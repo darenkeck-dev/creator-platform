@@ -32,6 +32,7 @@
 
 ## Docs/process
 
+- Work through the [React Cleanup TODOs](cleanup-todos.md) as a dedicated post-release audit.
 - Continue using `raw_sources/` as immutable-ish source docs.
 - Use this `wiki/` tree as the synthesized LLM context layer.
 

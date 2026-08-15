@@ -1,5 +1,7 @@
 # Tone Review Plan
 
+> Archived 2026-08-13. This captures the review architecture and follow-up direction at the time of the public tone-selection release; maintained state now lives in `wiki/`.
+
 ## Purpose And Status
 
 Tone reviews capture target-centered human descriptions without making review records user-identity records.

@@ -1,5 +1,18 @@
 # Wiki Log
 
+## [2026-08-13] docs | refresh monorepo README
+
+- Replaced the stale pre-release roadmap README with a current guide to every application, package, infrastructure layer, runtime flow, content pipeline, validation command, deployment path, and maintained documentation source.
+
+## [2026-08-13] docs | retire completed root plans
+
+- Removed the completed `MVP_RELEASE_PLAN.md`, moved the React audit checklist to `wiki/cleanup-todos.md`, and archived `TONE_REVIEW_PLAN.md` under `raw_sources/`.
+- Updated the wiki index, open issues, review notes, and historical vector-plan reference to point at the maintained or archived locations.
+
+## [2026-08-13] docs | remove stale Essentia runbook
+
+- Removed the duplicated root `AUDIO_TONE_MODEL_RUNBOOK.md`; the app-local `apps/tone-embedding/docs/audio-tone-extraction.md` remains the reference for the experimental Essentia workflow.
+
 ## [2026-08-13] deploy | publish resume update
 
 - Published Darenkeck production from content revision `8ddcf96d6e0f7eaf1fbe86069d195967f7f2755c` and completed CloudFront invalidation `I9DQLQWX57UYCM92BLH5RHNCLD`.

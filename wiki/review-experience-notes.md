@@ -85,4 +85,4 @@ Individual personalization would require a separate, explicit identity boundary 
 
 Personalization should remain a layer over the global predictor, not rewrite shared source tone. It should also include consent, deletion and retention rules, abuse controls, and a clear distinction between explicit review keywords and inferred behavior such as skips or playback duration. None of this is implemented today.
 
-See also: [Tone Review Plan](../TONE_REVIEW_PLAN.md), [Tone Vector Dimensions](tone-vector-dimensions.md), and [Architecture Map](architecture-map.md).
+See also: [Archived Tone Review Plan](../raw_sources/TONE_REVIEW_PLAN.md), [Tone Vector Dimensions](tone-vector-dimensions.md), and [Architecture Map](architecture-map.md).

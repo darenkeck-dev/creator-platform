@@ -1,10 +1,10 @@
-# Post-MVP Cleanup Plan
+# React Cleanup TODOs
 
 ## Status
 
-Deferred until after the tone-selection and automatic-walk MVP is released.
+Ready for a post-release audit pass.
 
-This cleanup is a source-first React audit and remediation pass. It does not block the MVP browser, playback, operational-log, or rollout gates in `MVP_RELEASE_PLAN.md`.
+This cleanup is a source-first React audit and remediation pass. It is follow-up work rather than a release gate.
 
 ## Goal
 
