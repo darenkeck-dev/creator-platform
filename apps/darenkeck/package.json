@@ -11,6 +11,7 @@
     "build": "bunx --bun vite build",
     "build:staging": "bunx --bun vite build --mode staging",
     "build:prod": "bunx --bun vite build --mode production",
+    "check:production-build": "bun run scripts/check-production-build.ts",
     "check:route-continuity": "bun run scripts/check-route-continuity.ts",
     "content:prepare": "bun run scripts/prepare-content.ts",
     "diagram:svg": "bash scripts/render-mermaid-svg.sh",

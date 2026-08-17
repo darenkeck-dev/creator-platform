@@ -4,12 +4,14 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 
 import { App } from "./App";
 import { NotFoundPage } from "./components/NotFoundPage";
+import { RouteErrorPage } from "./components/RouteErrorPage";
 import "./index.css";
 
 const router = createBrowserRouter([
   {
     path: "/",
     element: <App />,
+    errorElement: <RouteErrorPage />,
     children: [
       { index: true, element: null },
       {
@@ -38,9 +40,28 @@ const router = createBrowserRouter([
           },
         ],
       },
+      {
+        path: "news",
+        children: [
+          {
+            index: true,
+            lazy: async () => {
+              const { BulletinIndexPage } = await import("./components/BulletinIndexPage");
+              return { Component: BulletinIndexPage };
+            },
+          },
+          {
+            path: ":slug",
+            lazy: async () => {
+              const { BulletinPage } = await import("./components/BulletinPage");
+              return { Component: BulletinPage };
+            },
+          },
+        ],
+      },
     ],
   },
-  { path: "*", element: <NotFoundPage /> },
+  { path: "*", element: <NotFoundPage />, errorElement: <RouteErrorPage /> },
 ]);
 
 const root = document.getElementById("root");

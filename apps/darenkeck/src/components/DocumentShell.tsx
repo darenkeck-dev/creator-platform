@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
+import { ContentSizeButton } from "./ContentSizeButton";
 import { useDocumentControls } from "./DocumentControlsContext";
 
 type DocumentShellProps = {
@@ -32,6 +33,14 @@ export function DocumentShell({
             className="sticky top-0 z-20 -mx-6 -mt-5 mb-5 flex w-[calc(100%+3rem)] items-center gap-2 bg-[linear-gradient(to_bottom,rgba(0,0,0,1)_0%,rgba(0,0,0,0.1)_100%)] px-6 py-4 text-sm leading-none text-white/65 shadow-lg backdrop-blur-md sm:-mx-10 sm:-mt-6 sm:w-[calc(100%+5rem)] sm:px-10 lg:-mx-14 lg:w-[calc(100%+7rem)] lg:rounded-t-2xl lg:px-14 print:static print:mx-0 print:mt-0 print:mb-4 print:w-full print:rounded-none print:bg-transparent print:p-0 print:shadow-none print:backdrop-blur-none print:hidden"
             data-document-nav
           >
+            {documentControls ? (
+              <div
+                className="absolute right-1 top-1/2 z-10 -translate-y-1/2"
+                data-document-minimize-control
+              >
+                <ContentSizeButton expanded onClick={documentControls.onMinimize} />
+              </div>
+            ) : null}
             {documentControls?.leading ? (
               <div className="shrink-0" data-document-audio-control>
                 {documentControls.leading}
@@ -68,7 +77,7 @@ export function DocumentShell({
               </ol>
             </nav>
             {trailingAction || documentControls?.trailing ? (
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="mr-8 flex shrink-0 items-center gap-2">
                 {trailingAction}
                 {documentControls?.trailing ? (
                   <div data-document-tone-control>{documentControls.trailing}</div>

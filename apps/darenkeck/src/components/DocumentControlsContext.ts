@@ -2,6 +2,7 @@ import { createContext, useContext, type ReactNode } from "react";
 
 export type DocumentControls = {
   leading: ReactNode;
+  onMinimize: () => void;
   trailing: ReactNode;
 };
 

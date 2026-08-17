@@ -6,6 +6,7 @@ import { lazy, Suspense, useEffect, useEffectEvent, useRef, useState, type RefOb
 import { useLocation, useOutlet } from "react-router-dom";
 
 import { BulletinSection } from "./components/BulletinSection";
+import { ContentSizeButton } from "./components/ContentSizeButton";
 import { DocumentControlsProvider } from "./components/DocumentControlsContext";
 import { LinksSection } from "./components/LinksSection";
 import { ShellLoader } from "./components/ShellLoader";
@@ -16,6 +17,7 @@ import {
   requestForJourney,
   type ComboJourney,
 } from "./lib/combo-journey";
+import { latestBulletins } from "./lib/bulletins";
 import {
   SingleSlotKey,
   SlotManager,
@@ -44,9 +46,11 @@ const DOCUMENT_TRANSITION_MS = 400;
 type AudioLevel = "muted" | "full";
 
 function DocumentRouteTransition({
+  contentMinimized,
   pathname,
   printMode,
 }: {
+  contentMinimized: boolean;
   pathname: string;
   printMode: boolean;
 }) {
@@ -97,15 +101,21 @@ function DocumentRouteTransition({
     };
   }, [pathname, printMode]);
 
+  const renderedDocument = isDocumentPath(renderedPathRef.current);
+  const userMinimized = renderedDocument && contentMinimized && !printMode;
+  const routeHidden = renderedDocument && (!documentVisible || userMinimized);
+
   return (
     <div
-      aria-hidden={!documentVisible && isDocumentPath(renderedPathRef.current)}
-      className={`min-h-dvh origin-bottom transition-[opacity,transform,filter] duration-[400ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none print:transform-none print:opacity-100 print:filter-none ${
-        documentVisible
-          ? "translate-y-0 scale-100 opacity-100 blur-none"
-          : "pointer-events-none translate-y-6 scale-[0.985] opacity-0 blur-[2px]"
+      aria-hidden={routeHidden}
+      className={`min-h-dvh origin-bottom transition-[opacity,transform,filter] duration-[400ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none print:block print:transform-none print:opacity-100 print:filter-none ${
+        userMinimized
+          ? "hidden"
+          : documentVisible
+            ? "translate-y-0 scale-100 opacity-100 blur-none"
+            : "pointer-events-none translate-y-6 scale-[0.985] opacity-0 blur-[2px]"
       }`}
-      inert={!documentVisible}
+      inert={routeHidden}
     >
       {renderedOutlet}
     </div>
@@ -425,7 +435,7 @@ export function App() {
   const [comboError, setComboError] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState<AudioLevel>("muted");
   const [audioVolume, setAudioVolume] = useState(1);
-  const [isBulletinOpen, setIsBulletinOpen] = useState(true);
+  const [isContentMinimized, setIsContentMinimized] = useState(false);
   const [isToneExplorerOpen, setIsToneExplorerOpen] = useState(false);
   const [showToneExplorerExplainer, setShowToneExplorerExplainer] = useState(false);
   const [toneExplorerAcknowledged, setToneExplorerAcknowledged] = useState(false);
@@ -438,9 +448,11 @@ export function App() {
   const [debugActionMessage, setDebugActionMessage] = useState<string | null>(null);
   const [debugSampleCount, setDebugSampleCount] = useState(0);
   const managerRef = useRef<SlotManager | null>(null);
+  const restoreButtonRef = useRef<HTMLButtonElement | null>(null);
   const toneExplorerButtonRef = useRef<HTMLButtonElement | null>(null);
   const journeyRef = useRef<ComboJourney>({ mode: "random" });
-  const bulletinStateBeforeToneRef = useRef(true);
+  const documentScrollPositionsRef = useRef(new Map<string, number>());
+  const restoreRequestedRef = useRef(false);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const previousPathRef = useRef(location.pathname);
@@ -589,14 +601,11 @@ export function App() {
     if (isToneExplorerOpen) {
       return;
     }
-    bulletinStateBeforeToneRef.current = isBulletinOpen;
-    setIsBulletinOpen(false);
     setIsToneExplorerOpen(true);
   };
 
   const closeToneExplorer = () => {
     setIsToneExplorerOpen(false);
-    setIsBulletinOpen(bulletinStateBeforeToneRef.current);
   };
 
   const closeToneExplorerForNavigation = useEffectEvent(() => {
@@ -605,7 +614,6 @@ export function App() {
       return;
     }
     setIsToneExplorerOpen(false);
-    setIsBulletinOpen(bulletinStateBeforeToneRef.current);
   });
 
   useEffect(() => {
@@ -616,10 +624,36 @@ export function App() {
     closeToneExplorerForNavigation();
   }, [location.pathname]);
 
-  const handleBulletinMaximize = () => {
+  const handleContentMinimize = () => {
+    if (isDocumentPath(location.pathname)) {
+      documentScrollPositionsRef.current.set(location.pathname, window.scrollY);
+    }
+    setShowToneExplorerExplainer(false);
     setIsToneExplorerOpen(false);
-    setIsBulletinOpen(true);
+    setIsContentMinimized(true);
   };
+
+  const handleContentRestore = () => {
+    restoreRequestedRef.current = true;
+    setIsContentMinimized(false);
+  };
+
+  useEffect(() => {
+    if (isContentMinimized) {
+      const frameId = window.requestAnimationFrame(() => restoreButtonRef.current?.focus());
+      return () => window.cancelAnimationFrame(frameId);
+    }
+    if (!restoreRequestedRef.current) return;
+    restoreRequestedRef.current = false;
+    const scrollY = documentScrollPositionsRef.current.get(location.pathname) ?? 0;
+    const frameId = window.requestAnimationFrame(() => {
+      window.scrollTo(0, scrollY);
+      document.querySelector<HTMLButtonElement>("[data-content-minimize]")?.focus({
+        preventScroll: true,
+      });
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [isContentMinimized, location.pathname]);
 
   const handleToneExplorerToggle = () => {
     if (isToneExplorerOpen) {
@@ -739,7 +773,10 @@ export function App() {
   const audioDebugSnapshot = formatMediaSnapshot(audioElementRef.current);
   const videoDebugSnapshot = formatMediaSnapshot(videoElementRef.current);
   const embedMediaControls =
-    compactDocumentViewport && isDocumentPath(location.pathname) && !printMode;
+    compactDocumentViewport &&
+    isDocumentPath(location.pathname) &&
+    !isContentMinimized &&
+    !printMode;
   const audioControl = (
     <AudioControl
       audioButtonTitle={audioButtonTitle}
@@ -762,35 +799,8 @@ export function App() {
   const linkItems = [
     { label: "Resume", href: "/dev", external: false },
     { label: "Blog", href: "/blog", external: false },
+    { label: "News", href: "/news", external: false },
     { label: "Wayfarer Records", href: "https://wayfarermusicgroup.com/dir" },
-  ];
-
-  const bulletinItems = [
-    <>
-      My collaboration{" "}
-      <a
-        className="font-semibold text-yellow-300"
-        href="https://wayfarermusicgroup.com/dir/shadow-dance-is-now-available/"
-        rel="noreferrer"
-        target="_blank"
-      >
-        Shadow Dance
-      </a>{" "}
-      with the talented{" "}
-      <a className="text-yellow-300" href="https://billydenk.com" rel="noreferrer" target="_blank">
-        Billy Denk
-      </a>{" "}
-      is out now! Listen on{" "}
-      <a
-        className="text-yellow-300"
-        href="https://wayfarermusicgroup.bandcamp.com/track/shadow-dance"
-        rel="noreferrer"
-        target="_blank"
-      >
-        Bandcamp
-      </a>{" "}
-      or your favorite streaming platform.
-    </>,
   ];
 
   return (
@@ -851,118 +861,68 @@ export function App() {
 
       <div className="relative z-20 min-h-dvh">
         <DocumentControlsProvider
-          value={
-            embedMediaControls
-              ? { leading: isToneExplorerOpen ? null : audioControl, trailing: toneControl }
-              : null
-          }
+          value={{
+            leading: embedMediaControls && !isToneExplorerOpen ? audioControl : null,
+            onMinimize: handleContentMinimize,
+            trailing: embedMediaControls ? toneControl : null,
+          }}
         >
-          <DocumentRouteTransition pathname={location.pathname} printMode={printMode} />
+          <DocumentRouteTransition
+            contentMinimized={isContentMinimized}
+            pathname={location.pathname}
+            printMode={printMode}
+          />
         </DocumentControlsProvider>
       </div>
 
       {isHome ? (
-        <section className="fixed inset-0 z-20 mx-auto flex h-dvh w-full max-w-xl items-end px-4 py-4 sm:px-6 sm:py-8">
+        <section
+          className="fixed inset-x-0 z-20 mx-auto w-full max-w-xl px-4 [bottom:max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:[bottom:max(2rem,env(safe-area-inset-bottom))]"
+          data-home-panel-shell
+        >
           <div className="relative w-full">
             <div
-              aria-hidden={!isBulletinOpen}
-              className={`relative z-10 mb-1 flex items-center justify-end px-1 transition-all duration-300 ease-in-out ${
-                isBulletinOpen
+              aria-hidden={isContentMinimized || isToneExplorerOpen}
+              className={`relative z-10 mb-1 flex items-center justify-end transition-all duration-300 ease-in-out ${
+                !isContentMinimized && !isToneExplorerOpen
                   ? "translate-y-[8px] scale-100 opacity-100"
                   : "pointer-events-none translate-y-4 scale-95 opacity-0"
               }`}
             >
-              <div className="flex items-center gap-2">
-                <DarenKeckWordmark />
-                <button
-                  aria-label="Minimize bulletin"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-white transition-all duration-200 ease-in-out hover:bg-black/35"
-                  onClick={() => setIsBulletinOpen(false)}
-                  tabIndex={isBulletinOpen ? 0 : -1}
-                  title="Minimize"
-                  type="button"
-                >
-                  <svg
-                    aria-hidden="true"
-                    fill="none"
-                    height="20"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="1.8"
-                    viewBox="0 0 24 24"
-                    width="20"
-                  >
-                    <rect height="16" rx="2.5" width="16" x="4" y="4" />
-                    <path d="M8 12h8" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <div
-              aria-hidden={isBulletinOpen}
-              className={`fixed right-4 z-[120] flex items-center gap-2 transition-all duration-300 ease-in-out [bottom:max(1.5rem,calc(env(safe-area-inset-bottom)+1rem))] sm:right-6 sm:[bottom:max(2.5rem,calc(env(safe-area-inset-bottom)+2rem))] ${
-                isBulletinOpen
-                  ? "pointer-events-none translate-y-3 scale-95 opacity-0"
-                  : "pointer-events-auto translate-y-0 scale-100 opacity-100"
-              }`}
-            >
               <DarenKeckWordmark />
-              <button
-                aria-label="Maximize bulletin"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-white transition-all duration-200 ease-in-out hover:bg-black/35"
-                onClick={handleBulletinMaximize}
-                tabIndex={isBulletinOpen ? -1 : 0}
-                title="Maximize"
-                type="button"
-              >
-                <svg
-                  aria-hidden="true"
-                  fill="none"
-                  height="20"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="1.8"
-                  viewBox="0 0 24 24"
-                  width="20"
-                >
-                  <rect height="16" rx="2.5" width="16" x="4" y="4" />
-                  <path d="M12 8v8" />
-                  <path d="M8 12h8" />
-                </svg>
-              </button>
             </div>
 
             <div
-              className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                isBulletinOpen
-                  ? "glass-card rounded-2xl border p-4 shadow-2xl shadow-black/35 sm:p-5"
+              data-home-panel
+              className={`relative overflow-hidden transition-all duration-300 ease-in-out ${
+                !isContentMinimized && !isToneExplorerOpen
+                  ? "rounded-2xl border bg-black/65 p-4 shadow-2xl shadow-black/30 backdrop-blur-[10px] sm:p-5"
                   : "rounded-2xl border-0 p-0 shadow-none"
               }`}
             >
+              {!isContentMinimized && !isToneExplorerOpen ? (
+                <div className="absolute right-1 top-4 z-10" data-home-minimize-control>
+                  <ContentSizeButton expanded onClick={handleContentMinimize} />
+                </div>
+              ) : null}
               <div
-                aria-hidden={!isBulletinOpen}
+                aria-hidden={isContentMinimized || isToneExplorerOpen}
                 className={`grid overflow-hidden transition-all duration-300 ease-in-out ${
-                  isBulletinOpen
+                  !isContentMinimized && !isToneExplorerOpen
                     ? "grid-rows-[1fr] opacity-100"
                     : "pointer-events-none grid-rows-[0fr] opacity-0"
                 }`}
-                inert={!isBulletinOpen}
+                inert={isContentMinimized || isToneExplorerOpen}
               >
                 <div className="min-h-0 space-y-5">
-                  <header className="space-y-2">
-                    <h1 className="text-3xl font-bold text-white">Hey!</h1>
+                  <header className="pr-5">
                     <p className="text-sm leading-relaxed text-white/85">
-                      This is my personal page. I'm a full-stack developer with a decade of
-                      experience, and I write music at Wayfarer Records!
-                    </p>
-                    <p className="text-sm leading-relaxed text-white/80">
-                      I'll occasionally link up fun projects here as well.
+                      <strong className="text-base font-bold text-white">Hey!</strong> I'm a
+                      full-stack developer with a decade of experience, and I write music at
+                      Wayfarer Records!
                     </p>
                   </header>
-                  <BulletinSection items={bulletinItems} />
+                  <BulletinSection bulletins={latestBulletins} />
                   <LinksSection links={linkItems} />
                   {/* {!slotAssignment ? (
                   <p className="text-xs text-white/70">
@@ -991,6 +951,17 @@ export function App() {
             ) : null}
           </div>
         </section>
+      ) : null}
+
+      {!printMode && isContentMinimized && !isToneExplorerOpen && !showToneExplorerExplainer ? (
+        <div className="pointer-events-auto fixed right-4 z-[120] flex items-center gap-2 [bottom:max(1.5rem,calc(env(safe-area-inset-bottom)+1rem))] sm:right-6 sm:[bottom:max(2.5rem,calc(env(safe-area-inset-bottom)+2rem))]">
+          <DarenKeckWordmark />
+          <ContentSizeButton
+            buttonRef={restoreButtonRef}
+            expanded={false}
+            onClick={handleContentRestore}
+          />
+        </div>
       ) : null}
 
       {SHOW_LOCAL_DEBUG_CONTROLS && !printMode ? (

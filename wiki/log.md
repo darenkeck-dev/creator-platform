@@ -1,5 +1,48 @@
 # Wiki Log
 
+## [2026-08-16] web | rename bulletin routes to news
+
+- Renamed the public bulletin archive and detail routes to `/news` and `/news/:slug`, including breadcrumbs, page metadata, homepage links, and not-found copy; the Pages CMS collection and generated manifest remain named `bulletins` internally.
+
+## [2026-08-16] web | unify Darenkeck minimize mode
+
+- Replaced the homepage-only bulletin toggle with one persistent content minimize mode shared by the homepage, resume, blog, and news routes.
+- Added the minus control to existing sticky document navigation, reused the fixed `Daren Keck [+]` restore view, kept route and playback trees mounted, restored per-route scroll offsets, and returned compact media controls to floating positions while minimized.
+- Pinned the document minus control directly to the sticky card's upper-right corner, outside navigation padding, while reserving inline room for route and tone controls.
+- Moved the homepage minus into the same true upper-right card-corner position while retaining the Daren Keck wordmark above the panel.
+- Kept a 4px right inset while vertically centering document minus controls on breadcrumbs and the homepage control on the inline `Hey!` title.
+- Replaced the homepage Resume, Blog, and Wayfarer pill buttons with a thin divided text-link footer rail; only the external Wayfarer link retains an arrow icon.
+- Moved the News archive link into the homepage footer rail and removed the standalone `View all` row from the bulletin section.
+- Extended desktop and compact browser continuity checks for focus, scroll, DOM/media identity, control placement, and homepage/document minimize restoration.
+
+## [2026-08-16] content | refresh Darenkeck source
+
+- Fetched Darenkeck content revision `9e6eb043f4a05729771d569057edda3f7f746a66`.
+- Regenerated two blog posts, two bulletins, one diagram, and the resume PDF.
+
+## [2026-08-16] web | add CMS-backed Darenkeck bulletins
+
+- Added validated build-time extraction for Pages CMS bulletin Markdown with draft filtering, newest-first ordering, summaries, and optional featured images.
+- Replaced the hardcoded homepage announcement with the latest three published bulletins and `View all`, plus news archive and detail routes that retain the persistent media experience.
+- Standardized homepage and archive rows on a leading thumbnail column, using a neutral bulletin placeholder when an entry has no featured image.
+- Rendered bulletin summaries as compact Markdown so Pages CMS-authored links work on homepage, archive, and detail surfaces; generated plain summary text separately for page metadata.
+- Compacted the homepage introduction into one paragraph beginning with bold `Hey!` and removed the extra project-link sentence to preserve vertical space for bulletins.
+- Replaced the homepage bulletin's full-viewport flex wrapper with an auto-height container using an explicit fixed bottom inset, keeping its bottom gap invariant while additional rows expand upward.
+- Aligned bulletin archive titles, dates, and summaries in one top-aligned content column beside the leading thumbnail.
+- Matched the compact homepage panel to the blog and bulletin document surfaces with the same black translucency, blur, border, and shadow treatment.
+- Bottom-aligned bulletin detail cards within the document shell so shorter entries keep the same viewport-bottom gap and differing content lengths grow upward.
+
+## [2026-08-15] deploy | publish pushed Darenkeck content
+
+- Published Darenkeck production from content revision `7134d65095f54314d99e38e288d87a60822d5d08` and completed CloudFront invalidation `IEYWU4C1WM0UQMSSPS550SUOD8`.
+- Verified the live homepage, updated resume, generated PDF, blog index, and tone article routes, including browser rendering of the resume.
+
+## [2026-08-15] deploy | republish Darenkeck content
+
+- Published Darenkeck production and completed CloudFront invalidation `I8PG60X0RK0W89HOAXPUNA60VH`.
+- The content fetch resolved to revision `8ddcf96d6e0f7eaf1fbe86069d195967f7f2755c`, unchanged from the previous content deploy.
+- Verified the live homepage, resume, generated PDF, blog index, and tone article routes, including browser rendering of the resume.
+
 ## [2026-08-13] docs | refresh monorepo README
 
 - Replaced the stale pre-release roadmap README with a current guide to every application, package, infrastructure layer, runtime flow, content pipeline, validation command, deployment path, and maintained documentation source.

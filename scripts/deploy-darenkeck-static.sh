@@ -48,14 +48,20 @@ resolve_export() {
 BUCKET_NAME="$(resolve_export "${BUCKET_EXPORT}")"
 DIST_ID="$(resolve_export "${DIST_EXPORT}")"
 
-echo "Preparing darenkeck blog content, diagrams, and resume PDF..."
+echo "Preparing darenkeck content, diagrams, and resume PDF..."
 bun run content:darenkeck:prepare
 
 echo "Building darenkeck for ${STAGE}..."
 bun run "${BUILD_CMD}"
 
-echo "Syncing dist to s3://${BUCKET_NAME} ..."
-aws s3 sync "apps/darenkeck/dist" "s3://${BUCKET_NAME}" --delete --no-follow-symlinks --exclude ".DS_Store" --exclude "*/.DS_Store"
+echo "Smoke-testing the production build..."
+bun run --cwd apps/darenkeck check:production-build
+
+echo "Uploading versioned assets to s3://${BUCKET_NAME}/assets ..."
+aws s3 sync "apps/darenkeck/dist/assets" "s3://${BUCKET_NAME}/assets" --no-follow-symlinks --cache-control "public,max-age=31536000,immutable" --exclude ".DS_Store" --exclude "*/.DS_Store"
+
+echo "Syncing site shell and content to s3://${BUCKET_NAME} ..."
+aws s3 sync "apps/darenkeck/dist" "s3://${BUCKET_NAME}" --delete --no-follow-symlinks --cache-control "no-cache" --exclude "assets/*" --exclude ".DS_Store" --exclude "*/.DS_Store"
 
 echo "Removing any existing .DS_Store objects from s3://${BUCKET_NAME} ..."
 aws s3 rm "s3://${BUCKET_NAME}" --recursive --exclude "*" --include ".DS_Store" --include "*/.DS_Store"

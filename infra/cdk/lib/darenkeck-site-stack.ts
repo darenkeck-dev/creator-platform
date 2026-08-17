@@ -143,6 +143,19 @@ export class DarenkeckSiteStack extends Stack {
       }
     );
 
+    const spaRewriteFunction = new cloudfront.Function(this, "DarenkeckSpaRewriteFunction", {
+      functionName: withStageSuffix("darenkeck-spa-rewrite", stage),
+      code: cloudfront.FunctionCode.fromInline(`function handler(event) {
+  var request = event.request;
+  var uri = request.uri;
+  var lastSegment = uri.substring(uri.lastIndexOf('/') + 1);
+  if (uri.endsWith('/') || lastSegment.indexOf('.') === -1) {
+    request.uri = '/index.html';
+  }
+  return request;
+}`),
+    });
+
     const distribution = new cloudfront.CfnDistribution(this, "DarenkeckSiteDistribution", {
       distributionConfig: {
         enabled: true,
@@ -164,19 +177,13 @@ export class DarenkeckSiteStack extends Stack {
           compress: true,
           cachePolicyId: "658327ea-f89d-4fab-a63d-7e88639e58f6",
           responseHeadersPolicyId: responseHeadersPolicy.responseHeadersPolicyId,
+          functionAssociations: [
+            {
+              eventType: "viewer-request",
+              functionArn: spaRewriteFunction.functionArn,
+            },
+          ],
         },
-        customErrorResponses: [
-          {
-            errorCode: 403,
-            responseCode: 200,
-            responsePagePath: "/index.html",
-          },
-          {
-            errorCode: 404,
-            responseCode: 200,
-            responsePagePath: "/index.html",
-          },
-        ],
         origins: [
           {
             id: "darenkeck-site-s3-origin",

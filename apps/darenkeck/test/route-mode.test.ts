@@ -19,7 +19,10 @@ describe("route mode", () => {
     expect(isDocumentPath("/dev")).toBe(true);
     expect(isDocumentPath("/blog")).toBe(true);
     expect(isDocumentPath("/blog/first-post")).toBe(true);
+    expect(isDocumentPath("/news")).toBe(true);
+    expect(isDocumentPath("/news/2026-08-16-site-update")).toBe(true);
     expect(isDocumentPath("/")).toBe(false);
     expect(isDocumentPath("/blogroll")).toBe(false);
+    expect(isDocumentPath("/newsletter")).toBe(false);
   });
 });

@@ -12,35 +12,20 @@ type LinksSectionProps = {
 
 export function LinksSection({ links }: LinksSectionProps) {
   return (
-    <section aria-label="Links">
-      <div className="flex flex-wrap gap-2">
+    <section aria-label="Links" className="border-t border-white/15 pt-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         {links.map((link) =>
           link.external === false ? (
             <Link
-              className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs text-white/90 transition hover:bg-white/10"
+              className="text-xs font-medium text-white/65 transition hover:text-white"
               key={link.label}
               to={link.href}
             >
               {link.label}
-              <svg
-                aria-hidden="true"
-                fill="none"
-                height="16"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="1.8"
-                viewBox="0 0 24 24"
-                width="16"
-              >
-                <rect height="16" rx="2.5" width="16" x="4" y="4" />
-                <path d="M12 8v8" />
-                <path d="M8 12h8" />
-              </svg>
             </Link>
           ) : (
             <a
-              className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs text-white/90 transition hover:bg-white/10"
+              className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-white/65 transition hover:text-white"
               href={link.href}
               key={link.label}
               rel="noreferrer"
@@ -50,13 +35,13 @@ export function LinksSection({ links }: LinksSectionProps) {
               <svg
                 aria-hidden="true"
                 fill="none"
-                height="14"
+                height="12"
                 stroke="currentColor"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth="1.8"
                 viewBox="0 0 24 24"
-                width="14"
+                width="12"
               >
                 <path d="M7 17 17 7" />
                 <path d="M8 7h9v9" />

@@ -81,6 +81,37 @@ try {
       document.querySelector("video") ?? undefined;
   });
 
+  const homePanelBox = await page.locator("[data-home-panel]").boundingBox();
+  const homeMinimizeBox = await page.locator("[data-home-minimize-control]").boundingBox();
+  const homeTitleBox = await page.locator("[data-home-panel] header strong").boundingBox();
+  if (
+    !homePanelBox ||
+    !homeMinimizeBox ||
+    !homeTitleBox ||
+    Math.abs(homeMinimizeBox.x + homeMinimizeBox.width - (homePanelBox.x + homePanelBox.width - 4)) >
+      1 ||
+    Math.abs(
+      homeMinimizeBox.y +
+        homeMinimizeBox.height / 2 -
+        (homeTitleBox.y + homeTitleBox.height / 2)
+    ) > 1
+  ) {
+    throw new Error(
+      `Homepage minimize control is not aligned with the title: ${JSON.stringify({ homeMinimizeBox, homePanelBox, homeTitleBox })}`
+    );
+  }
+
+  await page.getByRole("button", { name: "Minimize page" }).click();
+  await page.getByRole("button", { name: "Restore page" }).waitFor({ state: "visible" });
+  const sameVideoOnMinimizedHome = await page.evaluate(
+    () =>
+      (window as Window & { continuityVideo?: HTMLVideoElement }).continuityVideo ===
+      document.querySelector("video")
+  );
+  if (!sameVideoOnMinimizedHome) throw new Error("Homepage minimize remounted ComboPlayer.");
+  await page.getByRole("button", { name: "Restore page" }).click();
+  await page.getByRole("button", { name: "Minimize page" }).waitFor({ state: "visible" });
+
   await page.getByRole("button", { name: "Explore combinations by tone" }).click();
   await page.getByRole("button", { name: "OK" }).click();
   await page.getByTitle("Soft, careful, and non-threatening.").click();
@@ -96,9 +127,32 @@ try {
   await page.getByRole("link", { name: "Download" }).waitFor({ state: "visible" });
   const resumeCardBox = await page.locator(".resume-document").boundingBox();
   const resumeNavBox = await page.locator("[data-document-nav]").boundingBox();
+  const desktopBreadcrumbBox = await resumeBreadcrumbs.boundingBox();
+  const desktopMinimizeBox = await page
+    .locator("[data-document-minimize-control]")
+    .boundingBox();
   if (!resumeCardBox || !resumeNavBox || Math.abs(resumeCardBox.y - resumeNavBox.y) > 1) {
     throw new Error(
       `Document navigation is not flush with its container: ${JSON.stringify({ resumeCardBox, resumeNavBox })}`
+    );
+  }
+  if (
+    !desktopMinimizeBox ||
+    !desktopBreadcrumbBox ||
+    Math.abs(
+      desktopMinimizeBox.x +
+        desktopMinimizeBox.width -
+        (resumeNavBox.x + resumeNavBox.width - 4)
+    ) >
+      1 ||
+    Math.abs(
+      desktopMinimizeBox.y +
+        desktopMinimizeBox.height / 2 -
+        (desktopBreadcrumbBox.y + desktopBreadcrumbBox.height / 2)
+    ) > 1
+  ) {
+    throw new Error(
+      `Document minimize control is not aligned with breadcrumbs: ${JSON.stringify({ desktopBreadcrumbBox, desktopMinimizeBox, resumeNavBox })}`
     );
   }
   const matchingTopCorners = await page.evaluate(() => {
@@ -113,9 +167,7 @@ try {
   if (!matchingTopCorners) {
     throw new Error("Document navigation corners do not match the container.");
   }
-  if ((await page.getByTitle("Minimize").count()) > 0) {
-    throw new Error("Document routes must not render the old minimize control.");
-  }
+  await page.getByRole("button", { name: "Minimize page" }).waitFor({ state: "visible" });
 
   const sameVideo = await page.evaluate(
     () =>
@@ -127,6 +179,41 @@ try {
     throw new Error("Navigating to /dev triggered another random combo request.");
   }
   await page.getByRole("button", { name: "Mute audio" }).waitFor({ state: "visible" });
+
+  await page.evaluate(() => {
+    (window as Window & { continuityDocument?: Element }).continuityDocument =
+      document.querySelector(".resume-document") ?? undefined;
+  });
+  await scrollDocument(page, "Desktop resume before minimize");
+  const desktopScrollBeforeMinimize = await page.evaluate(() => window.scrollY);
+  await page.getByRole("button", { name: "Minimize page" }).click();
+  await page.getByRole("button", { name: "Restore page" }).waitFor({ state: "visible" });
+  await page.locator(".resume-document").waitFor({ state: "hidden" });
+  const desktopMinimizedState = await page.evaluate(() => ({
+    sameDocument:
+      (window as Window & { continuityDocument?: Element }).continuityDocument ===
+      document.querySelector(".resume-document"),
+    sameVideo:
+      (window as Window & { continuityVideo?: HTMLVideoElement }).continuityVideo ===
+      document.querySelector("video"),
+  }));
+  if (!desktopMinimizedState.sameDocument || !desktopMinimizedState.sameVideo) {
+    throw new Error(
+      `Desktop minimize remounted persistent UI: ${JSON.stringify(desktopMinimizedState)}`
+    );
+  }
+  await page.getByRole("button", { name: "Restore page" }).click();
+  await page.locator(".resume-document").waitFor({ state: "visible" });
+  await page.waitForFunction((scrollY) => window.scrollY === scrollY, desktopScrollBeforeMinimize);
+  const focusReturnedToMinimize = await page
+    .getByRole("button", { name: "Minimize page" })
+    .evaluate((button) => document.activeElement === button);
+  if (!focusReturnedToMinimize) {
+    throw new Error("Restoring the desktop document did not return focus to Minimize.");
+  }
+  if (randomRequests !== requestCountBeforeNavigation) {
+    throw new Error("Minimizing the desktop document triggered another random combo request.");
+  }
 
   await page.getByRole("button", { name: "Explore combinations by tone" }).click();
   const selectedClass = await page
@@ -227,8 +314,10 @@ try {
   const mobileResumeNav = mobilePage.locator("[data-document-nav]");
   const mobileAudioControl = mobileResumeNav.locator("[data-document-audio-control]");
   const mobileToneControl = mobileResumeNav.locator("[data-document-tone-control]");
+  const mobileMinimizeControl = mobileResumeNav.getByRole("button", { name: "Minimize page" });
   await mobileAudioControl.waitFor({ state: "visible" });
   await mobileToneControl.waitFor({ state: "visible" });
+  await mobileMinimizeControl.waitFor({ state: "visible" });
   const mobileResumeCardBox = await mobilePage.locator(".resume-document").boundingBox();
   if (!mobileResumeCardBox || Math.abs(mobileResumeCardBox.width - 390) > 1) {
     throw new Error(
@@ -246,16 +335,19 @@ try {
   const mobileAudioBox = await mobileAudioControl.boundingBox();
   const mobileBreadcrumb = mobileResumeNav.getByRole("navigation", { name: "Breadcrumb" });
   const mobileBreadcrumbBox = await mobileBreadcrumb.boundingBox();
+  const mobileMinimizeBox = await mobileMinimizeControl.boundingBox();
   const mobileToneBox = await mobileToneControl.boundingBox();
   if (
     !mobileAudioBox ||
     !mobileBreadcrumbBox ||
+    !mobileMinimizeBox ||
     !mobileToneBox ||
     mobileAudioBox.x + mobileAudioBox.width > mobileBreadcrumbBox.x ||
-    mobileBreadcrumbBox.x + mobileBreadcrumbBox.width > mobileToneBox.x
+    mobileBreadcrumbBox.x + mobileBreadcrumbBox.width > mobileToneBox.x ||
+    mobileToneBox.x + mobileToneBox.width > mobileMinimizeBox.x
   ) {
     throw new Error(
-      `Mobile controls do not flank breadcrumbs: ${JSON.stringify({ mobileAudioBox, mobileBreadcrumbBox, mobileToneBox })}`
+      `Mobile controls do not flank breadcrumbs: ${JSON.stringify({ mobileAudioBox, mobileBreadcrumbBox, mobileMinimizeBox, mobileToneBox })}`
     );
   }
   const mobileBreadcrumbJustification = await mobileBreadcrumb
@@ -266,6 +358,28 @@ try {
   }
   await scrollDocument(mobilePage, "Mobile resume before tone selection");
   const mobileScrollBeforeTone = await mobilePage.evaluate(() => window.scrollY);
+  await mobileMinimizeControl.click();
+  const mobileRestoreControl = mobilePage.getByRole("button", { name: "Restore page" });
+  await mobileRestoreControl.waitFor({ state: "visible" });
+  await mobilePage.locator(".resume-document").waitFor({ state: "hidden" });
+  const minimizedFloatingControls = mobilePage.locator("[data-media-controls]");
+  await minimizedFloatingControls.waitFor({ state: "visible" });
+  const minimizedAudioPosition = await minimizedFloatingControls
+    .getByRole("button", { name: "Unmute audio" })
+    .evaluate((button) => getComputedStyle(button).position);
+  const sameMobileVideoWhileMinimized = await mobilePage.evaluate(
+    () =>
+      (window as Window & { mobileContinuityVideo?: HTMLVideoElement }).mobileContinuityVideo ===
+      document.querySelector("video")
+  );
+  if (minimizedAudioPosition !== "fixed" || !sameMobileVideoWhileMinimized) {
+    throw new Error(
+      `Mobile minimize did not preserve playback or float controls: ${JSON.stringify({ minimizedAudioPosition, sameMobileVideoWhileMinimized })}`
+    );
+  }
+  await mobileRestoreControl.click();
+  await mobileAudioControl.waitFor({ state: "visible" });
+  await mobilePage.waitForFunction((scrollY) => window.scrollY === scrollY, mobileScrollBeforeTone);
   await mobileAudioControl.getByRole("button", { name: "Unmute audio" }).click();
   await mobileAudioControl
     .getByRole("button", { name: "Mute audio" })
@@ -411,21 +525,26 @@ try {
   const mediumNav = mediumPage.locator("[data-document-nav]");
   const mediumAudio = mediumNav.locator("[data-document-audio-control]");
   const mediumTone = mediumNav.locator("[data-document-tone-control]");
+  const mediumMinimize = mediumNav.getByRole("button", { name: "Minimize page" });
   await mediumAudio.waitFor({ state: "visible" });
   await mediumTone.waitFor({ state: "visible" });
+  await mediumMinimize.waitFor({ state: "visible" });
   const mediumAudioBox = await mediumAudio.boundingBox();
   const mediumBreadcrumb = mediumNav.getByRole("navigation", { name: "Breadcrumb" });
   const mediumBreadcrumbBox = await mediumBreadcrumb.boundingBox();
+  const mediumMinimizeBox = await mediumMinimize.boundingBox();
   const mediumToneBox = await mediumTone.boundingBox();
   if (
     !mediumAudioBox ||
     !mediumBreadcrumbBox ||
+    !mediumMinimizeBox ||
     !mediumToneBox ||
     mediumAudioBox.x + mediumAudioBox.width > mediumBreadcrumbBox.x ||
-    mediumBreadcrumbBox.x + mediumBreadcrumbBox.width > mediumToneBox.x
+    mediumBreadcrumbBox.x + mediumBreadcrumbBox.width > mediumToneBox.x ||
+    mediumToneBox.x + mediumToneBox.width > mediumMinimizeBox.x
   ) {
     throw new Error(
-      `Medium controls do not flank breadcrumbs: ${JSON.stringify({ mediumAudioBox, mediumBreadcrumbBox, mediumToneBox })}`
+      `Medium controls do not flank breadcrumbs: ${JSON.stringify({ mediumAudioBox, mediumBreadcrumbBox, mediumMinimizeBox, mediumToneBox })}`
     );
   }
   const mediumBreadcrumbJustification = await mediumBreadcrumb

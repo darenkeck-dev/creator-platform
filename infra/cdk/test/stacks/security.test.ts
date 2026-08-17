@@ -85,6 +85,7 @@ describe("security posture", () => {
         ]),
       },
     });
+
   });
 
   it("keeps darenkeck site bucket private and scoped to its CloudFront distribution", () => {
@@ -122,6 +123,21 @@ describe("security posture", () => {
           }),
         ]),
       },
+    });
+
+    template.hasResourceProperties("AWS::CloudFront::Function", {
+      AutoPublish: true,
+      FunctionCode: Match.stringLikeRegexp("request\\.uri = '/index\\.html'"),
+    });
+    template.hasResourceProperties("AWS::CloudFront::Distribution", {
+      DistributionConfig: Match.objectLike({
+        CustomErrorResponses: Match.absent(),
+        DefaultCacheBehavior: Match.objectLike({
+          FunctionAssociations: Match.arrayWith([
+            Match.objectLike({ EventType: "viewer-request", FunctionARN: Match.anyValue() }),
+          ]),
+        }),
+      }),
     });
   });
 

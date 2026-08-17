@@ -3,7 +3,13 @@ export function isHomePath(pathname: string): boolean {
 }
 
 export function isDocumentPath(pathname: string): boolean {
-  return pathname === "/dev" || pathname === "/blog" || pathname.startsWith("/blog/");
+  return (
+    pathname === "/dev" ||
+    pathname === "/blog" ||
+    pathname.startsWith("/blog/") ||
+    pathname === "/news" ||
+    pathname.startsWith("/news/")
+  );
 }
 
 export function isResumePrintMode(pathname: string, search: string): boolean {

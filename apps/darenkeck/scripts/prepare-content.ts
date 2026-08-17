@@ -6,13 +6,16 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 import { buildBlogManifest, extractEmbeddedMermaid } from "./blog-content";
+import { buildBulletinManifest } from "./bulletin-content";
 
 const execFileAsync = promisify(execFile);
 const appDir = fileURLToPath(new URL("..", import.meta.url));
 const generatedDir = path.join(appDir, ".generated-content");
 const postsDir = path.join(generatedDir, "content", "posts");
+const bulletinsDir = path.join(generatedDir, "content", "bulletins");
 const diagramsDir = path.join(generatedDir, "diagrams");
-const manifestPath = path.join(generatedDir, "blog.json");
+const blogManifestPath = path.join(generatedDir, "blog.json");
+const bulletinManifestPath = path.join(generatedDir, "bulletins.json");
 const publicDiagramsDir = path.join(appDir, "public", "media", "diagrams");
 const renderScript = path.join(appDir, "scripts", "render-mermaid-svg.sh");
 
@@ -43,17 +46,26 @@ async function renderDiagram(inputPath: string, outputPath: string): Promise<voi
   }
 }
 
-async function writeManifest(): Promise<{ publishedPosts: number; embeddedDiagrams: number }> {
+async function writeManifests(): Promise<{
+  publishedPosts: number;
+  publishedBulletins: number;
+  embeddedDiagrams: number;
+}> {
   const postPaths = await regularFiles(postsDir, ".md");
-  const files = await Promise.all(
+  const postFiles = await Promise.all(
     postPaths.map(async (filePath) => ({ filePath, source: await readFile(filePath, "utf8") }))
   );
-  const manifest = buildBlogManifest(files);
+  const bulletinPaths = await regularFiles(bulletinsDir, ".md");
+  const bulletinFiles = await Promise.all(
+    bulletinPaths.map(async (filePath) => ({ filePath, source: await readFile(filePath, "utf8") }))
+  );
+  const blogManifest = buildBlogManifest(postFiles);
+  const bulletinManifest = buildBulletinManifest(bulletinFiles);
   const temporaryDiagramDir = await mkdtemp(path.join(os.tmpdir(), "darenkeck-mermaid."));
   let embeddedDiagrams = 0;
 
   try {
-    for (const post of manifest.posts) {
+    for (const post of blogManifest.posts) {
       const extracted = extractEmbeddedMermaid(post.content, post.slug, post.title);
       post.content = extracted.content;
       for (const diagram of extracted.diagrams) {
@@ -68,10 +80,21 @@ async function writeManifest(): Promise<{ publishedPosts: number; embeddedDiagra
     await rm(temporaryDiagramDir, { recursive: true, force: true });
   }
 
-  const temporaryPath = `${manifestPath}.tmp`;
-  await writeFile(temporaryPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
-  await rename(temporaryPath, manifestPath);
-  return { publishedPosts: manifest.posts.length, embeddedDiagrams };
+  const temporaryBlogPath = `${blogManifestPath}.tmp`;
+  const temporaryBulletinPath = `${bulletinManifestPath}.tmp`;
+  await Promise.all([
+    writeFile(temporaryBlogPath, `${JSON.stringify(blogManifest, null, 2)}\n`, "utf8"),
+    writeFile(temporaryBulletinPath, `${JSON.stringify(bulletinManifest, null, 2)}\n`, "utf8"),
+  ]);
+  await Promise.all([
+    rename(temporaryBlogPath, blogManifestPath),
+    rename(temporaryBulletinPath, bulletinManifestPath),
+  ]);
+  return {
+    publishedPosts: blogManifest.posts.length,
+    publishedBulletins: bulletinManifest.bulletins.length,
+    embeddedDiagrams,
+  };
 }
 
 async function renderSourceDiagrams(): Promise<number> {
@@ -87,7 +110,7 @@ await mkdir(generatedDir, { recursive: true });
 await rm(publicDiagramsDir, { recursive: true, force: true });
 await mkdir(publicDiagramsDir, { recursive: true });
 const sourceDiagrams = await renderSourceDiagrams();
-const { publishedPosts, embeddedDiagrams } = await writeManifest();
+const { publishedPosts, publishedBulletins, embeddedDiagrams } = await writeManifests();
 console.log(
-  `Prepared ${publishedPosts} published blog posts and ${sourceDiagrams + embeddedDiagrams} diagrams.`
+  `Prepared ${publishedPosts} published blog posts, ${publishedBulletins} bulletins, and ${sourceDiagrams + embeddedDiagrams} diagrams.`
 );
