@@ -110,12 +110,12 @@ try {
       homepageSummaryHref
     );
   }
-  await page.getByRole("link", { name: "News", exact: true }).click();
+  await page.getByRole("link", { name: "View all news", exact: true }).click();
   await page.locator(".bulletin-document").waitFor({ state: "visible" });
-  await page.getByRole("link", { name: "darenkeck", exact: true }).click();
+  await page.getByRole("link", { name: "Home", exact: true }).click();
   await page.getByRole("link", { name: "Resume" }).click();
   await page.locator(".resume-document").waitFor({ state: "visible" });
-  await page.getByRole("link", { name: "darenkeck", exact: true }).click();
+  await page.getByRole("link", { name: "Home", exact: true }).click();
   await page.getByRole("link", { name: "Blog" }).click();
   await page.locator(".blog-document").waitFor({ state: "visible" });
 

@@ -58,10 +58,27 @@ export function DocumentShell({
                       {index > 0 ? <span aria-hidden="true">/</span> : null}
                       {breadcrumb.to ? (
                         <Link
+                          aria-label={index === 0 && breadcrumb.to === "/" ? "Home" : undefined}
                           className="truncate text-white/70 transition hover:text-white"
                           to={breadcrumb.to}
                         >
-                          {breadcrumb.label}
+                          {index === 0 && breadcrumb.to === "/" ? (
+                            <svg
+                              aria-hidden="true"
+                              fill="currentColor"
+                              height="18"
+                              viewBox="0 0 24 24"
+                              width="18"
+                            >
+                              <path
+                                clipRule="evenodd"
+                                d="M1.5 11.5 12 2.5l10.5 9H18V20H6v-8.5zM9.75 20v-6.5h4.5V20z"
+                                fillRule="evenodd"
+                              />
+                            </svg>
+                          ) : (
+                            breadcrumb.label
+                          )}
                         </Link>
                       ) : (
                         <span

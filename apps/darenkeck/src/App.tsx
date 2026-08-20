@@ -799,7 +799,6 @@ export function App() {
   const linkItems = [
     { label: "Resume", href: "/dev", external: false },
     { label: "Blog", href: "/blog", external: false },
-    { label: "News", href: "/news", external: false },
     { label: "Wayfarer Records", href: "https://wayfarermusicgroup.com/dir" },
   ];
 
@@ -923,7 +922,10 @@ export function App() {
                     </p>
                   </header>
                   <BulletinSection bulletins={latestBulletins} />
-                  <LinksSection links={linkItems} />
+                  <LinksSection
+                    links={linkItems}
+                    moreLink={{ href: "/news", label: "View all news" }}
+                  />
                   {/* {!slotAssignment ? (
                   <p className="text-xs text-white/70">
                     {comboLoading

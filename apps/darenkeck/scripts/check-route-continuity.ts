@@ -122,7 +122,7 @@ try {
   await page.getByRole("link", { name: "Resume" }).click();
   await page.locator(".resume-document").waitFor({ state: "visible" });
   const resumeBreadcrumbs = page.getByRole("navigation", { name: "Breadcrumb" });
-  await resumeBreadcrumbs.getByRole("link", { name: "darenkeck" }).waitFor({ state: "visible" });
+  await resumeBreadcrumbs.getByRole("link", { name: "Home" }).waitFor({ state: "visible" });
   await resumeBreadcrumbs.getByText("resume", { exact: true }).waitFor({ state: "visible" });
   await page.getByRole("link", { name: "Download" }).waitFor({ state: "visible" });
   const resumeCardBox = await page.locator(".resume-document").boundingBox();
@@ -234,7 +234,7 @@ try {
   await page.getByRole("link", { name: "Blog" }).click();
   await page.locator(".blog-document").waitFor({ state: "visible" });
   const blogBreadcrumbs = page.getByRole("navigation", { name: "Breadcrumb" });
-  await blogBreadcrumbs.getByRole("link", { name: "darenkeck" }).waitFor({ state: "visible" });
+  await blogBreadcrumbs.getByRole("link", { name: "Home" }).waitFor({ state: "visible" });
   await blogBreadcrumbs.getByText("blog", { exact: true }).waitFor({ state: "visible" });
   const blogIndexCardBox = await page.locator(".blog-document").boundingBox();
   const desktopViewport = page.viewportSize();
@@ -490,7 +490,7 @@ try {
   );
   if (!sameMobileVideo) throw new Error("ComboPlayer remounted on the mobile resume route.");
 
-  await mobileResumeNav.getByRole("link", { name: "darenkeck" }).click();
+  await mobileResumeNav.getByRole("link", { name: "Home" }).click();
   await mobilePage.getByRole("link", { name: "Blog" }).click();
   await mobilePage.locator("[data-document-audio-control]").waitFor({ state: "visible" });
   await mobilePage.locator("[data-document-tone-control]").waitFor({ state: "visible" });
