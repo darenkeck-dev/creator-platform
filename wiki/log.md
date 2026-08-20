@@ -1,5 +1,20 @@
 # Wiki Log
 
+## [2026-08-17] docs | capture Darenkeck content and player ideas
+
+- Added future ideas for pinned News ordering, News links that target blog posts or future albums, album content routes, a traditional track player, coexistence rules with persistent combo playback, and track/album display metadata.
+- Updated the open content-routing issue to reflect that `/news` is implemented while albums and project/profile collections remain future work.
+
+## [2026-08-17] web | compact document breadcrumbs
+
+- Replaced the leading `darenkeck` breadcrumb label with an accessible home icon across resume, blog, and News document pages.
+
+## [2026-08-17] deploy | publish Darenkeck News and deployment hardening
+
+- Deployed `MediaManagerDarenkeckSiteStack` with extensionless-route CloudFront rewriting and without distribution-wide 403/404 HTML fallback responses.
+- Published Darenkeck production from content revision `9e6eb043f4a05729771d569057edda3f7f746a66` and completed CloudFront invalidation `I3O0O5UGKAMK9SNTSMCOANCVQ7`.
+- Verified live homepage-to-News navigation, a direct News detail route, minimize/restore behavior, featured-image delivery, valid JavaScript MIME responses, and a missing stale chunk returning `403 application/xml` instead of HTML.
+
 ## [2026-08-16] web | rename bulletin routes to news
 
 - Renamed the public bulletin archive and detail routes to `/news` and `/news/:slug`, including breadcrumbs, page metadata, homepage links, and not-found copy; the Pages CMS collection and generated manifest remain named `bulletins` internally.
@@ -13,6 +28,7 @@
 - Kept a 4px right inset while vertically centering document minus controls on breadcrumbs and the homepage control on the inline `Hey!` title.
 - Replaced the homepage Resume, Blog, and Wayfarer pill buttons with a thin divided text-link footer rail; only the external Wayfarer link retains an arrow icon.
 - Moved the News archive link into the homepage footer rail and removed the standalone `View all` row from the bulletin section.
+- Replaced the News footer text with compact double downward chevrons positioned above the footer divider, backed by an accessible `View all news` link target.
 - Extended desktop and compact browser continuity checks for focus, scroll, DOM/media identity, control placement, and homepage/document minimize restoration.
 
 ## [2026-08-16] content | refresh Darenkeck source
