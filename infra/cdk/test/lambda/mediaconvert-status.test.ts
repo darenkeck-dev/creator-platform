@@ -125,6 +125,32 @@ describe("mediaconvert-status lambda", () => {
     expect(sqs.calls[0]?.input.MessageBody).toBe('{"assetId":"asset-101"}');
   });
 
+  it("ignores late processing events after a terminal asset update", async () => {
+    let firstUpdate = true;
+    const { calls } = stubSend(async (command) => {
+      if (command instanceof UpdateCommand && firstUpdate) {
+        firstUpdate = false;
+        const error = new Error("terminal state already committed");
+        error.name = "ConditionalCheckFailedException";
+        throw error;
+      }
+      return {};
+    });
+
+    const result = await handler({
+      source: "aws.mediaconvert",
+      "detail-type": "MediaConvert Job State Change",
+      detail: {
+        status: "PROGRESSING",
+        userMetadata: { assetId: "asset-terminal" },
+      },
+    });
+
+    expect(result).toEqual({ ok: true, status: "ignored-stale" });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input.ConditionExpression).toContain("#status <> :readyStatus");
+  });
+
   it("maps COMPLETE to ready and stores stream metadata", async () => {
     const { calls } = stubSend(async () => ({}));
     const sqs = stubSqsSend();

@@ -43,7 +43,13 @@ const ReprocessConversionMessageSchema = z.object({
   kind: z.literal("reprocess_conversion"),
   assetId: z.string().min(1),
   processingProfile: z
-    .enum(["video-standard-v1", "audio-passthrough-v1", "audio-transcode-hls-v1", "image-passthrough-v1"])
+    .enum([
+      "video-standard-v1",
+      "audio-passthrough-v1",
+      "audio-package-hls-v1",
+      "audio-transcode-hls-v1",
+      "image-passthrough-v1",
+    ])
     .optional(),
 });
 type ReprocessConversionMessage = z.infer<typeof ReprocessConversionMessageSchema>;
@@ -83,18 +89,21 @@ type ConversionState = "queued" | "processing" | "ready" | "error" | "passthroug
 type ProcessingProfileId =
   | "video-standard-v1"
   | "audio-passthrough-v1"
+  | "audio-package-hls-v1"
   | "audio-transcode-hls-v1"
   | "image-passthrough-v1";
 type VideoOrientation = "landscape" | "portrait";
 
 const VIDEO_STANDARD_V1 = "video-standard-v1";
 const AUDIO_PASSTHROUGH_V1 = "audio-passthrough-v1";
+const AUDIO_PACKAGE_HLS_V1 = "audio-package-hls-v1";
 const AUDIO_TRANSCODE_HLS_V1 = "audio-transcode-hls-v1";
 const IMAGE_PASSTHROUGH_V1 = "image-passthrough-v1";
 
 const PROFILE_BY_ID: Record<ProcessingProfileId, ProcessingProfile> = {
   [VIDEO_STANDARD_V1]: { profileId: VIDEO_STANDARD_V1, mode: "mediaconvert" },
   [AUDIO_PASSTHROUGH_V1]: { profileId: AUDIO_PASSTHROUGH_V1, mode: "passthrough" },
+  [AUDIO_PACKAGE_HLS_V1]: { profileId: AUDIO_PACKAGE_HLS_V1, mode: "mediaconvert" },
   [AUDIO_TRANSCODE_HLS_V1]: { profileId: AUDIO_TRANSCODE_HLS_V1, mode: "mediaconvert" },
   [IMAGE_PASSTHROUGH_V1]: { profileId: IMAGE_PASSTHROUGH_V1, mode: "passthrough" },
 };
@@ -207,7 +216,13 @@ function fallbackProfileForAssetType(assetType: AssetRecord["type"]): Processing
 function resolveProcessingProfile(asset: AssetRecord, requestedProfile?: ProcessingProfileId): ProcessingProfile {
   const profileId = requestedProfile ?? asset.processingProfile ?? fallbackProfileForAssetType(asset.type);
   const parsedProfileId = z
-    .enum([VIDEO_STANDARD_V1, AUDIO_PASSTHROUGH_V1, AUDIO_TRANSCODE_HLS_V1, IMAGE_PASSTHROUGH_V1])
+    .enum([
+      VIDEO_STANDARD_V1,
+      AUDIO_PASSTHROUGH_V1,
+      AUDIO_PACKAGE_HLS_V1,
+      AUDIO_TRANSCODE_HLS_V1,
+      IMAGE_PASSTHROUGH_V1,
+    ])
     .safeParse(profileId);
   if (!parsedProfileId.success) {
     logWarn("Invalid processing profile on asset; defaulting to video profile", {
@@ -233,7 +248,9 @@ function resolveProcessingProfile(asset: AssetRecord, requestedProfile?: Process
 function auditCategoryForProfile(
   profileId: ProcessingProfileId
 ): "audio_conversion" | "media_conversion" {
-  return profileId === AUDIO_TRANSCODE_HLS_V1 || profileId === AUDIO_PASSTHROUGH_V1
+  return profileId === AUDIO_TRANSCODE_HLS_V1 ||
+    profileId === AUDIO_PACKAGE_HLS_V1 ||
+    profileId === AUDIO_PASSTHROUGH_V1
     ? "audio_conversion"
     : "media_conversion";
 }
@@ -490,7 +507,8 @@ function mediaConvertAudioHlsJobSettings(
   assetId: string,
   originalsBucket: string,
   key: string,
-  derivedBucket: string
+  derivedBucket: string,
+  passthrough: boolean
 ): JobSettings {
   const destinationBase = `s3://${derivedBucket}/derived/${assetId}`;
 
@@ -526,14 +544,16 @@ function mediaConvertAudioHlsJobSettings(
             AudioDescriptions: [
               {
                 AudioSourceName: "Audio Selector 1",
-                CodecSettings: {
-                  Codec: "AAC",
-                  AacSettings: {
-                    Bitrate: 128000,
-                    CodingMode: "CODING_MODE_2_0",
-                    SampleRate: 48000,
-                  },
-                },
+                CodecSettings: passthrough
+                  ? { Codec: "PASSTHROUGH" }
+                  : {
+                      Codec: "AAC",
+                      AacSettings: {
+                        Bitrate: 128000,
+                        CodingMode: "CODING_MODE_2_0",
+                        SampleRate: 48000,
+                      },
+                    },
               },
             ],
           },
@@ -655,6 +675,7 @@ const ConversionUpdateSchema = z.object({
   profile: z.enum([
     VIDEO_STANDARD_V1,
     AUDIO_PASSTHROUGH_V1,
+    AUDIO_PACKAGE_HLS_V1,
     AUDIO_TRANSCODE_HLS_V1,
     IMAGE_PASSTHROUGH_V1,
   ]),
@@ -738,8 +759,14 @@ async function submitMediaConvertJob(
   const isVideoProfile = processingProfile === VIDEO_STANDARD_V1;
   const orientation = isVideoProfile ? await resolveVideoOrientation(bucketName, key) : undefined;
   const settings =
-    processingProfile === AUDIO_TRANSCODE_HLS_V1
-      ? mediaConvertAudioHlsJobSettings(assetId, bucketName, key, derivedBucket)
+    processingProfile === AUDIO_TRANSCODE_HLS_V1 || processingProfile === AUDIO_PACKAGE_HLS_V1
+      ? mediaConvertAudioHlsJobSettings(
+          assetId,
+          bucketName,
+          key,
+          derivedBucket,
+          processingProfile === AUDIO_PACKAGE_HLS_V1
+        )
       : mediaConvertJobSettings(
           assetId,
           bucketName,
@@ -930,7 +957,7 @@ async function processConversionAsset(input: {
       category: auditCategoryForProfile(profile.profileId),
       source: "upload-trigger",
       code: "conversion.queued",
-      message: `${profile.profileId === AUDIO_TRANSCODE_HLS_V1 ? "Audio conversion" : "Media conversion"}: processing queued`,
+      message: `${auditCategoryForProfile(profile.profileId) === "audio_conversion" ? "Audio conversion" : "Media conversion"}: processing queued`,
       details: { profile: profile.profileId },
     });
   } catch (error) {
@@ -965,7 +992,7 @@ async function processConversionAsset(input: {
       category: auditCategoryForProfile(profile.profileId),
       source: "upload-trigger",
       code: "conversion.job_submitted",
-      message: `${profile.profileId === AUDIO_TRANSCODE_HLS_V1 ? "Audio conversion" : "Media conversion"}: MediaConvert job submitted`,
+      message: `${auditCategoryForProfile(profile.profileId) === "audio_conversion" ? "Audio conversion" : "Media conversion"}: MediaConvert job submitted`,
       details: { profile: profile.profileId, jobId },
     });
     logInfo("Asset status updated to processing with MediaConvert job", {
@@ -988,7 +1015,7 @@ async function processConversionAsset(input: {
       level: "error",
       source: "upload-trigger",
       code: "conversion.submit_failed",
-      message: `${profile.profileId === AUDIO_TRANSCODE_HLS_V1 ? "Audio conversion" : "Media conversion"}: submission failed`,
+      message: `${auditCategoryForProfile(profile.profileId) === "audio_conversion" ? "Audio conversion" : "Media conversion"}: submission failed`,
       details: { profile: profile.profileId },
     });
     logWarn("MediaConvert submission failed; asset marked error", {

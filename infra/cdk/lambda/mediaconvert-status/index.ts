@@ -303,6 +303,10 @@ type ConversionPayload = {
   errorMessage?: string;
 };
 
+function isConditionalConflict(error: unknown): boolean {
+  return error instanceof Error && error.name === "ConditionalCheckFailedException";
+}
+
 const ConversionPayloadSchema = z.object({
   status: z.enum(["processing", "ready", "error"]),
   profile: z.string().min(1),
@@ -357,36 +361,43 @@ export async function handler(event: MediaConvertEvent): Promise<{ ok: boolean; 
     const profile = safeEvent.detail?.userMetadata?.processingProfile ?? "video-standard-v1";
     const errorMessage = safeEvent.detail?.errorMessage;
 
-    await db.send(
-      new UpdateCommand({
-        TableName: tableName,
-        Key: {
-          pk: `ASSET#${assetId}`,
-          sk: "META",
-        },
-        ConditionExpression: "attribute_exists(pk) AND attribute_exists(sk)",
-        UpdateExpression:
-          "SET #status = :status, #updatedAt = :updatedAt, #stream = :stream, #conversion = :conversion",
-        ExpressionAttributeNames: {
-          "#status": "status",
-          "#updatedAt": "updatedAt",
-          "#stream": "stream",
-          "#conversion": "conversion",
-        },
-        ExpressionAttributeValues: {
-          ":status": status,
-          ":updatedAt": now,
-          ":stream": stream,
-          ":conversion": buildConversionPayload({
-            status: "ready",
-            profile,
-            jobId: safeEvent.detail?.jobId,
-            now,
-            errorMessage,
-          }),
-        },
-      })
-    );
+    try {
+      await db.send(
+        new UpdateCommand({
+          TableName: tableName,
+          Key: {
+            pk: `ASSET#${assetId}`,
+            sk: "META",
+          },
+          ConditionExpression:
+            "attribute_exists(pk) AND attribute_exists(sk) AND #status <> :errorStatus",
+          UpdateExpression:
+            "SET #status = :status, #updatedAt = :updatedAt, #stream = :stream, #conversion = :conversion",
+          ExpressionAttributeNames: {
+            "#status": "status",
+            "#updatedAt": "updatedAt",
+            "#stream": "stream",
+            "#conversion": "conversion",
+          },
+          ExpressionAttributeValues: {
+            ":status": status,
+            ":errorStatus": "error",
+            ":updatedAt": now,
+            ":stream": stream,
+            ":conversion": buildConversionPayload({
+              status: "ready",
+              profile,
+              jobId: safeEvent.detail?.jobId,
+              now,
+              errorMessage,
+            }),
+          },
+        })
+      );
+    } catch (error) {
+      if (isConditionalConflict(error)) return { ok: true, status: "ignored-stale" };
+      throw error;
+    }
     await enqueueVectorSyncMessage(assetId, "mediaconvert-status:ready");
 
     await appendAssetAuditLogEntry({
@@ -412,33 +423,43 @@ export async function handler(event: MediaConvertEvent): Promise<{ ok: boolean; 
           : "MediaConvert job failed"))
       : undefined;
 
-  await db.send(
-    new UpdateCommand({
-      TableName: tableName,
-      Key: {
-        pk: `ASSET#${assetId}`,
-        sk: "META",
-      },
-      ConditionExpression: "attribute_exists(pk) AND attribute_exists(sk)",
-      UpdateExpression: "SET #status = :status, #updatedAt = :updatedAt, #conversion = :conversion",
-      ExpressionAttributeNames: {
-        "#status": "status",
-        "#updatedAt": "updatedAt",
-        "#conversion": "conversion",
-      },
-      ExpressionAttributeValues: {
-        ":status": status,
-        ":updatedAt": now,
-        ":conversion": buildConversionPayload({
-          status,
-          profile,
-          jobId: safeEvent.detail?.jobId,
-          now,
-          errorMessage,
-        }),
-      },
-    })
-  );
+  try {
+    await db.send(
+      new UpdateCommand({
+        TableName: tableName,
+        Key: {
+          pk: `ASSET#${assetId}`,
+          sk: "META",
+        },
+        ConditionExpression:
+          status === "processing"
+            ? "attribute_exists(pk) AND attribute_exists(sk) AND #status <> :readyStatus AND #status <> :errorStatus"
+            : "attribute_exists(pk) AND attribute_exists(sk) AND #status <> :readyStatus",
+        UpdateExpression: "SET #status = :status, #updatedAt = :updatedAt, #conversion = :conversion",
+        ExpressionAttributeNames: {
+          "#status": "status",
+          "#updatedAt": "updatedAt",
+          "#conversion": "conversion",
+        },
+        ExpressionAttributeValues: {
+          ":status": status,
+          ":readyStatus": "ready",
+          ...(status === "processing" ? { ":errorStatus": "error" } : {}),
+          ":updatedAt": now,
+          ":conversion": buildConversionPayload({
+            status,
+            profile,
+            jobId: safeEvent.detail?.jobId,
+            now,
+            errorMessage,
+          }),
+        },
+      })
+    );
+  } catch (error) {
+    if (isConditionalConflict(error)) return { ok: true, status: "ignored-stale" };
+    throw error;
+  }
   await enqueueVectorSyncMessage(assetId, `mediaconvert-status:${status}`);
 
   await appendAssetAuditLogEntry({

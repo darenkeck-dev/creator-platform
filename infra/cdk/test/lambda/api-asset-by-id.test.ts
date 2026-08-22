@@ -6,6 +6,7 @@ import {
   DeleteCommand,
   GetCommand,
   QueryCommand,
+  TransactWriteCommand,
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 import {
@@ -95,17 +96,22 @@ function validAsset(id: string) {
 
 function stubDdbSend(
   impl: (
-    command: GetCommand | UpdateCommand | QueryCommand | DeleteCommand
+    command: GetCommand | UpdateCommand | QueryCommand | DeleteCommand | TransactWriteCommand
   ) => Promise<Record<string, unknown>>
-): { calls: Array<GetCommand | UpdateCommand | QueryCommand | DeleteCommand> } {
-  const calls: Array<GetCommand | UpdateCommand | QueryCommand | DeleteCommand> = [];
+): {
+  calls: Array<GetCommand | UpdateCommand | QueryCommand | DeleteCommand | TransactWriteCommand>;
+} {
+  const calls: Array<
+    GetCommand | UpdateCommand | QueryCommand | DeleteCommand | TransactWriteCommand
+  > = [];
 
   DynamoDBDocumentClient.prototype.send = async function (command: unknown) {
     if (
       !(command instanceof GetCommand) &&
       !(command instanceof UpdateCommand) &&
       !(command instanceof QueryCommand) &&
-      !(command instanceof DeleteCommand)
+      !(command instanceof DeleteCommand) &&
+      !(command instanceof TransactWriteCommand)
     ) {
       throw new Error("Unexpected command");
     }
@@ -592,6 +598,67 @@ describe("api-asset-by-id lambda", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("blocks making a published music asset private", async () => {
+    const { calls } = stubDdbSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return { Item: { ...validAsset("music-audio"), type: "audio", visibility: "public" } };
+      }
+      if (command instanceof QueryCommand) {
+        return { Items: [{ sk: "MUSIC_TRACK", publicationStatus: "published" }] };
+      }
+
+      throw new Error("Update must not run");
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: { http: { method: "PATCH" } },
+        pathParameters: { id: "music-audio" },
+        body: JSON.stringify({ visibility: "private" }),
+      })
+    );
+    expect(result.statusCode).toBe(409);
+    expect(calls.some((command) => command instanceof UpdateCommand)).toBe(false);
+  });
+
+  it("makes privacy changes transactional with draft reverse-state checks", async () => {
+    let getCount = 0;
+    const { calls } = stubDdbSend(async (command) => {
+      if (command instanceof GetCommand) {
+        getCount += 1;
+        return {
+          Item: {
+            ...validAsset("draft-music-audio"),
+            type: "audio",
+            visibility: getCount === 1 ? "public" : "private",
+          },
+        };
+      }
+      if (command instanceof QueryCommand)
+        return { Items: [{ sk: "MUSIC_TRACK", publicationStatus: "draft" }] };
+      if (command instanceof TransactWriteCommand) return {};
+      throw new Error("Unexpected command");
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: { http: { method: "PATCH" } },
+        pathParameters: { id: "draft-music-audio" },
+        body: JSON.stringify({ visibility: "private" }),
+      })
+    );
+    expect(result.statusCode).toBe(200);
+    const transaction = calls.find(
+      (command) => command instanceof TransactWriteCommand
+    ) as TransactWriteCommand;
+    expect(transaction.input.TransactItems?.[0]?.Update?.ConditionExpression).toContain(
+      "publishedMusicLinkCount"
+    );
+    expect(transaction.input.TransactItems?.[1]?.ConditionCheck?.ConditionExpression).toContain(
+      "publicationStatus <> :published"
+    );
+  });
+
   it("returns pre-signed URL for POST /assets/{id}/upload-url without marking uploaded", async () => {
     const { calls } = stubDdbSend(async (command) => {
       if (command instanceof GetCommand) {
@@ -1058,6 +1125,11 @@ describe("api-asset-by-id lambda", () => {
         };
       }
 
+      if (command instanceof TransactWriteCommand) {
+        operations.push("delete-metadata-transaction");
+        return {};
+      }
+
       if (command instanceof DeleteCommand) {
         operations.push("delete-record");
         return {};
@@ -1105,5 +1177,34 @@ describe("api-asset-by-id lambda", () => {
     );
 
     expect(result.statusCode).toBe(403);
+  });
+
+  it("blocks direct deletion before storage mutation when music links exist", async () => {
+    const s3 = stubS3Send(async () => {
+      throw new Error("S3 must not run");
+    });
+    stubDdbSend(async (command) => {
+      if (command instanceof GetCommand) return { Item: validAsset("linked-asset") };
+      if (command instanceof QueryCommand) {
+        return {
+          Items: [
+            {
+              sk: "MUSIC_RELEASE#00000000-0000-4000-8000-000000000001",
+              publicationStatus: "draft",
+            },
+          ],
+        };
+      }
+      throw new Error("Delete must not run");
+    });
+
+    const result = await handler(
+      withOwnerClaims({
+        requestContext: { http: { method: "DELETE" } },
+        pathParameters: { id: "linked-asset" },
+      })
+    );
+    expect(result.statusCode).toBe(409);
+    expect(s3.calls).toHaveLength(0);
   });
 });

@@ -19,6 +19,8 @@ function ensureLambdaArtifacts() {
     "api-asset-by-id",
     "api-combos",
     "api-public-combo-selection",
+    "api-music",
+    "api-public-music",
     "api-jobs",
   ]) {
     const dir = join(process.cwd(), ".dist", "lambda", lambdaDir);

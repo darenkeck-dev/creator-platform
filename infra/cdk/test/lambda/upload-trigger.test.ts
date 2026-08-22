@@ -514,4 +514,85 @@ describe("upload-trigger lambda", () => {
     });
     expect(s3.calls).toHaveLength(0);
   });
+
+  it("packages pre-encoded AAC into HLS without re-encoding", async () => {
+    const ddb = stubDdbSend(async (command) => {
+      if (command instanceof GetCommand) {
+        return {
+          Item: {
+            id: "asset-aac-1",
+            type: "audio",
+            status: "uploaded",
+            original: {
+              bucket: "pending",
+              key: "incoming/asset-aac-1",
+              size: 0,
+              contentType: "audio/mp4",
+            },
+            processingProfile: "audio-package-hls-v1",
+          },
+        };
+      }
+
+      return {};
+    });
+
+    const mc = stubMediaConvertSend(async (command) => {
+      if (command instanceof DescribeEndpointsCommand) {
+        return {
+          Endpoints: [{ Url: "https://abcd.mediaconvert.us-west-2.amazonaws.com" }],
+        };
+      }
+
+      return { Job: { Id: "job-aac-package-1" } };
+    });
+
+    const result = await handler({
+      Records: [
+        {
+          body: JSON.stringify({
+            source: "aws.s3",
+            "detail-type": "Object Created",
+            detail: {
+              bucket: { name: "media-originals-test" },
+              object: { key: "incoming/asset-aac-1", size: 1024 },
+            },
+          }),
+        },
+      ],
+    });
+
+    expect(result).toMatchObject({ ok: true, processed: 1 });
+    const createJobCall = mc.calls.find((command) => command instanceof CreateJobCommand) as
+      | CreateJobCommand
+      | undefined;
+    expect(createJobCall?.input.UserMetadata).toMatchObject({
+      assetId: "asset-aac-1",
+      processingProfile: "audio-package-hls-v1",
+    });
+    expect(createJobCall?.input.Settings?.OutputGroups?.[0]?.OutputGroupSettings).toMatchObject({
+      Type: "HLS_GROUP_SETTINGS",
+      HlsGroupSettings: {
+        SegmentLength: 6,
+        OutputSelection: "MANIFESTS_AND_SEGMENTS",
+      },
+    });
+    expect(
+      createJobCall?.input.Settings?.OutputGroups?.[0]?.Outputs?.[0]?.AudioDescriptions?.[0]
+        ?.CodecSettings
+    ).toEqual({ Codec: "PASSTHROUGH" });
+
+    const conversions = ddb.calls
+      .filter((command) => command instanceof UpdateCommand)
+      .map((command) => command.input.ExpressionAttributeValues?.[":conversion"])
+      .filter(Boolean);
+    expect(conversions).toEqual([
+      expect.objectContaining({ status: "queued", profile: "audio-package-hls-v1" }),
+      expect.objectContaining({
+        status: "processing",
+        profile: "audio-package-hls-v1",
+        jobId: "job-aac-package-1",
+      }),
+    ]);
+  });
 });

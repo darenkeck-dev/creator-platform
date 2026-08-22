@@ -6,6 +6,7 @@ export const ASSET_ORIGINS = ["uploaded", "generated", "derived", "manual"] as c
 export const PROCESSING_PROFILES = [
   "video-standard-v1",
   "audio-passthrough-v1",
+  "audio-package-hls-v1",
   "audio-transcode-hls-v1",
   "image-passthrough-v1",
   "folder-meta-v1",
@@ -74,6 +75,12 @@ export const PROCESSING_PROFILE_METADATA = [
     mode: "mediaconvert",
   },
   {
+    id: "audio-package-hls-v1",
+    label: "Audio HLS packaging (AAC passthrough)",
+    supportedTypes: ["audio"],
+    mode: "mediaconvert",
+  },
+  {
     id: "image-passthrough-v1",
     label: "Image passthrough",
     supportedTypes: ["image"],
@@ -99,6 +106,8 @@ export const AssetOriginalSchema = z.object({
   size: z.number().nonnegative(),
   contentType: z.string().min(1),
 });
+
+export const AssetLibraryVisibilitySchema = z.enum(["listed", "unlisted"]);
 
 export const AssetTagSchema = z.object({
   facet: AssetTagFacetSchema.optional(),
@@ -250,6 +259,7 @@ export const AssetRecordSchema = z.object({
   description: z.string(),
   status: AssetStatusSchema,
   visibility: AssetVisibilitySchema.default("private"),
+  libraryVisibility: AssetLibraryVisibilitySchema.default("listed"),
   original: AssetOriginalSchema,
   tags: z.array(AssetTagSchema),
   createdAt: z.string().datetime(),
@@ -289,6 +299,7 @@ export const CreateAssetInputSchema = z
     description: z.string().default(""),
     tags: z.array(AssetTagSchema).default([]),
     visibility: AssetVisibilitySchema.default("private"),
+    libraryVisibility: AssetLibraryVisibilitySchema.default("listed"),
     containerId: z.string().min(1).optional(),
     parentId: z.string().min(1).optional(),
     sourceAssetIds: z.array(z.string().min(1)).max(20).optional(),
@@ -746,6 +757,239 @@ export const PublicComboSelectionResponseSchema = z
   })
   .strict();
 
+export const MUSIC_TRACK_SCHEMA_VERSION = "music-track/v1" as const;
+export const MUSIC_RELEASE_SCHEMA_VERSION = "music-release/v1" as const;
+export const MUSIC_ADMIN_RESPONSE_SCHEMA_VERSION = "music-admin-response/v1" as const;
+export const PUBLIC_MUSIC_CATALOG_SCHEMA_VERSION = "public-music-catalog/v1" as const;
+export const MUSIC_RELEASE_TRACK_LIMIT = 20;
+
+const MusicIdSchema = z.string().uuid();
+const MusicTitleSchema = z.string().trim().min(1).max(200);
+const HttpsUrlSchema = z
+  .string()
+  .url()
+  .refine((value) => new URL(value).protocol === "https:", { message: "URL must use HTTPS" });
+const MusicPurchaseLinksSchema = z
+  .array(
+    z
+      .object({
+        label: z.string().trim().min(1).max(80),
+        url: HttpsUrlSchema,
+      })
+      .strict()
+  )
+  .max(20);
+const MusicDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine(
+    (value) => {
+      const date = new Date(`${value}T00:00:00.000Z`);
+      return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
+    },
+    { message: "Invalid calendar date" }
+  );
+const OrderedMusicTrackIdsSchema = z
+  .array(MusicIdSchema)
+  .max(MUSIC_RELEASE_TRACK_LIMIT)
+  .refine((ids) => new Set(ids).size === ids.length, { message: "trackIds must be unique" });
+
+export const PurchaseLinkSchema = z
+  .object({
+    label: z.string().trim().min(1).max(80),
+    url: HttpsUrlSchema,
+  })
+  .strict();
+export const MusicPublicationStatusSchema = z.enum(["draft", "published"]);
+export const MusicReleaseTypeSchema = z.enum(["single", "ep", "album"]);
+
+export const MusicTrackRecordSchema = z
+  .object({
+    schemaVersion: z.literal(MUSIC_TRACK_SCHEMA_VERSION),
+    id: MusicIdSchema,
+    revision: z.number().int().positive(),
+    ownerEmail: z.string().email(),
+    title: MusicTitleSchema,
+    assetId: z.string().min(1),
+    durationSeconds: z.number().positive().finite().optional(),
+    purchaseLinks: MusicPurchaseLinksSchema,
+    publicationStatus: MusicPublicationStatusSchema,
+    standalonePublished: z.boolean(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .strict();
+
+export const MusicReleaseRecordSchema = z
+  .object({
+    schemaVersion: z.literal(MUSIC_RELEASE_SCHEMA_VERSION),
+    id: MusicIdSchema,
+    revision: z.number().int().positive(),
+    ownerEmail: z.string().email(),
+    title: MusicTitleSchema,
+    releaseDate: MusicDateSchema.optional(),
+    type: MusicReleaseTypeSchema.optional(),
+    coverAssetId: z.string().min(1).optional(),
+    coverAlt: z.string().trim().min(1).max(300).optional(),
+    trackIds: OrderedMusicTrackIdsSchema,
+    purchaseLinks: MusicPurchaseLinksSchema,
+    description: z.string().trim().max(5000).optional(),
+    publicationStatus: MusicPublicationStatusSchema,
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .strict();
+
+export const CreateMusicTrackInputSchema = z
+  .object({
+    schemaVersion: z.literal("music-track-create/v1"),
+    title: MusicTitleSchema,
+    assetId: z.string().min(1),
+    durationSeconds: z.number().positive().finite().optional(),
+    purchaseLinks: MusicPurchaseLinksSchema.default([]),
+  })
+  .strict();
+export const UpdateMusicTrackInputSchema = z
+  .object({
+    schemaVersion: z.literal("music-track-update/v1"),
+    expectedRevision: z.number().int().positive(),
+    title: MusicTitleSchema.optional(),
+    durationSeconds: z.number().positive().finite().nullable().optional(),
+    purchaseLinks: MusicPurchaseLinksSchema.optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      Object.keys(value).some((key) => key !== "schemaVersion" && key !== "expectedRevision"),
+    {
+      message: "At least one field must be provided",
+    }
+  );
+export const CreateMusicReleaseInputSchema = z
+  .object({
+    schemaVersion: z.literal("music-release-create/v1"),
+    title: MusicTitleSchema,
+    releaseDate: MusicDateSchema.optional(),
+    type: MusicReleaseTypeSchema.optional(),
+    coverAssetId: z.string().min(1).optional(),
+    coverAlt: z.string().trim().min(1).max(300).optional(),
+    trackIds: OrderedMusicTrackIdsSchema.default([]),
+    purchaseLinks: MusicPurchaseLinksSchema.default([]),
+    description: z.string().trim().max(5000).optional(),
+  })
+  .strict();
+export const UpdateMusicReleaseInputSchema = z
+  .object({
+    schemaVersion: z.literal("music-release-update/v1"),
+    expectedRevision: z.number().int().positive(),
+    title: MusicTitleSchema.optional(),
+    releaseDate: MusicDateSchema.nullable().optional(),
+    type: MusicReleaseTypeSchema.nullable().optional(),
+    coverAssetId: z.string().min(1).nullable().optional(),
+    coverAlt: z.string().trim().min(1).max(300).nullable().optional(),
+    trackIds: OrderedMusicTrackIdsSchema.optional(),
+    purchaseLinks: MusicPurchaseLinksSchema.optional(),
+    description: z.string().trim().max(5000).nullable().optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      Object.keys(value).some((key) => key !== "schemaVersion" && key !== "expectedRevision"),
+    {
+      message: "At least one field must be provided",
+    }
+  );
+
+export const MusicPublicationActionInputSchema = z
+  .object({
+    schemaVersion: z.literal("music-publication-action/v1"),
+    expectedRevision: z.number().int().positive(),
+  })
+  .strict();
+export const MusicDeleteInputSchema = MusicPublicationActionInputSchema;
+
+export const MusicTrackResponseSchema = z
+  .object({
+    schemaVersion: z.literal(MUSIC_ADMIN_RESPONSE_SCHEMA_VERSION),
+    track: MusicTrackRecordSchema,
+  })
+  .strict();
+export const MusicTrackListResponseSchema = z
+  .object({
+    schemaVersion: z.literal(MUSIC_ADMIN_RESPONSE_SCHEMA_VERSION),
+    tracks: z.array(MusicTrackRecordSchema),
+  })
+  .strict();
+export const MusicReleaseResponseSchema = z
+  .object({
+    schemaVersion: z.literal(MUSIC_ADMIN_RESPONSE_SCHEMA_VERSION),
+    release: MusicReleaseRecordSchema,
+  })
+  .strict();
+export const MusicReleaseListResponseSchema = z
+  .object({
+    schemaVersion: z.literal(MUSIC_ADMIN_RESPONSE_SCHEMA_VERSION),
+    releases: z.array(MusicReleaseRecordSchema),
+  })
+  .strict();
+export const MusicDeleteResponseSchema = z
+  .object({
+    schemaVersion: z.literal(MUSIC_ADMIN_RESPONSE_SCHEMA_VERSION),
+    id: MusicIdSchema,
+    deleted: z.literal(true),
+  })
+  .strict();
+export const MusicReadinessIssueSchema = z
+  .object({
+    code: z.string().min(1),
+    entityType: z.enum(["track", "release", "asset"]),
+    entityId: z.string().min(1),
+    message: z.string().min(1),
+  })
+  .strict();
+export const MusicReadinessResponseSchema = z
+  .object({
+    schemaVersion: z.literal("music-readiness-response/v1"),
+    ready: z.boolean(),
+    issues: z.array(MusicReadinessIssueSchema),
+  })
+  .strict();
+
+export const PublicMusicTrackSchema = z
+  .object({
+    id: MusicIdSchema,
+    title: MusicTitleSchema,
+    durationSeconds: z.number().positive().finite().optional(),
+    audioUrl: z.string().url(),
+    purchaseLinks: MusicPurchaseLinksSchema.min(1),
+  })
+  .strict();
+export const PublicMusicReleaseSchema = z
+  .object({
+    id: MusicIdSchema,
+    title: MusicTitleSchema,
+    releaseDate: MusicDateSchema,
+    type: MusicReleaseTypeSchema,
+    coverUrl: z.string().url(),
+    coverAlt: z.string().trim().min(1).max(300),
+    trackIds: z
+      .array(MusicIdSchema)
+      .min(1)
+      .max(MUSIC_RELEASE_TRACK_LIMIT)
+      .refine((ids) => new Set(ids).size === ids.length, { message: "trackIds must be unique" }),
+    tracks: z.array(PublicMusicTrackSchema).min(1).max(MUSIC_RELEASE_TRACK_LIMIT),
+    purchaseLinks: MusicPurchaseLinksSchema.min(1),
+    description: z.string().trim().max(5000).optional(),
+  })
+  .strict();
+export const PublicMusicCatalogResponseSchema = z
+  .object({
+    schemaVersion: z.literal(PUBLIC_MUSIC_CATALOG_SCHEMA_VERSION),
+    tracks: z.array(PublicMusicTrackSchema),
+    releases: z.array(PublicMusicReleaseSchema),
+  })
+  .strict();
+
 export type AssetType = z.infer<typeof AssetTypeSchema>;
 export type AssetStatus = z.infer<typeof AssetStatusSchema>;
 export type AssetOrigin = z.infer<typeof AssetOriginSchema>;
@@ -823,4 +1067,25 @@ export type PublicComboSelectionRequest = z.infer<typeof PublicComboSelectionReq
 export type PublicComboSelectionFallbackReason = z.infer<
   typeof PublicComboSelectionFallbackReasonSchema
 >;
+export type PurchaseLink = z.infer<typeof PurchaseLinkSchema>;
+export type MusicPublicationStatus = z.infer<typeof MusicPublicationStatusSchema>;
+export type MusicReleaseType = z.infer<typeof MusicReleaseTypeSchema>;
+export type MusicTrackRecord = z.infer<typeof MusicTrackRecordSchema>;
+export type MusicReleaseRecord = z.infer<typeof MusicReleaseRecordSchema>;
+export type CreateMusicTrackInput = z.infer<typeof CreateMusicTrackInputSchema>;
+export type UpdateMusicTrackInput = z.infer<typeof UpdateMusicTrackInputSchema>;
+export type CreateMusicReleaseInput = z.infer<typeof CreateMusicReleaseInputSchema>;
+export type UpdateMusicReleaseInput = z.infer<typeof UpdateMusicReleaseInputSchema>;
+export type MusicPublicationActionInput = z.infer<typeof MusicPublicationActionInputSchema>;
+export type MusicDeleteInput = z.infer<typeof MusicDeleteInputSchema>;
+export type MusicTrackResponse = z.infer<typeof MusicTrackResponseSchema>;
+export type MusicTrackListResponse = z.infer<typeof MusicTrackListResponseSchema>;
+export type MusicReleaseResponse = z.infer<typeof MusicReleaseResponseSchema>;
+export type MusicReleaseListResponse = z.infer<typeof MusicReleaseListResponseSchema>;
+export type MusicDeleteResponse = z.infer<typeof MusicDeleteResponseSchema>;
+export type MusicReadinessIssue = z.infer<typeof MusicReadinessIssueSchema>;
+export type MusicReadinessResponse = z.infer<typeof MusicReadinessResponseSchema>;
+export type PublicMusicTrack = z.infer<typeof PublicMusicTrackSchema>;
+export type PublicMusicRelease = z.infer<typeof PublicMusicReleaseSchema>;
+export type PublicMusicCatalogResponse = z.infer<typeof PublicMusicCatalogResponseSchema>;
 export type PublicComboSelectionResponse = z.infer<typeof PublicComboSelectionResponseSchema>;

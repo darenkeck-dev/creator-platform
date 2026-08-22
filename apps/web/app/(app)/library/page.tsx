@@ -15,6 +15,7 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
 
   const assets: AssetListResponse["assets"] = await fetchAssetsFromApi({
     containerId,
+    libraryVisibility: "listed",
   });
 
   return (

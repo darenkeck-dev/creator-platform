@@ -32,7 +32,7 @@ export default async function AssetDetailPage({ params }: AssetPageProps) {
   if (asset.type === "folder") {
     const childrenResult = await fetchAssetChildrenFromApi(asset.id).catch(() => null);
     const children = childrenResult?.assets ?? [];
-    return <FolderDetailView children={children} folder={asset} />;
+    return <FolderDetailView assets={children} folder={asset} />;
   }
 
   const reviews =

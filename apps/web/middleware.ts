@@ -2,14 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { AUTH_COOKIE_NAME } from "@/lib/auth";
-
-const protectedPaths = ["/library", "/upload", "/asset", "/review", "/combos", "/combo", "/api"];
-
-function isProtectedPath(pathname: string) {
-  return protectedPaths.some((protectedPath) => {
-    return pathname === protectedPath || pathname.startsWith(`${protectedPath}/`);
-  });
-}
+import { isProtectedPath } from "@/lib/protected-paths";
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -75,6 +68,7 @@ export const config = {
     "/review/:path*",
     "/combos/:path*",
     "/combo/:path*",
+    "/releases/:path*",
     "/api/:path*"
   ]
 };

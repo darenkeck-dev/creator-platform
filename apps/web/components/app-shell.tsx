@@ -10,6 +10,7 @@ import { buttonVariants } from "@/components/ui/button";
 const navItems = [
   { href: "/review", label: "Review" },
   { href: "/combos", label: "Combos" },
+  { href: "/releases", label: "Releases" },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {

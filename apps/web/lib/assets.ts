@@ -10,6 +10,7 @@ const mockAssets: AssetRecord[] = [
     description: "Aerial footage for campaign launch trailer.",
     status: "processing",
     visibility: "private",
+    libraryVisibility: "listed",
     original: {
       bucket: "media-originals-dev",
       key: "originals/asset-001/source.mov",
@@ -33,6 +34,7 @@ const mockAssets: AssetRecord[] = [
     description: "Stereo ambience loop for background layer.",
     status: "ready",
     visibility: "public",
+    libraryVisibility: "listed",
     original: {
       bucket: "media-originals-dev",
       key: "originals/asset-002/source.wav",
@@ -64,6 +66,7 @@ const mockAssets: AssetRecord[] = [
     description: "Studio still used as product hero image.",
     status: "uploaded",
     visibility: "private",
+    libraryVisibility: "listed",
     original: {
       bucket: "media-originals-dev",
       key: "originals/asset-003/source.png",

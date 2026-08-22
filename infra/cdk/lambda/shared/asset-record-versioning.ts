@@ -1,4 +1,4 @@
-import { PutCommand, type DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { UpdateCommand, type DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { ASSET_SCHEMA_VERSION, AssetRecordSchema } from "@media-manager/contracts";
 import { z } from "zod";
 
@@ -87,14 +87,26 @@ async function persistIfUpgraded(input: {
     return;
   }
 
+  const originalUpdatedAt = input.original.updatedAt;
+  if (typeof originalUpdatedAt !== "string") {
+    return;
+  }
+
   await input.db.send(
-    new PutCommand({
+    new UpdateCommand({
       TableName: input.tableName,
-      Item: {
-        ...input.original,
-        ...input.upgraded,
+      Key: { pk, sk },
+      UpdateExpression: "SET schemaVersion = :upgradedVersion",
+      ConditionExpression:
+        "attribute_exists(pk) AND attribute_exists(sk) AND updatedAt = :originalUpdatedAt AND " +
+        (originalVersion === 0
+          ? "attribute_not_exists(schemaVersion)"
+          : "schemaVersion = :originalVersion"),
+      ExpressionAttributeValues: {
+        ":upgradedVersion": upgradedVersion,
+        ":originalUpdatedAt": originalUpdatedAt,
+        ...(originalVersion === 0 ? {} : { ":originalVersion": originalVersion }),
       },
-      ConditionExpression: "attribute_exists(pk) AND attribute_exists(sk)",
     })
   );
 }

@@ -95,6 +95,27 @@ export class ApiStack extends Stack {
       },
     });
 
+    const musicFunction = new lambda.Function(this, "MusicFunction", {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: "index.handler",
+      code: lambda.Code.fromAsset(".dist/lambda/api-music"),
+      timeout: Duration.seconds(30),
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      environment: { ASSETS_TABLE_NAME: assetsTableName },
+    });
+
+    const publicMusicFunction = new lambda.Function(this, "PublicMusicFunction", {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: "index.handler",
+      code: lambda.Code.fromAsset(".dist/lambda/api-public-music"),
+      timeout: Duration.seconds(15),
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      environment: {
+        ASSETS_TABLE_NAME: assetsTableName,
+        ASSETS_ORIGINALS_BUCKET_NAME: assetsOriginalsBucketName,
+      },
+    });
+
     const bulkActionsDlq = new sqs.Queue(this, "BulkActionsDlq", {
       queueName: withStageSuffix("media-manager-bulk-actions-dlq", stage),
       retentionPeriod: Duration.days(14),
@@ -138,6 +159,12 @@ export class ApiStack extends Stack {
 
     const jobsFunctionCfn = jobsFunction.node.defaultChild as lambda.CfnFunction;
     jobsFunctionCfn.addPropertyOverride("Runtime", "nodejs22.x");
+
+    const musicFunctionCfn = musicFunction.node.defaultChild as lambda.CfnFunction;
+    musicFunctionCfn.addPropertyOverride("Runtime", "nodejs22.x");
+
+    const publicMusicFunctionCfn = publicMusicFunction.node.defaultChild as lambda.CfnFunction;
+    publicMusicFunctionCfn.addPropertyOverride("Runtime", "nodejs22.x");
 
     const assetsTableArn = Stack.of(this).formatArn({
       service: "dynamodb",
@@ -192,8 +219,21 @@ export class ApiStack extends Stack {
 
     assetsFunction.addToRolePolicy(tableReadWritePolicy);
     assetByIdFunction.addToRolePolicy(tableReadWritePolicy);
+    assetByIdFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["dynamodb:TransactWriteItems"],
+        resources: [assetsTableArn],
+      })
+    );
     combosFunction.addToRolePolicy(tableReadWritePolicy);
     jobsFunction.addToRolePolicy(tableReadWritePolicy);
+    musicFunction.addToRolePolicy(tableReadWritePolicy);
+    musicFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["dynamodb:TransactWriteItems"],
+        resources: [assetsTableArn],
+      })
+    );
     bulkActionsQueue.grantSendMessages(jobsFunction);
     vectorSyncQueue.grantSendMessages(assetByIdFunction);
     vectorSyncQueue.grantSendMessages(combosFunction);
@@ -208,6 +248,18 @@ export class ApiStack extends Stack {
       new iam.PolicyStatement({
         actions: ["dynamodb:GetItem", "dynamodb:Scan"],
         resources: [assetsTableArn],
+      })
+    );
+    publicMusicFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["dynamodb:BatchGetItem", "dynamodb:Query"],
+        resources: [assetsTableArn],
+      })
+    );
+    publicMusicFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["s3:GetObject"],
+        resources: [`${originalsBucketArn}/*`],
       })
     );
     publicComboSelectionFunction.addToRolePolicy(
@@ -304,6 +356,20 @@ export class ApiStack extends Stack {
       apiId: api.ref,
       integrationType: "AWS_PROXY",
       integrationUri: `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/${jobsFunction.functionArn}/invocations`,
+      payloadFormatVersion: "2.0",
+    });
+
+    const musicIntegration = new apigwv2.CfnIntegration(this, "MusicIntegration", {
+      apiId: api.ref,
+      integrationType: "AWS_PROXY",
+      integrationUri: `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/${musicFunction.functionArn}/invocations`,
+      payloadFormatVersion: "2.0",
+    });
+
+    const publicMusicIntegration = new apigwv2.CfnIntegration(this, "PublicMusicIntegration", {
+      apiId: api.ref,
+      integrationType: "AWS_PROXY",
+      integrationUri: `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/${publicMusicFunction.functionArn}/invocations`,
       payloadFormatVersion: "2.0",
     });
 
@@ -533,6 +599,41 @@ export class ApiStack extends Stack {
       }
     );
 
+    const musicRouteKeys = [
+      "GET /music/tracks",
+      "POST /music/tracks",
+      "GET /music/tracks/{id}",
+      "PATCH /music/tracks/{id}",
+      "DELETE /music/tracks/{id}",
+      "GET /music/tracks/{id}/readiness",
+      "POST /music/tracks/{id}/publish",
+      "POST /music/tracks/{id}/unpublish",
+      "GET /music/releases",
+      "POST /music/releases",
+      "GET /music/releases/{id}",
+      "PATCH /music/releases/{id}",
+      "DELETE /music/releases/{id}",
+      "GET /music/releases/{id}/readiness",
+      "POST /music/releases/{id}/publish",
+      "POST /music/releases/{id}/unpublish",
+    ];
+    musicRouteKeys.forEach((routeKey, index) => {
+      new apigwv2.CfnRoute(this, `MusicRoute${index}`, {
+        apiId: api.ref,
+        routeKey,
+        target: `integrations/${musicIntegration.ref}`,
+        authorizationType: "JWT",
+        authorizerId: authorizer.ref,
+      });
+    });
+
+    const getPublicMusicRoute = new apigwv2.CfnRoute(this, "GetPublicMusicRoute", {
+      apiId: api.ref,
+      routeKey: "GET /public/music",
+      target: `integrations/${publicMusicIntegration.ref}`,
+      authorizationType: "NONE",
+    });
+
     const apiAccessLogGroup = new logs.LogGroup(this, "ApiAccessLogGroup", {
       retention: logs.RetentionDays.ONE_MONTH,
     });
@@ -543,6 +644,10 @@ export class ApiStack extends Stack {
       autoDeploy: true,
       routeSettings: {
         "POST /public/combos/select": {
+          ThrottlingBurstLimit: 20,
+          ThrottlingRateLimit: 10,
+        },
+        "GET /public/music": {
           ThrottlingBurstLimit: 20,
           ThrottlingRateLimit: 10,
         },
@@ -562,6 +667,7 @@ export class ApiStack extends Stack {
       },
     });
     defaultStage.addDependency(postPublicComboSelectionRoute);
+    defaultStage.addDependency(getPublicMusicRoute);
 
     const executeApiArnPrefix = Stack.of(this).formatArn({
       service: "execute-api",
@@ -594,6 +700,18 @@ export class ApiStack extends Stack {
     });
 
     publicComboSelectionFunction.addPermission("AllowHttpApiInvokePublicComboSelection", {
+      principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
+      action: "lambda:InvokeFunction",
+      sourceArn: executeApiArnPrefix,
+    });
+
+    musicFunction.addPermission("AllowHttpApiInvokeMusic", {
+      principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
+      action: "lambda:InvokeFunction",
+      sourceArn: executeApiArnPrefix,
+    });
+
+    publicMusicFunction.addPermission("AllowHttpApiInvokePublicMusic", {
       principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
       action: "lambda:InvokeFunction",
       sourceArn: executeApiArnPrefix,

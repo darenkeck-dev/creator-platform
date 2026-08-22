@@ -23,6 +23,9 @@ function ensureLambdaArtifacts() {
     "api-asset-by-id",
     "api-combos",
     "api-public-combo-selection",
+    "api-music",
+    "api-public-music",
+    "api-jobs",
     "pre-token-allowlist",
     "upload-trigger",
     "mediaconvert-status",
@@ -85,7 +88,6 @@ describe("security posture", () => {
         ]),
       },
     });
-
   });
 
   it("keeps darenkeck site bucket private and scoped to its CloudFront distribution", () => {
@@ -218,11 +220,28 @@ describe("security posture", () => {
       "GET /combos/{id}",
       "DELETE /combos/{id}",
       "POST /combos/{id}/vote",
+      "GET /music/tracks",
+      "POST /music/tracks",
+      "GET /music/tracks/{id}",
+      "PATCH /music/tracks/{id}",
+      "DELETE /music/tracks/{id}",
+      "GET /music/tracks/{id}/readiness",
+      "POST /music/tracks/{id}/publish",
+      "POST /music/tracks/{id}/unpublish",
+      "GET /music/releases",
+      "POST /music/releases",
+      "GET /music/releases/{id}",
+      "PATCH /music/releases/{id}",
+      "DELETE /music/releases/{id}",
+      "GET /music/releases/{id}/readiness",
+      "POST /music/releases/{id}/publish",
+      "POST /music/releases/{id}/unpublish",
     ]);
 
     const requiredPublicRouteKeys = new Set([
       "GET /public/combos/random",
       "POST /public/combos/select",
+      "GET /public/music",
     ]);
 
     for (const route of routeEntries) {

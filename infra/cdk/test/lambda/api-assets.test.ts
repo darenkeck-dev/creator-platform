@@ -144,6 +144,7 @@ describe("api-assets lambda", () => {
         schemaVersion: number;
         ownerEmail: string;
         searchText?: string;
+        libraryVisibility: string;
         tags: Array<{ facet?: string; value: string }>;
       };
     };
@@ -153,6 +154,7 @@ describe("api-assets lambda", () => {
     expect(body.asset.status).toBe("draft");
     expect(body.asset.schemaVersion).toBe(1);
     expect(body.asset.ownerEmail).toBe("owner@example.com");
+    expect(body.asset.libraryVisibility).toBe("listed");
     expect(body.asset.tags).toHaveLength(1);
     expect((body.asset.tags[0] as { source?: string }).source).toBe("user");
     expect(body.asset.searchText).toContain("launch clip");
@@ -421,6 +423,88 @@ describe("api-assets lambda", () => {
     const body = parseBody(result) as { assets: Array<{ id: string }> };
     expect(body.assets).toHaveLength(1);
     expect(body.assets[0]?.id).toBe("asset-1");
+  });
+
+  it("filters unlisted release uploads from library queries", async () => {
+    stubSend(async (command) => {
+      if (!(command instanceof QueryCommand)) throw new Error("Expected QueryCommand");
+      const base = {
+        schemaVersion: 1,
+        ownerEmail: "owner@example.com",
+        type: "audio",
+        description: "",
+        status: "ready",
+        original: { bucket: "b", key: "k", size: 1, contentType: "audio/mp4" },
+        tags: [],
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      };
+      return {
+        Items: [
+          { ...base, id: "library-audio", title: "Library audio" },
+          {
+            ...base,
+            id: "release-audio",
+            title: "Release audio",
+            libraryVisibility: "unlisted",
+          },
+        ],
+      };
+    });
+
+    const result = await handler(createGetEventWithQuery({ libraryVisibility: "listed" }));
+    expect(result.statusCode).toBe(200);
+    const body = parseBody(result) as { assets: Array<{ id: string }> };
+    expect(body.assets.map((asset) => asset.id)).toEqual(["library-audio"]);
+  });
+
+  it("continues after a filtered DynamoDB page to find older listed assets", async () => {
+    let page = 0;
+    const { calls } = stubSend(async (command) => {
+      if (!(command instanceof QueryCommand)) throw new Error("Expected QueryCommand");
+      page += 1;
+      expect(command.input.FilterExpression).toContain("attribute_not_exists(#libraryVisibility)");
+      if (page === 1) {
+        return {
+          Items: [],
+          LastEvaluatedKey: { gsi2pk: "CONTAINER#ROOT", gsi2sk: "cursor" },
+        };
+      }
+      expect(command.input.ExclusiveStartKey).toEqual({
+        gsi2pk: "CONTAINER#ROOT",
+        gsi2sk: "cursor",
+      });
+      return {
+        Items: [
+          {
+            id: "older-folder",
+            schemaVersion: 1,
+            ownerEmail: "owner@example.com",
+            type: "folder",
+            title: "Older folder",
+            description: "",
+            status: "ready",
+            original: {
+              bucket: "b",
+              key: "folders/older-folder",
+              size: 0,
+              contentType: "application/x-directory",
+            },
+            tags: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      };
+    });
+
+    const result = await handler(createGetEventWithQuery({ libraryVisibility: "listed" }));
+    expect(result.statusCode).toBe(200);
+    const body = parseBody(result) as { assets: Array<{ id: string; libraryVisibility: string }> };
+    expect(body.assets).toEqual([
+      expect.objectContaining({ id: "older-folder", libraryVisibility: "listed" }),
+    ]);
+    expect(calls).toHaveLength(2);
   });
 
   it("filters assets by type and facet on GET", async () => {

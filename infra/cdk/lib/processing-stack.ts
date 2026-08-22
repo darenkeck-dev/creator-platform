@@ -84,7 +84,7 @@ export class ProcessingStack extends Stack {
 
     statusUpdater.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: ["dynamodb:UpdateItem"],
+        actions: ["dynamodb:GetItem", "dynamodb:UpdateItem"],
         resources: [assetsTableArn],
       })
     );
@@ -246,6 +246,7 @@ export class ProcessingStack extends Stack {
           "dynamodb:UpdateItem",
           "dynamodb:DeleteItem",
           "dynamodb:Query",
+          "dynamodb:TransactWriteItems",
         ],
         resources: [assetsTableArn, `${assetsTableArn}/index/*`],
       })

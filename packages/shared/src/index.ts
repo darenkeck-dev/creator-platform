@@ -7,6 +7,8 @@ export type AssetStatus = (typeof ASSET_STATUSES)[number];
 export const PROCESSING_PROFILES = [
   "video-standard-v1",
   "audio-passthrough-v1",
+  "audio-package-hls-v1",
+  "audio-transcode-hls-v1",
   "image-passthrough-v1",
 ] as const;
 export type ProcessingProfile = (typeof PROCESSING_PROFILES)[number];

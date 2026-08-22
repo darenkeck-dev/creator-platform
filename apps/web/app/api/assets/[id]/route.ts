@@ -9,6 +9,7 @@ import {
 import { NextResponse } from "next/server";
 
 import { deleteAssetInApi, fetchAssetByIdFromApi, patchAssetInApi } from "@/lib/assets-api";
+import { UpstreamApiError } from "@/lib/upstream-api-error";
 
 type Params = {
   id: string;
@@ -56,7 +57,10 @@ export async function PATCH(request: Request, context: { params: Promise<Params>
     const asset = await patchAssetInApi(parsedParams.data.id, parsedBody.data);
     const response: AssetDetailResponse = AssetDetailResponseSchema.parse({ asset });
     return NextResponse.json(response);
-  } catch {
+  } catch (error) {
+    if (error instanceof UpstreamApiError) {
+      return NextResponse.json(error.payload, { status: error.status });
+    }
     return NextResponse.json({ message: "Failed to update asset" }, { status: 500 });
   }
 }
@@ -72,6 +76,9 @@ export async function DELETE(_: Request, context: { params: Promise<Params> }) {
     const response: AssetDeleteResponse = AssetDeleteResponseSchema.parse(deleted);
     return NextResponse.json(response);
   } catch (error) {
+    if (error instanceof UpstreamApiError) {
+      return NextResponse.json(error.payload, { status: error.status });
+    }
     const message = error instanceof Error ? error.message : "Failed to delete asset";
     if (message.includes("not found")) {
       return NextResponse.json({ message: "Asset not found" }, { status: 404 });

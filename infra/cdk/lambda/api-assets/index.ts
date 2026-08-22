@@ -10,6 +10,7 @@ import {
   AssetTagFacetSchema,
   ASSET_SCHEMA_VERSION,
   AssetListResponseSchema,
+  AssetLibraryVisibilitySchema,
   AssetRecordSchema,
   AssetTypeSchema,
   CreateAssetInputSchema,
@@ -37,6 +38,7 @@ const ListAssetsQuerySchema = z.object({
   type: AssetTypeSchema.optional(),
   origin: AssetOriginSchema.optional(),
   facet: AssetTagFacetSchema.optional(),
+  libraryVisibility: z.union([AssetLibraryVisibilitySchema, z.literal("all")]).default("all"),
   containerId: z.string().min(1).optional(),
   scope: z.enum(["container", "all"]).default("container"),
   sort: z.enum(["newest", "oldest"]).default("newest"),
@@ -150,6 +152,7 @@ function buildAssetRecord(
     description: input.description,
     status: isFolder ? "ready" : "draft",
     visibility: input.visibility ?? "private",
+    libraryVisibility: input.libraryVisibility,
     original: {
       bucket: "pending",
       key: input.original?.key ?? (isFolder ? `folders/${id}` : `incoming/${id}`),
@@ -314,45 +317,48 @@ async function listAssets(event: HttpEvent): Promise<{ statusCode: number; body:
     return response(400, { message: "Invalid query parameters", issues: parsedQuery.error.issues });
   }
 
-  const { type, origin, facet, containerId, scope, sort } = parsedQuery.data;
+  const { type, origin, facet, libraryVisibility, containerId, scope, sort } = parsedQuery.data;
   const ownerEmail = getOwnerEmail(event);
   const tableName = getRequiredEnv("ASSETS_TABLE_NAME");
   const containerIndex = getRequiredEnv("ASSETS_CONTAINER_INDEX");
   const createdAtIndex = getRequiredEnv("ASSETS_CREATED_AT_INDEX");
+  const maxResults = scope === "all" ? 200 : 100;
+  const filterExpression =
+    libraryVisibility === "listed"
+      ? "ownerEmail = :ownerEmail AND (attribute_not_exists(#libraryVisibility) OR #libraryVisibility = :libraryVisibility)"
+      : libraryVisibility === "unlisted"
+        ? "ownerEmail = :ownerEmail AND #libraryVisibility = :libraryVisibility"
+        : "ownerEmail = :ownerEmail";
+  const items: Array<Record<string, unknown>> = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  let pageCount = 0;
+  do {
+    const result = await db.send(
+      new QueryCommand({
+        TableName: tableName,
+        IndexName: scope === "all" ? createdAtIndex : containerIndex,
+        KeyConditionExpression:
+          scope === "all" ? "gsi1pk = :partitionKey" : "gsi2pk = :partitionKey",
+        FilterExpression: filterExpression,
+        ExpressionAttributeNames:
+          libraryVisibility === "all" ? undefined : { "#libraryVisibility": "libraryVisibility" },
+        ExpressionAttributeValues: {
+          ":partitionKey": scope === "all" ? "ASSET" : toContainerIndexPk(containerId),
+          ":ownerEmail": ownerEmail,
+          ...(libraryVisibility === "all" ? {} : { ":libraryVisibility": libraryVisibility }),
+        },
+        ExclusiveStartKey: exclusiveStartKey,
+        ScanIndexForward: false,
+        Limit: maxResults,
+      })
+    );
+    items.push(...((result.Items ?? []) as Array<Record<string, unknown>>));
+    exclusiveStartKey = result.LastEvaluatedKey;
+    pageCount += 1;
+  } while (exclusiveStartKey && items.length < maxResults && pageCount < 20);
 
-  const result = await db.send(
-    new QueryCommand(
-      scope === "all"
-        ? {
-            TableName: tableName,
-            IndexName: createdAtIndex,
-            KeyConditionExpression: "gsi1pk = :partitionKey",
-            FilterExpression: "ownerEmail = :ownerEmail",
-            ExpressionAttributeValues: {
-              ":partitionKey": "ASSET",
-              ":ownerEmail": ownerEmail,
-            },
-            ScanIndexForward: false,
-            Limit: 200,
-          }
-        : {
-            TableName: tableName,
-            IndexName: containerIndex,
-            KeyConditionExpression: "gsi2pk = :partitionKey",
-            FilterExpression: "ownerEmail = :ownerEmail",
-            ExpressionAttributeValues: {
-              ":partitionKey": toContainerIndexPk(containerId),
-              ":ownerEmail": ownerEmail,
-            },
-            ScanIndexForward: false,
-            Limit: 100,
-          }
-    )
-  );
-
-  const items = (result.Items ?? []) as Array<Record<string, unknown>>;
   const parsedAssets = await Promise.all(
-    items.map(async (item) =>
+    items.slice(0, maxResults).map(async (item) =>
       safeReadAssetRecordWithUpgrade({
         db,
         tableName,
@@ -371,6 +377,10 @@ async function listAssets(event: HttpEvent): Promise<{ statusCode: number; body:
     }
 
     if (facet && !asset.tags.some((tag) => tag.facet === facet)) {
+      return false;
+    }
+
+    if (libraryVisibility !== "all" && asset.libraryVisibility !== libraryVisibility) {
       return false;
     }
 

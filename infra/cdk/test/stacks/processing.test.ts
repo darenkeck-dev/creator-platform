@@ -137,6 +137,11 @@ describe("processing stack tone analysis", () => {
         (statement) => statement.Action ?? []
       )
     ).toContain("sqs:SendMessage");
+    expect(
+      jobsPolicy?.Properties?.PolicyDocument?.Statement?.flatMap(
+        (statement) => statement.Action ?? []
+      )
+    ).toContain("dynamodb:TransactWriteItems");
   });
 
   it("grants status mutation lambdas access to the vector sync queue", () => {
@@ -174,5 +179,31 @@ describe("processing stack tone analysis", () => {
         )
       ).toContain("sqs:SendMessage");
     }
+  });
+
+  it("allows the MediaConvert status updater to read before appending audit logs", () => {
+    const app = new App();
+    const stack = new ProcessingStack(app, "ProcessingStackStatusAuditTest", {
+      stage: "test",
+      env,
+    });
+    const resources = Template.fromStack(stack).toJSON().Resources as Record<
+      string,
+      {
+        Type?: string;
+        Properties?: { PolicyDocument?: { Statement?: Array<{ Action?: string | string[] }> } };
+      }
+    >;
+    const policy = Object.entries(resources).find(
+      ([id, resource]) =>
+        id.startsWith("MediaConvertStatusUpdaterFunction") &&
+        resource.Type === "AWS::IAM::Policy"
+    )?.[1];
+    const actions = policy?.Properties?.PolicyDocument?.Statement?.flatMap(
+      (statement) => statement.Action ?? []
+    );
+
+    expect(actions).toContain("dynamodb:GetItem");
+    expect(actions).toContain("dynamodb:UpdateItem");
   });
 });

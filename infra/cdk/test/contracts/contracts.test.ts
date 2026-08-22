@@ -65,6 +65,19 @@ describe("contracts", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("defaults assets to listed and accepts unlisted release uploads", () => {
+    expect(
+      CreateAssetInputSchema.parse({ type: "audio", title: "Library" }).libraryVisibility
+    ).toBe("listed");
+    expect(
+      CreateAssetInputSchema.parse({
+        type: "audio",
+        title: "Release",
+        libraryVisibility: "unlisted",
+      }).libraryVisibility
+    ).toBe("unlisted");
+  });
+
   it("accepts audio transcode processing profile on create", () => {
     const parsed = CreateAssetInputSchema.safeParse({
       type: "audio",
@@ -74,6 +87,16 @@ describe("contracts", () => {
     });
 
     expect(parsed.success).toBe(true);
+  });
+
+  it("accepts AAC passthrough HLS packaging on create", () => {
+    expect(
+      CreateAssetInputSchema.parse({
+        type: "audio",
+        title: "Packaged master",
+        processingProfile: "audio-package-hls-v1",
+      }).processingProfile
+    ).toBe("audio-package-hls-v1");
   });
 
   it("accepts generated provenance metadata on create", () => {

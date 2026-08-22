@@ -14,10 +14,10 @@ type Asset = AssetDetailResponse["asset"];
 
 type Props = {
   folder: Asset;
-  children: Asset[];
+  assets: Asset[];
 };
 
-export function FolderDetailView({ folder, children }: Props) {
+export function FolderDetailView({ folder, assets }: Props) {
   const router = useRouter();
   const [title, setTitle] = useState(folder.title);
   const [description, setDescription] = useState(folder.description);
@@ -144,7 +144,7 @@ export function FolderDetailView({ folder, children }: Props) {
         {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
       </header>
 
-      <LibraryAssetBrowser assets={children} containerId={folder.id} />
+      <LibraryAssetBrowser assets={assets} containerId={folder.id} />
     </section>
   );
 }

@@ -43,39 +43,39 @@ export function JobStatusProvider({ children }: { children: ReactNode }) {
   const latestJob = jobs[0];
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return;
-    }
-
-    try {
-      const ids = JSON.parse(raw) as unknown;
-      if (Array.isArray(ids)) {
-        setJobs(
-          ids
-            .filter((id): id is string => typeof id === "string" && id.length > 0)
-            .map((id) => ({
-              id,
-              schemaVersion: 1,
-              ownerEmail: "pending@example.com",
-              type: "delete_assets",
-              status: "queued",
-              target: { assetIds: [id], includeDescendants: true },
-              options: {},
-              totalItems: 0,
-              completedItems: 0,
-              failedItems: 0,
-              skippedItems: 0,
-              message: "Restoring job status",
-              failures: [],
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            }))
-        );
+    const timer = window.setTimeout(() => {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      try {
+        const ids = JSON.parse(raw) as unknown;
+        if (Array.isArray(ids)) {
+          setJobs(
+            ids
+              .filter((id): id is string => typeof id === "string" && id.length > 0)
+              .map((id) => ({
+                id,
+                schemaVersion: 1,
+                ownerEmail: "pending@example.com",
+                type: "delete_assets",
+                status: "queued",
+                target: { assetIds: [id], includeDescendants: true },
+                options: {},
+                totalItems: 0,
+                completedItems: 0,
+                failedItems: 0,
+                skippedItems: 0,
+                message: "Restoring job status",
+                failures: [],
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              }))
+          );
+        }
+      } catch {
+        window.localStorage.removeItem(STORAGE_KEY);
       }
-    } catch {
-      window.localStorage.removeItem(STORAGE_KEY);
-    }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {

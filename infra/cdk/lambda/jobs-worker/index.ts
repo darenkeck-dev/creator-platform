@@ -11,6 +11,7 @@ import {
   DynamoDBDocumentClient,
   GetCommand,
   QueryCommand,
+  TransactWriteCommand,
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 import {
@@ -23,6 +24,7 @@ import {
 import { z } from "zod";
 import { buildJobPreview, expandAssetTree, safeReadAsset } from "../shared/asset-job-tree";
 import { enqueueVectorSyncMessage } from "../shared/vector-sync-message";
+import { getMusicAssetLinks } from "../shared/music-asset-links";
 
 type SqsEvent = {
   Records?: Array<{
@@ -190,27 +192,80 @@ async function deleteOneAsset(params: {
   derivedBucketName: string;
   asset: AssetRecord;
 }): Promise<void> {
-  if (params.asset.type !== "folder") {
-    const originalBucket =
-      params.asset.original.bucket === "pending"
-        ? params.originalsBucketName
-        : params.asset.original.bucket;
-    try {
-      await s3.send(
-        new DeleteObjectCommand({
-          Bucket: originalBucket,
-          Key: params.asset.original.key,
-        })
-      );
-    } catch (error) {
-      console.error("Original object delete failed", { assetId: params.asset.id, error });
-    }
-
-    await deleteDerivedPrefix(params.derivedBucketName, `derived/${params.asset.id}/`);
+  const musicLinks = await getMusicAssetLinks({
+    db,
+    tableName: params.tableName,
+    assetId: params.asset.id,
+  });
+  if (musicLinks.length > 0) {
+    throw new Error("Asset is linked to the official music catalog");
   }
 
-  await deleteAssetRecords(params.tableName, params.asset.id);
-  await enqueueVectorSyncMessage(params.asset.id, "jobs-worker:deleted");
+  await db.send(
+    new TransactWriteCommand({
+      TransactItems: [
+        {
+          Update: {
+            TableName: params.tableName,
+            Key: { pk: `ASSET#${params.asset.id}`, sk: "META" },
+            UpdateExpression: "SET officialMusicDeletionLock = :lock",
+            ConditionExpression:
+              "ownerEmail = :ownerEmail AND updatedAt = :updatedAt " +
+              "AND attribute_not_exists(officialMusicDeletionLock) " +
+              "AND (attribute_not_exists(officialMusicLinkCount) OR officialMusicLinkCount = :zero)",
+            ExpressionAttributeValues: {
+              ":ownerEmail": params.asset.ownerEmail,
+              ":updatedAt": params.asset.updatedAt,
+              ":zero": 0,
+              ":lock": true,
+            },
+          },
+        },
+      ],
+    })
+  );
+
+  try {
+    if (params.asset.type !== "folder") {
+      const originalBucket =
+        params.asset.original.bucket === "pending"
+          ? params.originalsBucketName
+          : params.asset.original.bucket;
+      try {
+        await s3.send(
+          new DeleteObjectCommand({
+            Bucket: originalBucket,
+            Key: params.asset.original.key,
+          })
+        );
+      } catch (error) {
+        console.error("Original object delete failed", { assetId: params.asset.id, error });
+      }
+
+      await deleteDerivedPrefix(params.derivedBucketName, `derived/${params.asset.id}/`);
+    }
+
+    await deleteAssetRecords(params.tableName, params.asset.id);
+    await enqueueVectorSyncMessage(params.asset.id, "jobs-worker:deleted");
+  } catch (error) {
+    try {
+      await db.send(
+        new UpdateCommand({
+          TableName: params.tableName,
+          Key: { pk: `ASSET#${params.asset.id}`, sk: "META" },
+          UpdateExpression: "REMOVE officialMusicDeletionLock",
+          ConditionExpression: "ownerEmail = :ownerEmail",
+          ExpressionAttributeValues: { ":ownerEmail": params.asset.ownerEmail },
+        })
+      );
+    } catch (unlockError) {
+      console.error("Failed to clear asset deletion lock", {
+        assetId: params.asset.id,
+        unlockError,
+      });
+    }
+    throw error;
+  }
 }
 
 async function runDeleteAssets(jobId: string): Promise<void> {
@@ -272,8 +327,19 @@ async function runDeleteAssets(jobId: string): Promise<void> {
 
   const failures: Array<{ id: string; title?: string; message: string }> = [];
   let completedItems = 0;
+  let skippedItems = 0;
+  const retainedAncestors = new Set<string>();
+  const itemById = new Map(items.map((item) => [item.id, item]));
 
   for (const item of items) {
+    if (retainedAncestors.has(item.id)) {
+      skippedItems += 1;
+      await updateJob(tableName, jobId, {
+        skippedItems,
+        message: `Retaining ${item.title} because a descendant could not be deleted`,
+      });
+      continue;
+    }
     await updateJob(tableName, jobId, {
       currentItemId: item.id,
       currentItemTitle: item.title,
@@ -289,18 +355,25 @@ async function runDeleteAssets(jobId: string): Promise<void> {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to delete item";
       failures.push({ id: item.id, title: item.title, message });
+      let ancestorId = item.containerId;
+      while (ancestorId) {
+        retainedAncestors.add(ancestorId);
+        ancestorId = itemById.get(ancestorId)?.containerId;
+      }
       console.error("Bulk delete item failed", { jobId, itemId: item.id, error });
     }
 
     await updateJob(tableName, jobId, {
       completedItems,
       failedItems: failures.length,
+      skippedItems,
       failures: failures.slice(0, 50),
     });
   }
 
   await updateJob(tableName, jobId, {
     status: failures.length > 0 ? "completed_with_errors" : "completed",
+    skippedItems,
     finishedAt: new Date().toISOString(),
     currentItemId: undefined,
     currentItemTitle: undefined,

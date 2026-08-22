@@ -17,7 +17,15 @@ const env = {
 };
 
 function ensureLambdaArtifacts() {
-  const lambdaDirs = ["api-assets", "api-asset-by-id", "api-combos", "api-public-combo-selection"];
+  const lambdaDirs = [
+    "api-assets",
+    "api-asset-by-id",
+    "api-combos",
+    "api-public-combo-selection",
+    "api-music",
+    "api-public-music",
+    "api-jobs",
+  ];
   for (const lambdaDir of lambdaDirs) {
     const dir = join(process.cwd(), ".dist", "lambda", lambdaDir);
     mkdirSync(dir, { recursive: true });

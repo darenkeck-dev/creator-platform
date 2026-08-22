@@ -5,6 +5,7 @@ import {
   UpdateCommand,
   QueryCommand,
   DeleteCommand,
+  TransactWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
 import {
   S3Client,
@@ -49,6 +50,7 @@ import {
 } from "../shared/asset-record-versioning";
 import { appendAssetAuditLogEntry } from "../shared/asset-audit-log";
 import { enqueueVectorSyncMessage } from "../shared/vector-sync-message";
+import { getMusicAssetLinks } from "../shared/music-asset-links";
 
 type HttpEvent = {
   requestContext?: {
@@ -528,6 +530,7 @@ async function patchAsset(
         pk: `ASSET#${id}`,
         sk: "META",
       },
+      ConsistentRead: true,
     })
   );
 
@@ -538,6 +541,17 @@ async function patchAsset(
   const currentAsset = await readAssetOrThrow(tableName, current.Item);
   if (currentAsset.ownerEmail !== ownerEmail) {
     return response(403, { message: "Forbidden" });
+  }
+
+  const musicLinks =
+    updates.visibility === "private"
+      ? await getMusicAssetLinks({ db, tableName, assetId: id })
+      : [];
+  let updatedItem: Record<string, unknown> | undefined;
+  if (updates.visibility === "private") {
+    if (musicLinks.some((link) => link.publicationStatus === "published")) {
+      return response(409, { message: "Published music assets cannot be made private" });
+    }
   }
 
   const names: Record<string, string> = {
@@ -597,27 +611,66 @@ async function patchAsset(
     setExpressions.push("#tags = :tags");
   }
 
-  const result = await db.send(
-    new UpdateCommand({
-      TableName: tableName,
-      Key: {
-        pk: `ASSET#${id}`,
-        sk: "META",
-      },
-      ConditionExpression:
-        "attribute_exists(pk) AND attribute_exists(sk) AND ownerEmail = :ownerEmail",
-      UpdateExpression: `SET ${setExpressions.join(", ")}`,
-      ExpressionAttributeNames: names,
-      ExpressionAttributeValues: values,
-      ReturnValues: "ALL_NEW",
-    })
-  );
+  const updateInput = {
+    TableName: tableName,
+    Key: {
+      pk: `ASSET#${id}`,
+      sk: "META",
+    },
+    ConditionExpression:
+      "attribute_exists(pk) AND attribute_exists(sk) AND ownerEmail = :ownerEmail",
+    UpdateExpression: `SET ${setExpressions.join(", ")}`,
+    ExpressionAttributeNames: names,
+    ExpressionAttributeValues: values,
+  };
 
-  if (!result.Attributes) {
+  if (updates.visibility === "private") {
+    values[":currentUpdatedAt"] = currentAsset.updatedAt;
+    values[":zero"] = 0;
+    await db.send(
+      new TransactWriteCommand({
+        TransactItems: [
+          {
+            Update: {
+              ...updateInput,
+              ConditionExpression:
+                `${updateInput.ConditionExpression} AND updatedAt = :currentUpdatedAt ` +
+                "AND attribute_not_exists(officialMusicDeletionLock) " +
+                "AND (attribute_not_exists(publishedMusicLinkCount) OR publishedMusicLinkCount = :zero)",
+            },
+          },
+          ...musicLinks.map((link) => ({
+            ConditionCheck: {
+              TableName: tableName,
+              Key: { pk: `ASSET#${id}`, sk: link.sk },
+              ConditionExpression:
+                "attribute_exists(pk) AND attribute_exists(sk) AND publicationStatus <> :published",
+              ExpressionAttributeValues: { ":published": "published" },
+            },
+          })),
+        ],
+      })
+    );
+  } else {
+    const result = await db.send(new UpdateCommand({ ...updateInput, ReturnValues: "ALL_NEW" }));
+    updatedItem = result.Attributes;
+  }
+
+  if (!updatedItem) {
+    const updated = await db.send(
+      new GetCommand({
+        TableName: tableName,
+        Key: { pk: `ASSET#${id}`, sk: "META" },
+        ConsistentRead: true,
+      })
+    );
+    updatedItem = updated.Item;
+  }
+  if (!updatedItem) {
     return response(404, { message: "Asset not found" });
   }
 
-  const asset = await readAssetOrThrow(tableName, result.Attributes);
+  const asset = await readAssetOrThrow(tableName, updatedItem);
   if (updates.visibility !== undefined && updates.visibility !== currentAsset.visibility) {
     await enqueueVectorSyncMessage(id, "api-asset-by-id:visibility");
   }
@@ -1229,6 +1282,7 @@ async function deleteAsset(
         pk: `ASSET#${id}`,
         sk: "META",
       },
+      ConsistentRead: true,
     })
   );
 
@@ -1241,53 +1295,99 @@ async function deleteAsset(
     return response(403, { message: "Forbidden" });
   }
 
-  const originalBucket =
-    asset.original.bucket === "pending" ? originalsBucketName : asset.original.bucket;
-  await s3.send(
-    new DeleteObjectCommand({
-      Bucket: originalBucket,
-      Key: asset.original.key,
+  const musicLinks = await getMusicAssetLinks({ db, tableName, assetId: id });
+  if (musicLinks.length > 0) {
+    return response(409, { message: "Asset is linked to the official music catalog" });
+  }
+
+  await db.send(
+    new TransactWriteCommand({
+      TransactItems: [
+        {
+          Update: {
+            TableName: tableName,
+            Key: { pk: `ASSET#${id}`, sk: "META" },
+            UpdateExpression: "SET officialMusicDeletionLock = :lock",
+            ConditionExpression:
+              "ownerEmail = :ownerEmail AND updatedAt = :updatedAt " +
+              "AND attribute_not_exists(officialMusicDeletionLock) " +
+              "AND (attribute_not_exists(officialMusicLinkCount) OR officialMusicLinkCount = :zero)",
+            ExpressionAttributeValues: {
+              ":ownerEmail": ownerEmail,
+              ":updatedAt": asset.updatedAt,
+              ":zero": 0,
+              ":lock": true,
+            },
+          },
+        },
+      ],
     })
   );
 
-  await deleteDerivedPrefix(derivedBucketName, `derived/${id}/`);
-
-  let lastEvaluatedKey: Record<string, unknown> | undefined;
-  do {
-    const page = await db.send(
-      new QueryCommand({
-        TableName: tableName,
-        KeyConditionExpression: "pk = :pk",
-        ExpressionAttributeValues: {
-          ":pk": `ASSET#${id}`,
-        },
-        ProjectionExpression: "pk, sk",
-        ExclusiveStartKey: lastEvaluatedKey,
+  try {
+    const originalBucket =
+      asset.original.bucket === "pending" ? originalsBucketName : asset.original.bucket;
+    await s3.send(
+      new DeleteObjectCommand({
+        Bucket: originalBucket,
+        Key: asset.original.key,
       })
     );
 
-    for (const item of page.Items ?? []) {
-      const pk = item.pk;
-      const sk = item.sk;
-      if (typeof pk !== "string" || typeof sk !== "string") {
-        continue;
-      }
+    await deleteDerivedPrefix(derivedBucketName, `derived/${id}/`);
 
-      await db.send(
-        new DeleteCommand({
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
+    do {
+      const page = await db.send(
+        new QueryCommand({
           TableName: tableName,
-          Key: { pk, sk },
+          KeyConditionExpression: "pk = :pk",
+          ExpressionAttributeValues: {
+            ":pk": `ASSET#${id}`,
+          },
+          ProjectionExpression: "pk, sk",
+          ExclusiveStartKey: lastEvaluatedKey,
         })
       );
+
+      for (const item of page.Items ?? []) {
+        const pk = item.pk;
+        const sk = item.sk;
+        if (typeof pk !== "string" || typeof sk !== "string") {
+          continue;
+        }
+
+        await db.send(
+          new DeleteCommand({
+            TableName: tableName,
+            Key: { pk, sk },
+          })
+        );
+      }
+
+      lastEvaluatedKey = page.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastEvaluatedKey);
+
+    await enqueueVectorSyncMessage(id, "api-asset-by-id:deleted");
+
+    const payload = AssetDeleteResponseSchema.parse({ id, deleted: true as const });
+    return response(200, payload);
+  } catch (error) {
+    try {
+      await db.send(
+        new UpdateCommand({
+          TableName: tableName,
+          Key: { pk: `ASSET#${id}`, sk: "META" },
+          UpdateExpression: "REMOVE officialMusicDeletionLock",
+          ConditionExpression: "ownerEmail = :ownerEmail",
+          ExpressionAttributeValues: { ":ownerEmail": ownerEmail },
+        })
+      );
+    } catch (unlockError) {
+      console.error("Failed to clear asset deletion lock", { assetId: id, unlockError });
     }
-
-    lastEvaluatedKey = page.LastEvaluatedKey as Record<string, unknown> | undefined;
-  } while (lastEvaluatedKey);
-
-  await enqueueVectorSyncMessage(id, "api-asset-by-id:deleted");
-
-  const payload = AssetDeleteResponseSchema.parse({ id, deleted: true as const });
-  return response(200, payload);
+    throw error;
+  }
 }
 
 export async function handler(event: HttpEvent): Promise<{ statusCode: number; body: string }> {
@@ -1350,6 +1450,12 @@ export async function handler(event: HttpEvent): Promise<{ statusCode: number; b
 
     return response(405, { message: "Method not allowed" });
   } catch (error) {
+    if (
+      error instanceof Error &&
+      ["ConditionalCheckFailedException", "TransactionCanceledException"].includes(error.name)
+    ) {
+      return response(409, { message: "Asset mutation conflict" });
+    }
     const message = error instanceof Error ? error.message : "Unexpected error";
     return response(500, { message });
   }

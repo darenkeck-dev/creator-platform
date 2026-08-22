@@ -77,8 +77,9 @@ import {
 import { cookies } from "next/headers";
 
 import { AUTH_COOKIE_NAME } from "@/lib/auth";
+import { throwUpstreamApiError } from "@/lib/upstream-api-error";
 
-function getApiBaseUrl(): string {
+export function getApiBaseUrl(): string {
   const stage = (process.env.APP_STAGE ?? "prod").trim().toLowerCase() || "prod";
   const stageKey = stage.toUpperCase().replace(/[^A-Z0-9]/g, "_");
   const stageApiBaseUrl = process.env[`API_BASE_URL_${stageKey}`];
@@ -91,7 +92,7 @@ function getApiBaseUrl(): string {
   return apiBaseUrl.replace(/\/$/, "");
 }
 
-async function getAuthHeader(): Promise<string> {
+export async function getAuthHeader(): Promise<string> {
   const cookieStore = await cookies();
   const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
   if (!token) {
@@ -105,6 +106,7 @@ type AssetListFilters = {
   type?: "video" | "audio" | "image" | "folder";
   origin?: "uploaded" | "generated" | "derived" | "manual";
   facet?: string;
+  libraryVisibility?: "listed" | "unlisted" | "all";
   containerId?: string;
   scope?: "container" | "all";
   sort?: "newest" | "oldest";
@@ -122,6 +124,9 @@ export async function fetchAssetsFromApi(
   }
   if (filters.origin) {
     query.set("origin", filters.origin);
+  }
+  if (filters.libraryVisibility) {
+    query.set("libraryVisibility", filters.libraryVisibility);
   }
   if (filters.containerId) {
     query.set("containerId", filters.containerId);
@@ -159,19 +164,23 @@ export async function fetchAssetsFromApi(
 export async function fetchAssetByIdFromApi(
   id: string
 ): Promise<AssetDetailResponse["asset"] | null> {
-  const response = await fetch(`${getApiBaseUrl()}/assets/${encodeURIComponent(id)}`, {
-    headers: {
-      authorization: await getAuthHeader(),
-    },
-    cache: "no-store",
-  });
+  const authorization = await getAuthHeader();
+  let response: Response | undefined;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    response = await fetch(`${getApiBaseUrl()}/assets/${encodeURIComponent(id)}`, {
+      headers: { authorization },
+      cache: "no-store",
+    });
+    if (![429, 503].includes(response.status) || attempt === 3) break;
+    await new Promise((resolve) => setTimeout(resolve, 100 * 2 ** attempt));
+  }
 
-  if (response.status === 404) {
+  if (response?.status === 404) {
     return null;
   }
 
-  if (!response.ok) {
-    throw new Error(`Failed to load asset ${id}: ${response.status}`);
+  if (!response?.ok) {
+    throw new Error(`Failed to load asset ${id}: ${response?.status ?? "no response"}`);
   }
 
   const json = (await response.json()) as unknown;
@@ -234,7 +243,7 @@ export async function patchAssetInApi(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to update asset ${id}: ${response.status}`);
+    await throwUpstreamApiError(response, `Failed to update asset ${id}`);
   }
 
   const json = (await response.json()) as unknown;
@@ -336,16 +345,8 @@ export async function deleteAssetInApi(id: string): Promise<AssetDeleteResponse>
     cache: "no-store",
   });
 
-  if (response.status === 404) {
-    throw new Error(`Asset ${id} not found`);
-  }
-
-  if (response.status === 403) {
-    throw new Error(`Forbidden deleting asset ${id}`);
-  }
-
   if (!response.ok) {
-    throw new Error(`Failed to delete asset ${id}: ${response.status}`);
+    await throwUpstreamApiError(response, `Failed to delete asset ${id}`);
   }
 
   const json = (await response.json()) as unknown;
