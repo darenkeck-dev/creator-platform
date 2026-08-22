@@ -1,5 +1,83 @@
 # Wiki Log
 
+## [2026-08-21] web | simplify release workspace copy
+
+- Removed redundant release workspace, release details, cover, track-capacity, and authoritative-stream explanatory copy while retaining controls, validation, and accessible action labels.
+
+## [2026-08-21] web | make release status refresh manual
+
+- Removed the five-second release workspace polling loop that repeatedly fetched readiness and every linked cover/audio asset.
+- Added an icon-only header action that refreshes readiness and linked asset state once on demand, with bounded asset request concurrency retained.
+- Removed the redundant release header description about Media Manager ownership.
+
+## [2026-08-21] fix | restore listed Library assets
+
+- Fixed authenticated asset listing after the new Library visibility filter caused root results to appear empty. DynamoDB applies `Limit` before `FilterExpression`, so newer unlisted release assets and records for other owners exhausted the first query page before older listed assets were reached.
+- Asset listing now applies listed/unlisted semantics in the DynamoDB filter, treats legacy records without `libraryVisibility` as listed, and follows pagination until it has enough matching records or reaches the bounded page cap.
+- Added a regression test for an empty filtered first page followed by an older listed folder, deployed the API, and verified the live Library returns both root folders, 19 video children, and 17 audio children while returning no release-only assets.
+
+## [2026-08-21] content | create Voices In Time draft release
+
+- Converted five ordered 24-bit/48 kHz AIFF masters under `media/voices_in_time/` to AAC-LC 256 kbps, 48 kHz stereo M4A files named from the Bandcamp preorder track titles.
+- Downloaded the 1200x1200 Bandcamp cover and uploaded it with all five audio files as private, unlisted assets. Every audio asset is ready under `audio-package-hls-v1` with a live HLS manifest.
+- Created five ordered draft tracks and draft EP `325af9d6-0215-450d-9151-378f2fb5f7c7` with the September 4, 2026 release date, Bandcamp description and credits, cover, and purchase links. Because Bandcamp only publishes the first track route during preorder, the remaining four links use the expected title-derived track slugs.
+- Verified release readiness has no issues, the draft remains absent from the public catalog, and all six linked assets remain excluded from normal Library results.
+
+## [2026-08-21] content | create Autocron draft release
+
+- Converted five ordered 16-bit/44.1 kHz AIFF masters under `media/autocron/` to AAC-LC 256 kbps, 48 kHz stereo M4A files named from the published Bandcamp track titles. Tracks two and three used the Bandcamp titles `Autocron` and `Dynamo` rather than the internal source filenames.
+- Downloaded the 1200x1200 Bandcamp cover and uploaded it with all five audio files as private, unlisted assets. Every audio asset is ready under `audio-package-hls-v1` with a live HLS manifest.
+- Created five ordered draft tracks with Bandcamp metadata and track purchase links, then created draft release `12fde804-16b3-40bc-b5c3-ffc7904d6412` with the January 14, 2022 release date, credits, cover, and album purchase link.
+- Verified release readiness has no issues, the draft remains absent from the public catalog, and all six linked assets remain excluded from normal Library results.
+
+## [2026-08-21] web | separate release media from Library browsing
+
+- Added explicit `libraryVisibility` metadata and authenticated asset-list filtering without coupling Library placement to public/private access.
+- Standard uploads default to listed. Release cover and audio uploads are created unlisted, while release administration continues resolving linked assets directly.
+- Deployed the API update and marked all ten Moonlit Home audio assets plus the cover unlisted. Live Lambda checks returned none of those assets in listed results and all eleven in unlisted results.
+
+## [2026-08-21] web | harden release asset loading
+
+- Traced the Moonlit Home release-page `503` to API Gateway reporting a throttled asset-detail Lambda, not an asset record or processing-profile schema failure. The page requested eleven linked assets in parallel against an account concurrency limit of ten.
+- Bounded release asset hydration and polling to three concurrent requests and added exponential retries for transient `429`/`503` asset responses.
+- Verified the web typecheck, 44 tests, lint with ten existing warnings, and production build.
+
+## [2026-08-21] content | create Moonlit Home draft release
+
+- Uploaded all ten ordered AAC masters and the Bandcamp cover through deployed API handlers under the Darenkeck owner. Every audio asset is private, ready, backed by a live HLS manifest, and uses `audio-package-hls-v1`; the cover is private and ready.
+- Created ten draft music tracks with exact durations and track-specific Bandcamp purchase links, then created ordered draft release `c4cd15e3-5ba5-4d5b-99ad-91fcf082a3aa` with album metadata, cover, description/credits, and album purchase link.
+- Verified release readiness reports no issues while all created records remain absent from `GET /public/music`.
+
+## [2026-08-21] media | prepare Moonlit Home streaming masters
+
+- Converted the ten ordered 24-bit/96 kHz stereo WAV masters under `media/Moonlit_Home/` to AAC-LC 256 kbps, 48 kHz stereo M4A files for `audio-package-hls-v1`.
+- Named outputs with two-digit order prefixes and underscore-normalized track titles from the published album listing; embedded artist, album, title, and track-number metadata. Original WAV files remain unchanged.
+
+## [2026-08-21] processing | add AAC passthrough HLS packaging
+
+- Added `audio-package-hls-v1` for locally encoded AAC masters. MediaConvert preserves the AAC stream and emits the same six-second HLS segmentation/manifests used by normalized audio.
+- Kept `audio-transcode-hls-v1` as the default for WAV, FLAC, and other sources requiring audio encoding.
+- Deployed the updated API and processing stacks; both completed successfully. Verified real AAC passthrough packaging across all ten Moonlit Home masters.
+- Fixed out-of-order MediaConvert state handling after a late `PROGRESSING` event overwrote one completed asset, and granted the status updater the DynamoDB read needed for audit-log appends. Redeployed processing and repaired the affected asset from its completed job output.
+
+## [2026-08-20] feature | add Media Manager official music catalog
+
+- Made Media Manager authoritative for official tracks, releases, cover assets, ordered track membership, purchase links, readiness, and publication; removed the superseded Pages CMS music-manifest direction.
+- Added revision-checked authenticated music administration, transactional reverse-link aggregates and asset lifecycle guards, and read-only `GET /public/music` resolution from current authoritative assets.
+- Added `/releases` administration with release creation, cover and ordered batch-track upload, purchase-link editing, readiness polling, HLS preview, conflict recovery, and explicit publish/unpublish controls.
+- Deployed `MediaManagerApiStack` and `MediaManagerProcessingStack`; both completed successfully, and live `GET /public/music` returned an empty contract-valid `public-music-catalog/v1` response.
+- Kept Darenkeck music playback and editorial-content links as separate follow-up work.
+
+## [2026-08-20] planning | order public feature implementation
+
+- Set the implementation order to released-music schema plus a full-track music player, natural-language tone-description walking, then a public review endpoint protected by an `amihuman`-type check and the existing abuse/data safeguards.
+- Promoted the overlapping music/player ideas from the non-commitment backlog into the active ordered TODO.
+
+## [2026-08-20] deploy | publish Darenkeck navigation refinements
+
+- Fetched unchanged `darenkeck-content` revision `9e6eb043f4a05729771d569057edda3f7f746a66` and deployed the current Darenkeck production build.
+- Completed CloudFront invalidation `IEARPLIGYH8S465LOQK2G3XWZF` and verified live homepage-to-News navigation, the accessible Home breadcrumb, JavaScript MIME responses, robots, sitemap, and stale-chunk handling.
+
 ## [2026-08-17] docs | capture Darenkeck content and player ideas
 
 - Added future ideas for pinned News ordering, News links that target blog posts or future albums, album content routes, a traditional track player, coexistence rules with persistent combo playback, and track/album display metadata.

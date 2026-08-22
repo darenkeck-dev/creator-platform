@@ -9,12 +9,16 @@
 - `apps/darenkeck` uses React Router for public routes. `/dev` is deployed and lazy-loads the fetched `content/resume.md` with styled Markdown components plus a generated print-friendly PDF download. `/blog`, `/blog/:slug`, `/news`, and `/news/:slug` use the same persistent media layout and document styling for generated newest-first indexes and individual entries.
 - Public-site content lives as Pages CMS-managed Markdown in the private `darenkeck-dev/darenkeck-content` repository. Darenkeck deploys fetch and validate that content before building; published bulletins support linked Markdown summaries, optional featured images, inline body media, and canonical detail URLs.
 - Content diagrams use Mermaid only as an authoring format. Deployment renders fetched `.mmd` sources with a pinned CLI into ignored static SVG assets; web and PDF consume the generated files without runtime Mermaid or committed generated content.
+- Media Manager now owns official music tracks/releases, ordered membership, cover assets, purchase links, readiness, and publication. Authenticated catalog APIs and `GET /public/music` are deployed; the `/releases` admin workspace is implemented locally but this repository still has no web deployment target. The Darenkeck music page/player remains next work.
+- Release asset hydration and manual status refresh use bounded concurrency with transient throttling retries. Release workspaces do not poll linked assets automatically; the header refresh action reloads readiness and linked asset state on demand.
+- Assets carry library-specific `listed`/`unlisted` visibility separate from public/private visibility. Standard Library uploads default to listed; files uploaded through Releases are unlisted, remain directly accessible to release administration, and do not appear in normal Library browsing.
 
 See also: [Architecture Map](architecture-map.md), [Deploy and Ops](deploy-and-ops.md).
 
 ## Key behavior now
 
 - Audio uploads default to `audio-transcode-hls-v1` (normalized HLS output), originals still preserved.
+- Pre-encoded AAC masters can use the production-verified `audio-package-hls-v1`; MediaConvert preserves the AAC bitstream and only creates the six-second HLS segments/manifests. This avoids a second lossy encode for locally prepared 256 kbps AAC music.
 - Random public combo API accepts optional previous audio hint and avoids repeating prior audio track when possible.
 - `ComboPlayer` now uses video timeline while muted and switches to audio timeline once unmuted playback is user-activated.
 - Streaming CloudFront now emits CORS headers for derived HLS objects and supports preflight header forwarding.

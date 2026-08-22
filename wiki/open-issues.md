@@ -1,5 +1,11 @@
 # Open Issues
 
+## Feature implementation order
+
+1. **Released music page and full-track player:** Media Manager contracts, persistence, release administration, publication safety, and the public catalog API are implemented. Next build the Darenkeck music page/full-track player, fetch `GET /public/music`, join published tracks to combo audio asset IDs, and define explicit coexistence with the persistent combo player.
+2. **Tone-description walking:** Add a text input that translates a natural-language tone description into the tone target used for controlled walking.
+3. **Public review endpoint:** Add the anonymous public review boundary with an `amihuman`-type check. Enforce stable combo/source validation, minimum keyword rules, idempotency, rate limits, abuse controls, consent copy, and retention/deletion policy before release.
+
 ## Current high-priority follow-ups
 
 - Validate recursive delete in prod-like data after deployment; the new job worker should delete folder descendants and storage objects deepest-first.
@@ -16,8 +22,7 @@
 - After MVP, harden Darenkeck with explicit retry, no-result, fallback-notice, autoplay-blocked, and media-error recovery states; MVP retains the existing busy indicator and random fallback.
 - After MVP, build dashboards/alarms/notifications and automated vector-drift checks from the structured selection and vector-sync logs now emitted for manual release checks.
 - Before learning from combo reviews, capture server-derived sparse labels plus review-time audio/video effective vectors, source fingerprints, taxonomy version, and predictor/training schema versions. Unlabeled dimensions must remain unknown rather than neutral.
-- Add a separate anonymous public review boundary only after enforcing stable combo/source validation, minimum keyword rules, idempotency, rate limits, abuse controls, consent copy, and retention/deletion policy.
-- Define deterministic file-to-route mapping and frontmatter extraction for future album and project/profile collections; `/dev`, `/blog`, and `/news` are implemented.
+- Define deterministic file-to-route mapping and frontmatter extraction for future project/profile collections; `/dev`, `/blog`, and `/news` are implemented. Official music remains Media Manager-owned.
 - Defer MDX unless future content requires embedded interactive React components; current resume and blog content use plain Markdown.
 - Decide how content-repository commits trigger site deployment and how a private repository, if used, supplies read-only credentials.
 - Ensure future CI/deployment runners install Playwright Chromium with `bun run setup:darenkeck:pdf` before darenkeck deployment.

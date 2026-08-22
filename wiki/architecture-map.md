@@ -90,18 +90,28 @@ Darenkeck homepage explorer:
 - Playwright prints internal route `/dev?print=1` through a temporary Vite development server to `public/daren-keck-resume.pdf`. Print mode skips combo initialization, media, scrims, and global controls; the generator fails if a combo or HLS request occurs.
 - The homepage links to the developer profile, and the route is included in `public/sitemap.xml`.
 
-## Planned public content pipeline
+## Public content pipeline
 
 - Content source: a separate `darenkeck-content` repository containing Markdown files edited through Pages CMS.
-- Initial content includes general news plus developer news, resume, and project/profile material.
-- `/dev` currently serves the resume. Intended collection routes include `/news`, `/news/:slug`, `/dev/news`, and `/dev/news/:slug`; final file-to-route conventions remain to be defined.
+- Current Pages CMS content includes the resume, blog posts, and News. Project/profile conventions remain future work; official music does not live in the content repository.
+- `/dev`, `/blog`, `/blog/:slug`, `/news`, and `/news/:slug` are implemented.
 - `scripts/fetch-darenkeck-content.sh` shallow-fetches `main` by default before darenkeck staging/prod builds, validates `content/`, `media/`, and non-empty `content/resume.md`, and records the resolved commit in `apps/darenkeck/.generated-content/REVISION`.
 - Fetched Markdown and Mermaid sources are stored under gitignored `apps/darenkeck/.generated-content/`; media is copied to gitignored `apps/darenkeck/public/media/` for Vite deployment.
-- Content preparation validates post frontmatter, omits `draft: true` and `*-draft.md` entries, rejects duplicate slugs, and writes a generated published-only blog manifest consumed by the SPA.
+- Content preparation validates blog and News frontmatter, omits `draft: true` and `*-draft.md` entries, and writes generated published-only manifests consumed by the SPA.
 - Mermaid diagrams are authored as fenced blocks in published blog Markdown or standalone `.mmd` files under the content repository's `diagrams/` tree. Content preparation renders both forms with the pinned CLI, rewrites blog blocks to deterministic static image links, removes stale output, and fails deployment on invalid Mermaid.
 - `DARENKECK_CONTENT_REPO` and `DARENKECK_CONTENT_REF` override the private SSH repository and `main` defaults. Local access uses existing Git credentials; future CI requires read-only repository credentials.
 - Blog collection indexing and frontmatter extraction are implemented for plain Markdown. Use MDX only if content later needs embedded interactive React components.
 - The first version remains a client-rendered SPA. Static generation/prerendering and broader SEO work are deferred.
+
+## Official music catalog
+
+- Media Manager is authoritative for official tracks and releases. Pages CMS remains limited to editorial content.
+- Versioned contracts in `packages/contracts` model tracks, releases, purchase links, publication actions/readiness, and the public catalog.
+- Track records reference authoritative audio assets; release records reference a cover image asset plus ordered track IDs. Neither record duplicates HLS or cover delivery URLs.
+- Authenticated `/music/*` routes provide revision-checked administration. Media Manager exposes release creation, cover and batch-track upload, ordering, purchase-link editing, readiness, HLS preview, and explicit publication under `/releases`.
+- Publication validates current assets, makes required media public, and atomically publishes catalog records and reverse-link aggregates in the existing Assets DynamoDB table.
+- Read-only `GET /public/music` resolves current HLS and signed cover delivery from authoritative assets, omitting unavailable tracks and dependent releases.
+- Asset privacy and direct/recursive deletion honor official-music reverse links so published media cannot be silently detached or orphaned.
 
 ## Deployment model
 

@@ -12,6 +12,7 @@
 
 ## Recent operational updates
 
+- Added Media Manager-owned official track/release contracts, transactional catalog persistence and publication, asset lifecycle guards, read-only public catalog resolution, and a release administration workspace with batch uploads, ordering, purchase links, readiness, and HLS preview.
 - Unified Darenkeck minimization across the homepage, resume, blog, and news routes with a shared sticky-nav minus control, fixed `Daren Keck [+]` restore view, mounted route preservation, and exact scroll restoration.
 - Replaced the hardcoded Darenkeck homepage announcement with Pages CMS-backed bulletins, including validated build-time extraction, latest-three homepage summaries, optional featured images, a chronological archive, and canonical bulletin detail routes.
 - Added maintained references for the ten tone dimensions, upload-processing dependency flow, curator review experience, and the current vector-backed walk algorithm.

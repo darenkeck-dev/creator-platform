@@ -12,6 +12,3 @@ Canonical deduplicated backlog for ideas that are not active commitments. Merge 
 
 - **Pinned News items:** Add explicit pinning/priority metadata so selected News entries remain above the normal newest-first feed until unpinned.
 - **News as destination links:** Allow a News item to act as a short announcement that opens a related blog post directly instead of its own detail page. Extend the same destination model to albums after album content routes exist, while retaining ordinary standalone News detail pages.
-- **Album publishing:** Extract the existing Pages CMS album collection into generated site data and add album index/detail routes before News entries can target albums.
-- **Traditional audio player:** Add an intentional track player with standard transport controls. First define audio-focus behavior with the persistent site-wide audio/video combination player, including whether starting a track pauses or mutes ambient playback, how prior state resumes, and how both players behave across route changes.
-- **Track and album metadata:** Carry track title, album identity/title, artwork, ordering, duration, and playable source through the content/runtime contract. The traditional player should visibly identify the current track and its album rather than presenting transport controls without context.

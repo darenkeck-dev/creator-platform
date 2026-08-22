@@ -18,6 +18,7 @@
 - `infra/cdk/lib/darenkeck-site-stack.ts` -> deploy darenkeck site infra stack.
 - `apps/darenkeck/*` runtime/static content -> deploy darenkeck static site.
 - `darenkeck-content` Markdown changes -> run the darenkeck static-site workflow, which fetches the selected content revision before the app build.
+- Music contracts/admin/public API or direct asset guards -> deploy API; recursive-delete music guards also require processing deployment. Media Manager release UI requires the web deployment target.
 
 ## Darenkeck content fetch
 
@@ -28,6 +29,7 @@
 - Local deployment uses existing Git SSH credentials. Future CI should use read-only access through a deploy key, GitHub App token, or fine-grained PAT.
 - `/dev` bundles fetched `content/resume.md` into the SPA and renders it with `react-markdown`; therefore a darenkeck build requires a successful content fetch first.
 - Blog posts under `content/posts/` require title/date frontmatter. `draft: true` and `*-draft.md` entries are absent from the generated manifest and production bundle; published entries are sorted newest-first and served at `/blog/:slug`.
+- Tracks under `content/tracks/` and releases under `content/releases/` are validated against the monorepo-owned `track/v1` and `release/v1` contracts. Content preparation writes a published-only music manifest and rejects duplicate identities, invalid URLs, and release references to unpublished tracks.
 - Mermaid is not a runtime dependency. Deployment extracts fenced Mermaid blocks from published posts and also renders `diagrams/**/*.mmd` sources with the pinned CLI into ignored `public/media/diagrams/**/*.svg`; generated SVGs are never committed, draft blocks are skipped, and stale outputs are cleared on each preparation.
 - Initial output remains an SPA deployed through the existing S3 sync and CloudFront invalidation flow. SEO prerendering is deferred.
 
@@ -113,6 +115,7 @@ For MVP release smoke, confirm exact search, exact walk, random fallback, indexe
 - New tone analyses emit `tone-taxonomy/v2`; contracts accept both `tone-taxonomy/v1` and `tone-taxonomy/v2` so historical artifacts can still be read.
 - If older ready tone analyses are missing display fields on the asset record, run `bun run --cwd infra/cdk backfill:tone-analysis-display` first, then `bun run --cwd infra/cdk backfill:tone-analysis-display -- --apply` after reviewing the dry run.
 - Audio/video curator adjustment materialization requires the tone worker's DynamoDB `Query` permission, so deploy both API and processing stacks for adjustment changes.
+- Official music prepared locally as AAC can set processing profile `audio-package-hls-v1`. The source must already contain browser-compatible AAC; MediaConvert packages it into HLS with codec passthrough rather than changing bitrate or sample rate. Standard WAV/FLAC uploads should continue using `audio-transcode-hls-v1`.
 - To inspect tone reviews before a full reset, run `bun run --cwd infra/cdk purge:tone-reviews`. Permanently delete the reported production records only with `bun run --cwd infra/cdk purge:tone-reviews -- --apply --confirm-production`; the purge also clears materialized audio/video adjustments derived from deleted reviews.
 
 ## Asset tone vector index
