@@ -13,12 +13,12 @@ type BreadcrumbAsset = {
 type ResolvedBreadcrumbs = {
   folders: BreadcrumbAsset[];
   assetTitle?: string;
+  releaseId?: string;
+  releaseTitle?: string;
 };
 
 function formatSegment(segment: string) {
-  return segment
-    .replace(/[-_]/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+  return segment.replace(/[-_]/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 export function Breadcrumbs() {
@@ -28,6 +28,8 @@ export function Breadcrumbs() {
   const segments = pathname.split("/").filter(Boolean);
 
   const assetId = segments[0] === "asset" && segments[1] ? segments[1] : undefined;
+  const releaseId =
+    segments[0] === "releases" && segments[1] && segments[1] !== "new" ? segments[1] : undefined;
   const containerId = searchParams.get("containerId")?.trim() || undefined;
 
   useEffect(() => {
@@ -76,6 +78,19 @@ export function Breadcrumbs() {
       return chain;
     }
 
+    async function fetchReleaseTitle(id: string): Promise<string | undefined> {
+      try {
+        const response = await fetch(`/api/music/releases/${encodeURIComponent(id)}`, {
+          cache: "no-store",
+        });
+        if (!response.ok) return undefined;
+        const json = (await response.json()) as { release?: { title?: unknown } };
+        return typeof json.release?.title === "string" ? json.release.title : undefined;
+      } catch {
+        return undefined;
+      }
+    }
+
     async function loadBreadcrumbs() {
       if (assetId) {
         const asset = await fetchAsset(assetId);
@@ -83,6 +98,12 @@ export function Breadcrumbs() {
         if (!cancelled) {
           setResolved({ folders, assetTitle: asset?.title });
         }
+        return;
+      }
+
+      if (releaseId) {
+        const releaseTitle = await fetchReleaseTitle(releaseId);
+        if (!cancelled) setResolved({ folders: [], releaseId, releaseTitle });
         return;
       }
 
@@ -98,20 +119,30 @@ export function Breadcrumbs() {
     return () => {
       cancelled = true;
     };
-  }, [assetId, containerId]);
+  }, [assetId, containerId, releaseId]);
 
   if (segments.length === 0) {
     return null;
   }
 
   const allCrumbs = segments.map((segment, index) => {
-    const href = `/${segments.slice(0, index + 1).join("/")}`;
+    const href =
+      segments[0] === "releases" && index === 0
+        ? "/library#releases"
+        : `/${segments.slice(0, index + 1).join("/")}`;
     const isLast = index === segments.length - 1;
     const isAssetId = segments[index - 1] === "asset";
+    const isReleaseId = segments[index - 1] === "releases";
 
     return {
       href,
-      label: isAssetId ? resolved.assetTitle ?? formatSegment(segment) : formatSegment(segment),
+      label: isAssetId
+        ? (resolved.assetTitle ?? formatSegment(segment))
+        : isReleaseId
+          ? resolved.releaseId === segment && resolved.releaseTitle
+            ? resolved.releaseTitle
+            : "Release"
+          : formatSegment(segment),
       isLast,
     };
   });
@@ -127,7 +158,8 @@ export function Breadcrumbs() {
           Library
         </Link>
         {resolved.folders.map((folder, index) => {
-          const isLastFolder = !assetId && segments[0] === "library" && index === resolved.folders.length - 1;
+          const isLastFolder =
+            !assetId && segments[0] === "library" && index === resolved.folders.length - 1;
           return (
             <span key={folder.id} className="flex items-center gap-2">
               <span className="text-muted-foreground">/</span>

@@ -163,8 +163,13 @@ export function LibraryAssetBrowser({ assets, containerId }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
+          <div className="mr-1 flex items-baseline gap-2 px-1">
+            <h2 className="font-semibold">Media</h2>
+            <span className="text-xs tabular-nums text-muted-foreground">{assets.length}</span>
+          </div>
+          <span aria-hidden="true" className="mx-1 h-5 border-l" />
           <Button
             disabled={assets.length === 0}
             onClick={toggleSelectAll}
@@ -269,10 +274,6 @@ export function LibraryAssetBrowser({ assets, containerId }: Props) {
         </p>
       ) : null}
 
-      {assets.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No items here yet.</p>
-      ) : null}
-
       <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
         <div className="grid grid-cols-[2.5rem_3rem_minmax(0,1fr)_6rem_8rem_7rem_8rem_8rem] gap-3 border-b px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground max-lg:grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_5rem_7rem]">
           <span>Select</span>
@@ -284,67 +285,74 @@ export function LibraryAssetBrowser({ assets, containerId }: Props) {
           <span className="max-lg:hidden">Conversion</span>
           <span className="max-lg:hidden">Tone</span>
         </div>
-        {assets.map((asset) => (
-          <div
-            className="grid grid-cols-[2.5rem_3rem_minmax(0,1fr)_6rem_8rem_7rem_8rem_8rem] items-center gap-3 border-b px-4 py-3 last:border-b-0 max-lg:grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_5rem_7rem]"
-            key={asset.id}
-          >
-            <input
-              aria-label={`Select ${asset.title}`}
-              checked={selectedIds.has(asset.id)}
-              className="h-4 w-4"
-              onChange={() => toggleSelected(asset.id)}
-              type="checkbox"
-            />
-            <AssetTypeIcon asset={asset} />
-            <div className="min-w-0">
-              <Link className="block truncate font-medium hover:underline" href={assetHref(asset)}>
-                {asset.title}
-              </Link>
-              {asset.type === "folder" && asset.description ? (
-                <p className="truncate text-xs text-muted-foreground">{asset.description}</p>
-              ) : null}
-            </div>
-            {asset.type === "audio" || asset.type === "video" ? (
-              <Link
-                aria-label={`Review ${asset.title}`}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-                href={`/review?targetType=${asset.type}&assetId=${encodeURIComponent(asset.id)}`}
-              >
-                <MessageSquareText aria-hidden="true" className="h-4 w-4" />
-                <span className="max-lg:sr-only">Review</span>
-              </Link>
-            ) : (
-              <span aria-hidden="true" />
-            )}
-            {asset.type === "folder" ? (
-              <>
+        {assets.length === 0 ? (
+          <p className="px-4 py-4 text-sm text-muted-foreground">No media here yet.</p>
+        ) : (
+          assets.map((asset) => (
+            <div
+              className="grid grid-cols-[2.5rem_3rem_minmax(0,1fr)_6rem_8rem_7rem_8rem_8rem] items-center gap-3 border-b px-4 py-3 last:border-b-0 max-lg:grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_5rem_7rem]"
+              key={asset.id}
+            >
+              <input
+                aria-label={`Select ${asset.title}`}
+                checked={selectedIds.has(asset.id)}
+                className="h-4 w-4"
+                onChange={() => toggleSelected(asset.id)}
+                type="checkbox"
+              />
+              <AssetTypeIcon asset={asset} />
+              <div className="min-w-0">
+                <Link
+                  className="block truncate font-medium hover:underline"
+                  href={assetHref(asset)}
+                >
+                  {asset.title}
+                </Link>
+                {asset.type === "folder" && asset.description ? (
+                  <p className="truncate text-xs text-muted-foreground">{asset.description}</p>
+                ) : null}
+              </div>
+              {asset.type === "audio" || asset.type === "video" ? (
+                <Link
+                  aria-label={`Review ${asset.title}`}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+                  href={`/review?targetType=${asset.type}&assetId=${encodeURIComponent(asset.id)}`}
+                >
+                  <MessageSquareText aria-hidden="true" className="h-4 w-4" />
+                  <span className="max-lg:sr-only">Review</span>
+                </Link>
+              ) : (
                 <span aria-hidden="true" />
-                <span aria-hidden="true" className="max-lg:hidden" />
-                <span aria-hidden="true" className="max-lg:hidden" />
-                <span aria-hidden="true" className="max-lg:hidden" />
-              </>
-            ) : (
-              <>
-                <span className="text-sm capitalize">
-                  {asset.status}
-                  <span className="block text-xs text-muted-foreground lg:hidden">
+              )}
+              {asset.type === "folder" ? (
+                <>
+                  <span aria-hidden="true" />
+                  <span aria-hidden="true" className="max-lg:hidden" />
+                  <span aria-hidden="true" className="max-lg:hidden" />
+                  <span aria-hidden="true" className="max-lg:hidden" />
+                </>
+              ) : (
+                <>
+                  <span className="text-sm capitalize">
+                    {asset.status}
+                    <span className="block text-xs text-muted-foreground lg:hidden">
+                      {asset.visibility}
+                    </span>
+                  </span>
+                  <span className="text-sm capitalize text-muted-foreground max-lg:hidden">
                     {asset.visibility}
                   </span>
-                </span>
-                <span className="text-sm capitalize text-muted-foreground max-lg:hidden">
-                  {asset.visibility}
-                </span>
-                <span className="text-sm capitalize text-muted-foreground max-lg:hidden">
-                  {statusText(asset.conversion?.status)}
-                </span>
-                <span className="text-sm capitalize text-muted-foreground max-lg:hidden">
-                  {statusText(asset.toneAnalysis?.status)}
-                </span>
-              </>
-            )}
-          </div>
-        ))}
+                  <span className="text-sm capitalize text-muted-foreground max-lg:hidden">
+                    {statusText(asset.conversion?.status)}
+                  </span>
+                  <span className="text-sm capitalize text-muted-foreground max-lg:hidden">
+                    {statusText(asset.toneAnalysis?.status)}
+                  </span>
+                </>
+              )}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

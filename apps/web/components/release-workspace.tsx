@@ -702,7 +702,7 @@ export function ReleaseWorkspace({
           expectedRevision: release.revision,
         }),
       });
-      router.push("/releases");
+      router.push("/library#releases");
       router.refresh();
     } catch (caught) {
       await handleMutationError(caught);
