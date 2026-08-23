@@ -2,9 +2,8 @@
 
 ## Feature implementation order
 
-1. **Released music page and full-track player:** Media Manager contracts, persistence, release administration, publication safety, and the public catalog API are implemented. Next build the Darenkeck music page/full-track player, fetch `GET /public/music`, join published tracks to combo audio asset IDs, and define explicit coexistence with the persistent combo player.
-2. **Tone-description walking:** Add a text input that translates a natural-language tone description into the tone target used for controlled walking.
-3. **Public review endpoint:** Add the anonymous public review boundary with an `amihuman`-type check. Enforce stable combo/source validation, minimum keyword rules, idempotency, rate limits, abuse controls, consent copy, and retention/deletion policy before release.
+1. **Tone-description walking:** Add a text input that translates a natural-language tone description into the tone target used for controlled walking.
+2. **Public review endpoint:** Add the anonymous public review boundary with an `amihuman`-type check. Enforce stable combo/source validation, minimum keyword rules, idempotency, rate limits, abuse controls, consent copy, and retention/deletion policy before release.
 
 ## Current high-priority follow-ups
 
@@ -12,6 +11,7 @@
 - Upload/delete UI context should consistently respect active folder path.
 - Queued tone/conversion reprocessing jobs currently report queueing completion, not downstream tone/MediaConvert completion; link downstream worker progress to jobs if richer completion tracking is needed.
 - Publish and validate the Media Manager `/combos` controlled explorer; the source build is complete but this repository has no web deployment target.
+- Publish at least one ready release, deploy the source-complete Darenkeck `/music` catalog/player, and validate real HLS auto-advance, seeking, mute, route persistence, and ambient return across the target browser/device matrix.
 - Darenkeck mobile focus-loss handling needs hardening (background/foreground transitions should not leave combo state machine desynced).
 - Darenkeck mobile native play/pause interactions need explicit state-machine handling so UI and media element state stay aligned.
 - Tone extraction output needs simplification: reassess whether `.tonebundle.tar.gz` is needed now that display-ready tone summary/scores are stored directly on the asset record.

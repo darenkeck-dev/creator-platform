@@ -4,7 +4,7 @@
 
 - **Frontend apps**
   - `apps/web`: authenticated media manager UI (upload/library/asset/combo admin).
-  - `apps/darenkeck`: public personal site using React Router, with random combo playback at `/`, a Markdown-backed resume at `/dev`, and an explicit not-found route.
+  - `apps/darenkeck`: public personal site using a persistent React Router shell, with ambient combo playback, a Markdown-backed resume at `/dev`, and an official release catalog/full-track player at `/music`.
 - **Shared packages**
   - `packages/contracts`: shared schemas/types for API payloads and records.
   - `packages/shared`: shared playback/review/explorer React components (`ComboPlayer`, `ComboToneReviewPlayer`, `ToneWordPicker`) and playback utilities.
@@ -108,7 +108,7 @@ Darenkeck homepage explorer:
 - Media Manager is authoritative for official tracks and releases. Pages CMS remains limited to editorial content.
 - Versioned contracts in `packages/contracts` model tracks, releases, purchase links, publication actions/readiness, and the public catalog.
 - Track records reference authoritative audio assets; release records reference a cover image asset plus ordered track IDs. Neither record duplicates HLS or cover delivery URLs.
-- Authenticated `/music/*` routes provide revision-checked administration. Media Manager exposes release creation, cover and batch-track upload, ordering, purchase-link editing, readiness, HLS preview, and explicit publication under `/releases`.
+- Authenticated `/music/*` routes provide revision-checked administration. Library renders the release index alongside assets; `/releases/new` and `/releases/:id` provide release creation, cover and batch-track upload, ordering, purchase-link editing, readiness, HLS preview, and explicit publication.
 - Publication validates current assets, makes required media public, and atomically publishes catalog records and reverse-link aggregates in the existing Assets DynamoDB table.
 - Read-only `GET /public/music` resolves current HLS and signed cover delivery from authoritative assets, omitting unavailable tracks and dependent releases.
 - Asset privacy and direct/recursive deletion honor official-music reverse links so published media cannot be silently detached or orphaned.

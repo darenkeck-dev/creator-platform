@@ -1,5 +1,23 @@
 # Wiki Log
 
+## [2026-08-22] web | add Darenkeck music catalog and persistent player
+
+- Added the lazy `/music` document route, homepage navigation, sitemap entry, validated `GET /public/music` loading, newest-first release rendering, covers, purchase links, and ordered clickable tracks.
+- Added persistent app-level music queues and transport controls. Each track pairs official audio with a fresh random looping video; audio remains timeline authority while muted, progress seeking targets the song, tracks auto-advance within its release, and the final track returns to the retained ambient combo assignment. Direct track selection starts unmuted, while automatic advancement preserves the listener's current mute choice. Player labels link back to the matching release section without interrupting playback. On long document pages, the floating transport hands its matching play, mute, and exit controls into the pinned breadcrumb row while scrolled. Music catalog loading, track selection, and auto-advance reuse the combo busy indicator inside the catalog, transport shell, or center of the docked row without unmounting an active player's controls; selected track rows retain their title and animate a one-to-three-dot suffix.
+- Extended the shared `ComboPlayer` with explicit timeline authority, background progress reporting, and imperative play/pause/seek controls without changing default ambient behavior.
+- Verified 31 Darenkeck tests, Darenkeck and shared typechecks/lints, the Darenkeck production build, route continuity, and desktop plus 320px production browser smokes. This source update is not deployed, and all prepared releases remain drafts.
+
+## [2026-08-22] web | move release index into Library
+
+- Removed Releases from the top navigation and removed the standalone `/releases` index route.
+- Added Releases as a second root-level Library list with the same action-bar and column-list structure as assets. Its primary `+` action links to `/releases/new`, and its refresh action reruns the server-side release and readiness GETs; release detail and creation routes remain intact.
+- Named the reusable, non-release collection `Media` and aligned both collections on matching title/count action bars, list frames, responsive column behavior, and in-frame empty states.
+- Updated release breadcrumbs and deletion redirects to return to the Library Releases section.
+
+## [2026-08-22] web | resolve release breadcrumb titles
+
+- Release detail breadcrumbs now resolve the release title through the authenticated music API instead of displaying the release UUID.
+
 ## [2026-08-21] web | simplify release workspace copy
 
 - Removed redundant release workspace, release details, cover, track-capacity, and authoritative-stream explanatory copy while retaining controls, validation, and accessible action labels.
