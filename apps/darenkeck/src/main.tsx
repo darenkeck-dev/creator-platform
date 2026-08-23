@@ -41,6 +41,13 @@ const router = createBrowserRouter([
         ],
       },
       {
+        path: "music",
+        lazy: async () => {
+          const { MusicPage } = await import("./components/MusicPage");
+          return { Component: MusicPage };
+        },
+      },
+      {
         path: "news",
         children: [
           {

@@ -1,4 +1,10 @@
-import { ComboPlayer } from "@media-manager/shared";
+import {
+  ComboPlayer,
+  type ComboPlayerHandle,
+  type ComboPlayerPhase,
+  type ComboTimelineTrack,
+} from "@media-manager/shared";
+import type { Ref } from "react";
 
 import type { ComboPayload } from "../lib/slot-manager";
 
@@ -7,11 +13,14 @@ type SingleComboSlotProps = {
   playbackCycle: number;
   audioMuted: boolean;
   audioVolume: number;
+  playerRef?: Ref<ComboPlayerHandle>;
+  timelineTrack?: ComboTimelineTrack;
   onVideoElementChange?: (video: HTMLVideoElement | null) => void;
   onAudioElementChange?: (audio: HTMLAudioElement | null) => void;
   onTimelineEnded?: () => void;
   onPlaybackReady?: () => void;
-  onPlaybackStateChange?: (phase: string) => void;
+  onPlaybackStateChange?: (phase: ComboPlayerPhase) => void;
+  onTimeUpdate?: (snapshot: { currentTime: number; duration: number; remaining: number }) => void;
 };
 
 export function SingleComboSlot({
@@ -19,11 +28,14 @@ export function SingleComboSlot({
   playbackCycle,
   audioMuted,
   audioVolume,
+  playerRef,
+  timelineTrack,
   onVideoElementChange,
   onAudioElementChange,
   onTimelineEnded,
   onPlaybackReady,
   onPlaybackStateChange,
+  onTimeUpdate,
 }: SingleComboSlotProps) {
   return (
     <div className="pointer-events-none fixed inset-0 z-0 print:hidden">
@@ -39,10 +51,13 @@ export function SingleComboSlot({
         onAudioElementChange={onAudioElementChange}
         onPlaybackReady={onPlaybackReady}
         onPlaybackStateChange={onPlaybackStateChange}
+        onTimeUpdate={onTimeUpdate}
         onTimelineEnded={onTimelineEnded}
         onVideoElementChange={onVideoElementChange}
         preload="auto"
+        ref={playerRef}
         suppressUi
+        timelineTrack={timelineTrack}
         variant="background"
         videoSrc={combo.videoSrc}
         videoTitle={combo.videoTitle}

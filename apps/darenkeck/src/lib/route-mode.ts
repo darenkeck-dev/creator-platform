@@ -5,6 +5,7 @@ export function isHomePath(pathname: string): boolean {
 export function isDocumentPath(pathname: string): boolean {
   return (
     pathname === "/dev" ||
+    pathname === "/music" ||
     pathname === "/blog" ||
     pathname.startsWith("/blog/") ||
     pathname === "/news" ||

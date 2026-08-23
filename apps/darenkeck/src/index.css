@@ -71,6 +71,32 @@ body {
   }
 }
 
+.track-loading-ellipsis {
+  display: inline-block;
+  width: 0.3em;
+  overflow: hidden;
+  vertical-align: bottom;
+  white-space: nowrap;
+  animation: track-loading-ellipsis 1.2s step-end infinite;
+}
+
+@keyframes track-loading-ellipsis {
+  0%,
+  32% {
+    width: 0.3em;
+  }
+
+  33%,
+  65% {
+    width: 0.6em;
+  }
+
+  66%,
+  100% {
+    width: 0.9em;
+  }
+}
+
 .tone-control-first-use {
   animation: tone-control-first-use 4.2s ease-in-out infinite;
 }
@@ -119,6 +145,11 @@ body {
     animation: none;
     border-color: rgba(255, 255, 255, 0.8);
     background: transparent;
+  }
+
+  .track-loading-ellipsis {
+    width: 0.9em;
+    animation: none;
   }
 
   .tone-control-first-use {

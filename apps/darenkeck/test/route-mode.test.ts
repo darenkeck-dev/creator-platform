@@ -17,6 +17,7 @@ describe("route mode", () => {
 
   it("classifies persistent document routes", () => {
     expect(isDocumentPath("/dev")).toBe(true);
+    expect(isDocumentPath("/music")).toBe(true);
     expect(isDocumentPath("/blog")).toBe(true);
     expect(isDocumentPath("/blog/first-post")).toBe(true);
     expect(isDocumentPath("/news")).toBe(true);
@@ -24,5 +25,6 @@ describe("route mode", () => {
     expect(isDocumentPath("/")).toBe(false);
     expect(isDocumentPath("/blogroll")).toBe(false);
     expect(isDocumentPath("/newsletter")).toBe(false);
+    expect(isDocumentPath("/musical")).toBe(false);
   });
 });

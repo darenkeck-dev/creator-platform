@@ -1,7 +1,14 @@
 import type {
   PublicComboPredictedTone,
   PublicComboSelectionRequest,
+  PublicMusicRelease,
+  PublicMusicTrack,
 } from "@media-manager/contracts";
+import {
+  ComboPlayerPhase,
+  ComboTimelineTrack,
+  type ComboPlayerHandle,
+} from "@media-manager/shared";
 import { lazy, Suspense, useEffect, useEffectEvent, useRef, useState, type RefObject } from "react";
 import { useLocation, useOutlet } from "react-router-dom";
 
@@ -9,6 +16,14 @@ import { BulletinSection } from "./components/BulletinSection";
 import { ContentSizeButton } from "./components/ContentSizeButton";
 import { DocumentControlsProvider } from "./components/DocumentControlsContext";
 import { LinksSection } from "./components/LinksSection";
+import { MusicPlaybackContext } from "./components/MusicPlaybackContext";
+import {
+  MusicExitButton,
+  MusicMuteButton,
+  MusicPlayButton,
+  MusicTransport,
+  MusicTransportLoader,
+} from "./components/MusicTransport";
 import { ShellLoader } from "./components/ShellLoader";
 import { ToneExplorer, ToneExplorerExplainer, ToneExplorerIcon } from "./components/ToneExplorer";
 import {
@@ -44,6 +59,25 @@ const ENABLE_DEBUG_LOGS = false;
 const SHOW_LOCAL_DEBUG_CONTROLS = false;
 const DOCUMENT_TRANSITION_MS = 400;
 type AudioLevel = "muted" | "full";
+
+type MusicPlayback = {
+  combo: ComboPayload;
+  playbackCycle: number;
+  release: PublicMusicRelease;
+  trackIndex: number;
+};
+
+function pairMusicTrackWithCombo(combo: ComboPayload, track: PublicMusicTrack): ComboPayload {
+  return {
+    comboId: `music-${track.id}-${combo.videoAssetId}`,
+    videoAssetId: combo.videoAssetId,
+    audioAssetId: track.id,
+    videoTitle: combo.videoTitle,
+    audioTitle: track.title,
+    videoSrc: combo.videoSrc,
+    audioSrc: track.audioUrl,
+  };
+}
 
 function DocumentRouteTransition({
   contentMinimized,
@@ -441,10 +475,15 @@ export function App() {
   const [toneExplorerAcknowledged, setToneExplorerAcknowledged] = useState(false);
   const [playerEnabled, setPlayerEnabled] = useState(false);
   const [managerEnabled, setManagerEnabled] = useState(false);
-  const [playbackPhase, setPlaybackPhase] = useState("loading");
+  const [playbackPhase, setPlaybackPhase] = useState<ComboPlayerPhase>(ComboPlayerPhase.Loading);
   const [managerState, setManagerState] = useState<SlotManagerState>("idle");
   const [slotState, setSlotState] = useState<SlotPlaybackState>("idle");
   const [combosPlayedCount, setCombosPlayedCount] = useState(0);
+  const [musicPlayback, setMusicPlayback] = useState<MusicPlayback | null>(null);
+  const [musicLoadingTrackId, setMusicLoadingTrackId] = useState<string | null>(null);
+  const [musicError, setMusicError] = useState<string | null>(null);
+  const [musicProgress, setMusicProgress] = useState({ currentTime: 0, duration: 0 });
+  const [documentNavStuck, setDocumentNavStuck] = useState(false);
   const [debugActionMessage, setDebugActionMessage] = useState<string | null>(null);
   const [debugSampleCount, setDebugSampleCount] = useState(0);
   const managerRef = useRef<SlotManager | null>(null);
@@ -455,6 +494,8 @@ export function App() {
   const restoreRequestedRef = useRef(false);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
+  const playerRef = useRef<ComboPlayerHandle | null>(null);
+  const musicRequestRef = useRef(0);
   const previousPathRef = useRef(location.pathname);
 
   useEffect(() => {
@@ -593,7 +634,61 @@ export function App() {
     };
   }, [managerEnabled, printMode]);
 
+  const exitMusicPlayback = () => {
+    musicRequestRef.current += 1;
+    setMusicLoadingTrackId(null);
+    setMusicError(null);
+    setMusicProgress({ currentTime: 0, duration: 0 });
+    setMusicPlayback(null);
+  };
+
+  const startMusicTrack = async (
+    release: PublicMusicRelease,
+    trackIndex: number,
+    unmute = false
+  ) => {
+    const track = release.tracks[trackIndex];
+    if (!track) return;
+
+    if (unmute) setAudioLevel("full");
+    const requestId = ++musicRequestRef.current;
+    setMusicLoadingTrackId(track.id);
+    setMusicError(null);
+    setIsToneExplorerOpen(false);
+    setShowToneExplorerExplainer(false);
+
+    try {
+      const combo = await fetchRandomCombo();
+      if (musicRequestRef.current !== requestId) return;
+      if (!combo) throw new Error("No background video is available.");
+
+      setMusicProgress({ currentTime: 0, duration: track.durationSeconds ?? 0 });
+      setMusicPlayback({
+        combo: pairMusicTrackWithCombo(combo, track),
+        playbackCycle: requestId,
+        release,
+        trackIndex,
+      });
+    } catch (error) {
+      if (musicRequestRef.current !== requestId) return;
+      console.error("Music playback failed to start", error);
+      setMusicError(error instanceof Error ? error.message : "Music playback failed to start.");
+    } finally {
+      if (musicRequestRef.current === requestId) setMusicLoadingTrackId(null);
+    }
+  };
+
   const handleTimelineEnded = () => {
+    if (musicPlayback) {
+      if (musicLoadingTrackId) return;
+      const nextTrackIndex = musicPlayback.trackIndex + 1;
+      if (nextTrackIndex < musicPlayback.release.tracks.length) {
+        void startMusicTrack(musicPlayback.release, nextTrackIndex);
+      } else {
+        exitMusicPlayback();
+      }
+      return;
+    }
     void managerRef.current?.handleSlotPlaybackEnded(SingleSlotKey.Primary);
   };
 
@@ -688,11 +783,13 @@ export function App() {
   };
 
   const handlePlaybackReady = () => {
+    if (musicPlayback) return;
     managerRef.current?.handleSlotPlaybackReady(SingleSlotKey.Primary);
   };
 
-  const handlePlaybackStateChange = (phase: string) => {
+  const handlePlaybackStateChange = (phase: ComboPlayerPhase) => {
     setPlaybackPhase(phase);
+    if (musicPlayback) return;
     managerRef.current?.handleSlotPlaybackPhaseChange(SingleSlotKey.Primary, phase);
   };
 
@@ -748,7 +845,7 @@ export function App() {
     const next = nextAudioLevel;
     setAudioLevel(next);
 
-    if (next !== "full") {
+    if (next !== "full" || musicPlayback) {
       return;
     }
 
@@ -768,11 +865,22 @@ export function App() {
   };
 
   const isAudioMuted = audioLevel === "muted";
+  const isMusicPlaying =
+    playbackPhase === ComboPlayerPhase.Playing || playbackPhase === ComboPlayerPhase.Stalled;
+  const activeTrack = musicPlayback?.release.tracks[musicPlayback.trackIndex] ?? null;
+  const musicLoading = musicLoadingTrackId !== null;
+  const musicLoaderDocked = Boolean(
+    musicLoading && documentNavStuck && isDocumentPath(location.pathname) && !isContentMinimized
+  );
+  const musicControlsStuck = Boolean(
+    musicPlayback && activeTrack && documentNavStuck && !isContentMinimized
+  );
   const nextAudioLevel: AudioLevel = audioLevel === "full" ? "muted" : "full";
   const audioButtonTitle = nextAudioLevel === "full" ? "Unmute audio" : "Mute audio";
   const audioDebugSnapshot = formatMediaSnapshot(audioElementRef.current);
   const videoDebugSnapshot = formatMediaSnapshot(videoElementRef.current);
   const embedMediaControls =
+    !musicPlayback &&
     compactDocumentViewport &&
     isDocumentPath(location.pathname) &&
     !isContentMinimized &&
@@ -799,6 +907,7 @@ export function App() {
   const linkItems = [
     { label: "Resume", href: "/dev", external: false },
     { label: "Blog", href: "/blog", external: false },
+    { label: "Music", href: "/music", external: false },
     { label: "Wayfarer Records", href: "https://wayfarermusicgroup.com/dir" },
   ];
 
@@ -806,18 +915,27 @@ export function App() {
     <div className="relative isolate min-h-dvh overflow-x-clip">
       {playerEnabled && !printMode ? (
         <Suspense fallback={null}>
-          {slotAssignment ? (
+          {musicPlayback || slotAssignment ? (
             <SingleComboSlot
               audioMuted={isAudioMuted}
               audioVolume={audioVolume}
-              combo={slotAssignment.combo}
-              playbackCycle={slotAssignment.playbackCycle}
+              combo={musicPlayback?.combo ?? slotAssignment!.combo}
+              playbackCycle={musicPlayback?.playbackCycle ?? slotAssignment!.playbackCycle}
               onAudioElementChange={(audio) => {
                 audioElementRef.current = audio;
               }}
               onPlaybackReady={handlePlaybackReady}
               onPlaybackStateChange={handlePlaybackStateChange}
+              onTimeUpdate={
+                musicPlayback
+                  ? ({ currentTime, duration }) => setMusicProgress({ currentTime, duration })
+                  : undefined
+              }
               onTimelineEnded={handleTimelineEnded}
+              playerRef={playerRef}
+              timelineTrack={
+                musicPlayback ? ComboTimelineTrack.Audio : ComboTimelineTrack.Auto
+              }
               onVideoElementChange={(video) => {
                 videoElementRef.current = video;
               }}
@@ -827,14 +945,35 @@ export function App() {
       ) : null}
       {!printMode ? (
         <>
-          {embedMediaControls ? null : (
+          {musicPlayback && activeTrack ? (
+            musicControlsStuck ? null : (
+              <MusicTransport
+                audioMuted={isAudioMuted}
+                currentTime={musicProgress.currentTime}
+                duration={musicProgress.duration}
+                loading={musicLoading}
+                onExit={exitMusicPlayback}
+                onMuteToggle={handleAudioLevelToggle}
+                onPlayToggle={() => void playerRef.current?.togglePlayback()}
+                onSeek={(seconds) => playerRef.current?.seekTo(seconds)}
+                playing={isMusicPlaying}
+                releaseId={musicPlayback.release.id}
+                releaseTitle={musicPlayback.release.title}
+                track={activeTrack}
+              />
+            )
+          ) : musicLoading ? (
+            musicLoaderDocked ? null : (
+              <MusicTransportLoader />
+            )
+          ) : embedMediaControls ? null : (
             <div className="contents" data-media-controls>
               {audioControl}
               {toneControl}
             </div>
           )}
 
-          <ToneExplorer
+          {!musicPlayback ? <ToneExplorer
             disabled={!slotAssignment}
             error={comboError}
             loading={comboLoading}
@@ -842,9 +981,9 @@ export function App() {
             onSubmit={handleToneSubmit}
             open={isToneExplorerOpen}
             showCloseControl={embedMediaControls}
-          />
+          /> : null}
 
-          {showToneExplorerExplainer ? (
+          {!musicPlayback && showToneExplorerExplainer ? (
             <ToneExplorerExplainer
               onAccept={handleToneExplorerAccept}
               onDismiss={() => setShowToneExplorerExplainer(false)}
@@ -861,18 +1000,58 @@ export function App() {
       <div className="relative z-20 min-h-dvh">
         <DocumentControlsProvider
           value={{
-            leading: embedMediaControls && !isToneExplorerOpen ? audioControl : null,
+            busy: musicLoaderDocked && !musicPlayback,
+            center: musicLoaderDocked ? <ShellLoader /> : null,
+            compactBreadcrumbs: musicControlsStuck || musicLoaderDocked,
+            leading: musicControlsStuck ? (
+              <div className="flex items-center gap-2" data-document-music-controls>
+                <MusicPlayButton
+                  onClick={() => void playerRef.current?.togglePlayback()}
+                  playing={isMusicPlaying}
+                />
+                <MusicMuteButton
+                  audioMuted={isAudioMuted}
+                  onClick={handleAudioLevelToggle}
+                />
+              </div>
+            ) : embedMediaControls && !isToneExplorerOpen ? (
+              audioControl
+            ) : null,
             onMinimize: handleContentMinimize,
-            trailing: embedMediaControls ? toneControl : null,
+            onStickyChange: setDocumentNavStuck,
+            trailing: musicControlsStuck ? (
+              <MusicExitButton onClick={exitMusicPlayback} />
+            ) : embedMediaControls ? (
+              toneControl
+            ) : null,
           }}
         >
-          <DocumentRouteTransition
-            contentMinimized={isContentMinimized}
-            pathname={location.pathname}
-            printMode={printMode}
-          />
+          <MusicPlaybackContext.Provider
+            value={{
+              currentTrackId: activeTrack?.id ?? null,
+              error: musicError,
+              loadingTrackId: musicLoadingTrackId,
+              playing: isMusicPlaying,
+              playTrack: (release, trackIndex) => void startMusicTrack(release, trackIndex, true),
+            }}
+          >
+            <DocumentRouteTransition
+              contentMinimized={isContentMinimized}
+              pathname={location.pathname}
+              printMode={printMode}
+            />
+          </MusicPlaybackContext.Provider>
         </DocumentControlsProvider>
       </div>
+
+      {!printMode && comboLoading && !musicLoading ? (
+        <div
+          className="pointer-events-none fixed left-1/2 z-[150] -translate-x-1/2 -translate-y-1/2 [top:calc(max(1.5rem,env(safe-area-inset-top))+24px)]"
+          data-playback-loader="floating"
+        >
+          <ShellLoader />
+        </div>
+      ) : null}
 
       {isHome ? (
         <section
@@ -939,12 +1118,6 @@ export function App() {
                 </div>
               </div>
             </div>
-
-            {comboLoading ? (
-              <div className="pointer-events-none fixed z-40 left-1/2 [top:calc(max(1.5rem,env(safe-area-inset-top))+24px)] -translate-x-1/2 -translate-y-1/2">
-                <ShellLoader />
-              </div>
-            ) : null}
 
             {!comboLoading && !slotAssignment && comboError ? (
               <p className="pointer-events-none absolute left-1/2 top-full mt-3 -translate-x-1/2 text-xs text-white/70">
