@@ -1,13 +1,11 @@
 import { createContext, useContext, type ReactNode } from "react";
 
 export type DocumentControls = {
-  busy?: boolean;
-  center?: ReactNode;
-  compactBreadcrumbs?: boolean;
+  dockedTone: ReactNode;
   leading: ReactNode;
+  navHidden?: boolean;
   onMinimize: () => void;
-  onStickyChange?: (stuck: boolean) => void;
-  trailing: ReactNode;
+  onStickyChange: (stuck: boolean) => void;
 };
 
 const DocumentControlsContext = createContext<DocumentControls | null>(null);

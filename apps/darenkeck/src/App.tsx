@@ -10,16 +10,14 @@ import {
   type ComboPlayerHandle,
 } from "@media-manager/shared";
 import { lazy, Suspense, useEffect, useEffectEvent, useRef, useState, type RefObject } from "react";
-import { useLocation, useOutlet } from "react-router-dom";
+import { Link, useLocation, useOutlet } from "react-router-dom";
 
 import { BulletinSection } from "./components/BulletinSection";
 import { ContentSizeButton } from "./components/ContentSizeButton";
 import { DocumentControlsProvider } from "./components/DocumentControlsContext";
-import { LinksSection } from "./components/LinksSection";
+import { NavigationMenu } from "./components/NavigationMenu";
 import { MusicPlaybackContext } from "./components/MusicPlaybackContext";
 import {
-  MusicExitButton,
-  MusicMuteButton,
   MusicPlayButton,
   MusicTransport,
   MusicTransportLoader,
@@ -42,6 +40,7 @@ import {
   type SlotPlaybackAssignment,
 } from "./lib/slot-manager";
 import { setPageMetadata } from "./lib/page-metadata";
+import { fetchMusicCatalog } from "./lib/music";
 import { isDocumentPath, isHomePath, isResumePrintMode } from "./lib/route-mode";
 import {
   acknowledgeToneExplorer,
@@ -65,6 +64,12 @@ type MusicPlayback = {
   playbackCycle: number;
   release: PublicMusicRelease;
   trackIndex: number;
+};
+
+type PublishedAudioReference = {
+  releaseId: string;
+  releaseTitle: string;
+  trackTitle: string;
 };
 
 function pairMusicTrackWithCombo(combo: ComboPayload, track: PublicMusicTrack): ComboPayload {
@@ -302,12 +307,12 @@ async function fetchSelectedCombo(
   return parseComboPayload(payload);
 }
 
-function DarenKeckWordmark() {
+function DarenKeckWordmark({ compact = false }: { compact?: boolean }) {
   return (
     <span className="relative inline-flex items-center">
       <img
         alt="Daren Keck"
-        className="h-12 w-auto"
+        className={compact ? "h-8 w-auto" : "h-12 w-auto"}
         draggable={false}
         onDragStart={(event) => {
           event.preventDefault();
@@ -324,41 +329,21 @@ function DarenKeckWordmark() {
   );
 }
 
-function useCompactDocumentViewport(): boolean {
-  const [compact, setCompact] = useState(() => window.matchMedia("(max-width: 1023px)").matches);
-
-  useEffect(() => {
-    const query = window.matchMedia("(max-width: 1023px)");
-    const update = (event: MediaQueryListEvent) => setCompact(event.matches);
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
-
-  return compact;
-}
-
 type AudioControlProps = {
   audioButtonTitle: string;
   audioLevel: AudioLevel;
-  embedded: boolean;
   onAudioToggle: () => void;
 };
 
 function AudioControl({
   audioButtonTitle,
   audioLevel,
-  embedded,
   onAudioToggle,
 }: AudioControlProps) {
-  const sizeClass = embedded ? "h-10 w-10" : "h-12 w-12";
-  const positionClass = embedded
-    ? "relative"
-    : "fixed z-[130] [left:max(1.5rem,env(safe-area-inset-left))] [top:max(1.5rem,env(safe-area-inset-top))]";
-
   return (
     <button
       aria-label={audioButtonTitle}
-      className={`pointer-events-auto inline-flex ${sizeClass} ${positionClass} items-center justify-center rounded-full border border-white/40 bg-black/45 text-white shadow-lg backdrop-blur-sm print:hidden`}
+      className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-md transition hover:bg-black/65 supports-[backdrop-filter]:bg-black/30 min-[360px]:h-12 min-[360px]:w-12 print:hidden"
       data-audio-control
       onClick={(event) => {
         event.preventDefault();
@@ -397,7 +382,6 @@ function AudioControl({
 }
 
 type ToneControlProps = {
-  embedded: boolean;
   onToneToggle: () => void;
   predictedTone?: PublicComboPredictedTone;
   toneExplorerAcknowledged: boolean;
@@ -406,34 +390,27 @@ type ToneControlProps = {
 };
 
 function ToneControl({
-  embedded,
   onToneToggle,
   predictedTone,
   toneExplorerAcknowledged,
   toneExplorerButtonRef,
   toneExplorerOpen,
 }: ToneControlProps) {
-  const closeState = toneExplorerOpen && !embedded;
-  const sizeClass = embedded ? "h-10 w-10" : "h-12 w-12";
-  const positionClass = embedded
-    ? "relative"
-    : "fixed z-[130] [right:max(1.5rem,env(safe-area-inset-right))] [top:max(1.5rem,env(safe-area-inset-top))]";
+  const closeState = toneExplorerOpen;
 
   return (
     <button
       aria-expanded={toneExplorerOpen}
       aria-label={closeState ? "Close tone explorer" : "Explore combinations by tone"}
-      className={`pointer-events-auto inline-flex ${sizeClass} ${positionClass} items-center justify-center rounded-full border bg-black/45 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/65 print:hidden ${
+      className={`pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-md transition hover:bg-black/65 supports-[backdrop-filter]:bg-black/30 min-[360px]:h-12 min-[360px]:w-12 print:hidden ${
         closeState
-          ? "border-sky-300 text-sky-200 shadow-[0_0_24px_rgba(56,189,248,0.45)]"
+          ? "text-sky-200 shadow-[0_0_24px_rgba(56,189,248,0.45)]"
           : toneExplorerAcknowledged
-            ? "border-white/40"
-            : "tone-control-first-use border-sky-200/70 text-sky-100"
+            ? ""
+            : "tone-control-first-use text-sky-100"
       }`}
       data-tone-control
-      onClick={() => {
-        if (!embedded || !toneExplorerOpen) onToneToggle();
-      }}
+      onClick={onToneToggle}
       ref={toneExplorerButtonRef}
       title={closeState ? "Close tone explorer" : "Explore by tone"}
       type="button"
@@ -463,13 +440,14 @@ export function App() {
   const location = useLocation();
   const isHome = isHomePath(location.pathname);
   const printMode = isResumePrintMode(location.pathname, location.search);
-  const compactDocumentViewport = useCompactDocumentViewport();
   const [slotAssignment, setSlotAssignment] = useState<SlotPlaybackAssignment | null>(null);
   const [comboLoading, setComboLoading] = useState(false);
   const [comboError, setComboError] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState<AudioLevel>("muted");
   const [audioVolume, setAudioVolume] = useState(1);
   const [isContentMinimized, setIsContentMinimized] = useState(false);
+  const [homeNavigationOpen, setHomeNavigationOpen] = useState(false);
+  const [documentNavStuck, setDocumentNavStuck] = useState(false);
   const [isToneExplorerOpen, setIsToneExplorerOpen] = useState(false);
   const [showToneExplorerExplainer, setShowToneExplorerExplainer] = useState(false);
   const [toneExplorerAcknowledged, setToneExplorerAcknowledged] = useState(false);
@@ -483,15 +461,14 @@ export function App() {
   const [musicLoadingTrackId, setMusicLoadingTrackId] = useState<string | null>(null);
   const [musicError, setMusicError] = useState<string | null>(null);
   const [musicProgress, setMusicProgress] = useState({ currentTime: 0, duration: 0 });
-  const [documentNavStuck, setDocumentNavStuck] = useState(false);
+  const [publishedAudioReferences, setPublishedAudioReferences] = useState(
+    new Map<string, PublishedAudioReference>()
+  );
   const [debugActionMessage, setDebugActionMessage] = useState<string | null>(null);
   const [debugSampleCount, setDebugSampleCount] = useState(0);
   const managerRef = useRef<SlotManager | null>(null);
-  const restoreButtonRef = useRef<HTMLButtonElement | null>(null);
   const toneExplorerButtonRef = useRef<HTMLButtonElement | null>(null);
   const journeyRef = useRef<ComboJourney>({ mode: "random" });
-  const documentScrollPositionsRef = useRef(new Map<string, number>());
-  const restoreRequestedRef = useRef(false);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const playerRef = useRef<ComboPlayerHandle | null>(null);
@@ -508,6 +485,33 @@ export function App() {
       url: "https://darenkeck.com/",
     });
   }, [isHome]);
+
+  useEffect(() => {
+    if (printMode) return;
+    let active = true;
+    void fetchMusicCatalog()
+      .then((catalog) => {
+        if (!active) return;
+        const references = new Map<string, PublishedAudioReference>();
+        for (const release of catalog.releases) {
+          for (const track of release.tracks) {
+            if (!track.audioAssetId || references.has(track.audioAssetId)) continue;
+            references.set(track.audioAssetId, {
+              releaseId: release.id,
+              releaseTitle: release.title,
+              trackTitle: track.title,
+            });
+          }
+        }
+        setPublishedAudioReferences(references);
+      })
+      .catch((error: unknown) => {
+        console.error("Published music metadata failed to load", error);
+      });
+    return () => {
+      active = false;
+    };
+  }, [printMode]);
 
   useEffect(() => {
     setToneExplorerAcknowledged(hasAcknowledgedToneExplorer(getToneExplorerStorage()));
@@ -720,35 +724,16 @@ export function App() {
   }, [location.pathname]);
 
   const handleContentMinimize = () => {
-    if (isDocumentPath(location.pathname)) {
-      documentScrollPositionsRef.current.set(location.pathname, window.scrollY);
-    }
     setShowToneExplorerExplainer(false);
     setIsToneExplorerOpen(false);
     setIsContentMinimized(true);
   };
 
-  const handleContentRestore = () => {
-    restoreRequestedRef.current = true;
+  const handleMenuNavigate = () => {
     setIsContentMinimized(false);
+    setShowToneExplorerExplainer(false);
+    setIsToneExplorerOpen(false);
   };
-
-  useEffect(() => {
-    if (isContentMinimized) {
-      const frameId = window.requestAnimationFrame(() => restoreButtonRef.current?.focus());
-      return () => window.cancelAnimationFrame(frameId);
-    }
-    if (!restoreRequestedRef.current) return;
-    restoreRequestedRef.current = false;
-    const scrollY = documentScrollPositionsRef.current.get(location.pathname) ?? 0;
-    const frameId = window.requestAnimationFrame(() => {
-      window.scrollTo(0, scrollY);
-      document.querySelector<HTMLButtonElement>("[data-content-minimize]")?.focus({
-        preventScroll: true,
-      });
-    });
-    return () => window.cancelAnimationFrame(frameId);
-  }, [isContentMinimized, location.pathname]);
 
   const handleToneExplorerToggle = () => {
     if (isToneExplorerOpen) {
@@ -869,33 +854,30 @@ export function App() {
     playbackPhase === ComboPlayerPhase.Playing || playbackPhase === ComboPlayerPhase.Stalled;
   const activeTrack = musicPlayback?.release.tracks[musicPlayback.trackIndex] ?? null;
   const musicLoading = musicLoadingTrackId !== null;
-  const musicLoaderDocked = Boolean(
-    musicLoading && documentNavStuck && isDocumentPath(location.pathname) && !isContentMinimized
-  );
-  const musicControlsStuck = Boolean(
-    musicPlayback && activeTrack && documentNavStuck && !isContentMinimized
-  );
+  const ambientAudioReference = slotAssignment
+    ? publishedAudioReferences.get(slotAssignment.combo.audioAssetId) ?? null
+    : null;
+  const documentHeaderDocked =
+    documentNavStuck && isDocumentPath(location.pathname) && !isContentMinimized;
+  const documentDockVisible =
+    isDocumentPath(location.pathname) &&
+    !isContentMinimized &&
+    !musicPlayback &&
+    !musicLoading &&
+    !isToneExplorerOpen;
   const nextAudioLevel: AudioLevel = audioLevel === "full" ? "muted" : "full";
   const audioButtonTitle = nextAudioLevel === "full" ? "Unmute audio" : "Mute audio";
   const audioDebugSnapshot = formatMediaSnapshot(audioElementRef.current);
   const videoDebugSnapshot = formatMediaSnapshot(videoElementRef.current);
-  const embedMediaControls =
-    !musicPlayback &&
-    compactDocumentViewport &&
-    isDocumentPath(location.pathname) &&
-    !isContentMinimized &&
-    !printMode;
   const audioControl = (
     <AudioControl
       audioButtonTitle={audioButtonTitle}
       audioLevel={audioLevel}
-      embedded={embedMediaControls}
       onAudioToggle={handleAudioLevelToggle}
     />
   );
   const toneControl = (
     <ToneControl
-      embedded={embedMediaControls}
       onToneToggle={handleToneExplorerToggle}
       predictedTone={slotAssignment?.combo.predictedTone}
       toneExplorerAcknowledged={toneExplorerAcknowledged}
@@ -903,16 +885,10 @@ export function App() {
       toneExplorerOpen={isToneExplorerOpen}
     />
   );
-
-  const linkItems = [
-    { label: "Resume", href: "/dev", external: false },
-    { label: "Blog", href: "/blog", external: false },
-    { label: "Music", href: "/music", external: false },
-    { label: "Wayfarer Records", href: "https://wayfarermusicgroup.com/dir" },
-  ];
-
   return (
-    <div className="relative isolate min-h-dvh overflow-x-clip">
+    <div
+      className={`relative isolate ${isHome ? "h-dvh overflow-hidden" : "min-h-dvh overflow-x-clip"}`}
+    >
       {playerEnabled && !printMode ? (
         <Suspense fallback={null}>
           {musicPlayback || slotAssignment ? (
@@ -945,43 +921,120 @@ export function App() {
       ) : null}
       {!printMode ? (
         <>
-          {musicPlayback && activeTrack ? (
-            musicControlsStuck ? null : (
-              <MusicTransport
-                audioMuted={isAudioMuted}
-                currentTime={musicProgress.currentTime}
-                duration={musicProgress.duration}
-                loading={musicLoading}
-                onExit={exitMusicPlayback}
-                onMuteToggle={handleAudioLevelToggle}
-                onPlayToggle={() => void playerRef.current?.togglePlayback()}
-                onSeek={(seconds) => playerRef.current?.seekTo(seconds)}
-                playing={isMusicPlaying}
-                releaseId={musicPlayback.release.id}
-                releaseTitle={musicPlayback.release.title}
-                track={activeTrack}
+          {!documentHeaderDocked ? (
+            <>
+              <div
+                aria-hidden="true"
+                className="pointer-events-none fixed left-0 top-0 z-[130] h-28 w-56 bg-[radial-gradient(ellipse_at_top_left,rgba(0,0,0,0.45),rgba(0,0,0,0.25)_42%,transparent_72%)]"
+                data-top-left-scrim
               />
-            )
+              <div
+                aria-hidden="true"
+                className="pointer-events-none fixed right-0 top-0 z-[130] h-28 w-40 bg-[radial-gradient(ellipse_at_top_right,rgba(0,0,0,0.45),rgba(0,0,0,0.25)_42%,transparent_72%)]"
+                data-top-right-scrim
+              />
+            </>
+          ) : null}
+          {musicPlayback && activeTrack ? (
+            <MusicTransport
+              audioMuted={isAudioMuted}
+              contentMinimized={isContentMinimized}
+              currentTime={musicProgress.currentTime}
+              duration={musicProgress.duration}
+              loading={musicLoading}
+              onExit={exitMusicPlayback}
+              onMinimize={handleContentMinimize}
+              onMuteToggle={handleAudioLevelToggle}
+              onNavigate={handleMenuNavigate}
+              onPlayToggle={() => void playerRef.current?.togglePlayback()}
+              onSeek={(seconds) => playerRef.current?.seekTo(seconds)}
+              playing={isMusicPlaying}
+              releaseId={musicPlayback.release.id}
+              releaseTitle={musicPlayback.release.title}
+              showBottomMinimize={!isDocumentPath(location.pathname)}
+              track={activeTrack}
+            />
           ) : musicLoading ? (
-            musicLoaderDocked ? null : (
-              <MusicTransportLoader />
-            )
-          ) : embedMediaControls ? null : (
-            <div className="contents" data-media-controls>
-              {audioControl}
-              {toneControl}
-            </div>
+            <MusicTransportLoader
+              audioMuted={isAudioMuted}
+              contentMinimized={isContentMinimized}
+              onMuteToggle={handleAudioLevelToggle}
+              onMinimize={handleContentMinimize}
+              onNavigate={handleMenuNavigate}
+              onPlayToggle={() => void playerRef.current?.togglePlayback()}
+              playing={isMusicPlaying}
+              showBottomMinimize={!isDocumentPath(location.pathname)}
+            />
+          ) : (
+            <>
+              <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[125] h-28 bg-gradient-to-t from-black/65 to-transparent" />
+              {!documentDockVisible ? (
+                <div
+                  className="pointer-events-none fixed inset-x-0 bottom-0 z-[140] grid h-[max(4rem,calc(env(safe-area-inset-bottom)+3.5rem))] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-t border-white/25 bg-black/40 px-4 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(0,0,0,0.3)] backdrop-blur-md sm:gap-3 sm:px-6"
+                  data-media-controls
+                >
+                  <div className="pointer-events-auto col-start-1 flex items-center gap-2">
+                    <MusicPlayButton
+                      context="combo"
+                      onClick={() => void playerRef.current?.togglePlayback()}
+                      playing={isMusicPlaying}
+                    />
+                    {audioControl}
+                  </div>
+                  {ambientAudioReference ? (
+                    <Link
+                      aria-label={`View ${ambientAudioReference.releaseTitle} on the Music page`}
+                      className="pointer-events-auto col-start-2 min-w-0 justify-self-center text-center text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.95)] transition hover:text-cyan-100"
+                      onClick={handleMenuNavigate}
+                      to={`/music#release-${ambientAudioReference.releaseId}`}
+                    >
+                      <strong className="block truncate text-sm">
+                        {ambientAudioReference.trackTitle}
+                      </strong>
+                      <span className="mt-1 hidden truncate text-[11px] text-white/60 sm:block">
+                        {ambientAudioReference.releaseTitle}
+                      </span>
+                    </Link>
+                  ) : (
+                    <span className="col-start-2" />
+                  )}
+                  <div className="pointer-events-auto col-start-3 flex items-center gap-2">
+                    {isContentMinimized ? (
+                      <ContentSizeButton expanded={false} onClick={handleMenuNavigate} />
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </>
           )}
 
-          {!musicPlayback ? <ToneExplorer
-            disabled={!slotAssignment}
-            error={comboError}
-            loading={comboLoading}
-            onClose={closeToneExplorer}
-            onSubmit={handleToneSubmit}
-            open={isToneExplorerOpen}
-            showCloseControl={embedMediaControls}
-          /> : null}
+          {!musicPlayback && !musicLoading && !documentHeaderDocked ? (
+            <div
+              className="fixed z-[140] [right:max(1rem,env(safe-area-inset-right))] [top:max(1rem,env(safe-area-inset-top))] min-[360px]:[right:max(1.5rem,env(safe-area-inset-right))] min-[360px]:[top:max(1.5rem,env(safe-area-inset-top))]"
+              data-tone-floating
+            >
+              {toneControl}
+            </div>
+          ) : null}
+
+          <div
+            className={`pointer-events-none fixed z-[140] [left:max(1rem,env(safe-area-inset-left))] [top:max(1rem,env(safe-area-inset-top))] min-[360px]:[left:max(1.5rem,env(safe-area-inset-left))] min-[360px]:[top:max(1.5rem,env(safe-area-inset-top))] ${documentHeaderDocked ? "hidden" : ""}`}
+            data-site-wordmark
+          >
+            <DarenKeckWordmark compact />
+          </div>
+
+          {!musicPlayback ? (
+            <ToneExplorer
+              disabled={!slotAssignment}
+              error={comboError}
+              loading={comboLoading}
+              onClose={closeToneExplorer}
+              onSubmit={handleToneSubmit}
+              open={isToneExplorerOpen}
+              showCloseControl={false}
+            />
+          ) : null}
 
           {!musicPlayback && showToneExplorerExplainer ? (
             <ToneExplorerExplainer
@@ -997,33 +1050,31 @@ export function App() {
         <div className="pointer-events-none fixed inset-0 z-10 bg-[linear-gradient(180deg,rgba(0,0,0,0.12),rgba(0,0,0,0.62))] print:hidden" />
       ) : null}
 
-      <div className="relative z-20 min-h-dvh">
+      <div
+        className={isHome ? "pointer-events-none absolute inset-0 z-20" : "relative z-20 min-h-dvh"}
+      >
         <DocumentControlsProvider
           value={{
-            busy: musicLoaderDocked && !musicPlayback,
-            center: musicLoaderDocked ? <ShellLoader /> : null,
-            compactBreadcrumbs: musicControlsStuck || musicLoaderDocked,
-            leading: musicControlsStuck ? (
-              <div className="flex items-center gap-2" data-document-music-controls>
+            dockedTone: !musicPlayback && !musicLoading ? toneControl : null,
+            leading: (
+              <>
                 <MusicPlayButton
+                  context="combo"
                   onClick={() => void playerRef.current?.togglePlayback()}
                   playing={isMusicPlaying}
                 />
-                <MusicMuteButton
-                  audioMuted={isAudioMuted}
-                  onClick={handleAudioLevelToggle}
-                />
-              </div>
-            ) : embedMediaControls && !isToneExplorerOpen ? (
-              audioControl
-            ) : null,
+                {audioControl}
+              </>
+            ),
+            navHidden: Boolean(
+              isHome ||
+                isContentMinimized ||
+                musicPlayback ||
+                musicLoading ||
+                isToneExplorerOpen
+            ),
             onMinimize: handleContentMinimize,
             onStickyChange: setDocumentNavStuck,
-            trailing: musicControlsStuck ? (
-              <MusicExitButton onClick={exitMusicPlayback} />
-            ) : embedMediaControls ? (
-              toneControl
-            ) : null,
           }}
         >
           <MusicPlaybackContext.Provider
@@ -1055,34 +1106,18 @@ export function App() {
 
       {isHome ? (
         <section
-          className="fixed inset-x-0 z-20 mx-auto w-full max-w-xl px-4 [bottom:max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:[bottom:max(2rem,env(safe-area-inset-bottom))]"
+          className="relative z-20 flex min-h-dvh w-full items-end px-0 pb-[max(4rem,calc(env(safe-area-inset-bottom)+3.5rem))] pt-24 lg:px-6"
           data-home-panel-shell
         >
-          <div className="relative w-full">
-            <div
-              aria-hidden={isContentMinimized || isToneExplorerOpen}
-              className={`relative z-10 mb-1 flex items-center justify-end transition-all duration-300 ease-in-out ${
-                !isContentMinimized && !isToneExplorerOpen
-                  ? "translate-y-[8px] scale-100 opacity-100"
-                  : "pointer-events-none translate-y-4 scale-95 opacity-0"
-              }`}
-            >
-              <DarenKeckWordmark />
-            </div>
-
+          <div className="relative mx-auto w-full max-w-4xl">
             <div
               data-home-panel
               className={`relative overflow-hidden transition-all duration-300 ease-in-out ${
                 !isContentMinimized && !isToneExplorerOpen
-                  ? "rounded-2xl border bg-black/65 p-4 shadow-2xl shadow-black/30 backdrop-blur-[10px] sm:p-5"
-                  : "rounded-2xl border-0 p-0 shadow-none"
+                  ? "rounded-none border-y bg-black/65 px-6 pb-0 pt-2 shadow-2xl shadow-black/30 backdrop-blur-[10px] sm:px-10 lg:rounded-2xl lg:border lg:px-14"
+                  : "rounded-none border-0 p-0 shadow-none lg:rounded-2xl"
               }`}
             >
-              {!isContentMinimized && !isToneExplorerOpen ? (
-                <div className="absolute right-1 top-4 z-10" data-home-minimize-control>
-                  <ContentSizeButton expanded onClick={handleContentMinimize} />
-                </div>
-              ) : null}
               <div
                 aria-hidden={isContentMinimized || isToneExplorerOpen}
                 className={`grid overflow-hidden transition-all duration-300 ease-in-out ${
@@ -1092,19 +1127,39 @@ export function App() {
                 }`}
                 inert={isContentMinimized || isToneExplorerOpen}
               >
-                <div className="min-h-0 space-y-5">
-                  <header className="pr-5">
-                    <p className="text-sm leading-relaxed text-white/85">
-                      <strong className="text-base font-bold text-white">Hey!</strong> I'm a
-                      full-stack developer with a decade of experience, and I write music at
-                      Wayfarer Records!
-                    </p>
-                  </header>
-                  <BulletinSection bulletins={latestBulletins} />
-                  <LinksSection
-                    links={linkItems}
-                    moreLink={{ href: "/news", label: "View all news" }}
-                  />
+                <div className="min-h-0">
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
+                    <header
+                      aria-hidden={homeNavigationOpen}
+                      className={`max-w-xl pt-1 transition-opacity duration-200 ${homeNavigationOpen ? "pointer-events-none opacity-0" : "opacity-100"}`}
+                      data-home-intro
+                      inert={homeNavigationOpen}
+                    >
+                      <p className="text-sm leading-relaxed text-white/85">
+                        <strong className="text-base font-bold text-white">Hey!</strong> I'm a
+                        full-stack developer with a decade of experience, and I write music at{" "}
+                        <a
+                          className="font-medium text-white underline decoration-white/35 underline-offset-4 transition hover:decoration-white"
+                          href="https://wayfarermusicgroup.com/dir"
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          Wayfarer Records
+                        </a>
+                        !
+                      </p>
+                    </header>
+                    <div className="flex items-center gap-1" data-home-header-controls>
+                      <NavigationMenu
+                        key={isContentMinimized ? "minimized" : "expanded"}
+                        onOpenChange={setHomeNavigationOpen}
+                      />
+                      <ContentSizeButton expanded onClick={handleContentMinimize} />
+                    </div>
+                  </div>
+                  <div className="mt-4 space-y-6">
+                    <BulletinSection bulletins={latestBulletins} />
+                  </div>
                   {/* {!slotAssignment ? (
                   <p className="text-xs text-white/70">
                     {comboLoading
@@ -1126,17 +1181,6 @@ export function App() {
             ) : null}
           </div>
         </section>
-      ) : null}
-
-      {!printMode && isContentMinimized && !isToneExplorerOpen && !showToneExplorerExplainer ? (
-        <div className="pointer-events-auto fixed right-4 z-[120] flex items-center gap-2 [bottom:max(1.5rem,calc(env(safe-area-inset-bottom)+1rem))] sm:right-6 sm:[bottom:max(2.5rem,calc(env(safe-area-inset-bottom)+2rem))]">
-          <DarenKeckWordmark />
-          <ContentSizeButton
-            buttonRef={restoreButtonRef}
-            expanded={false}
-            onClick={handleContentRestore}
-          />
-        </div>
       ) : null}
 
       {SHOW_LOCAL_DEBUG_CONTROLS && !printMode ? (

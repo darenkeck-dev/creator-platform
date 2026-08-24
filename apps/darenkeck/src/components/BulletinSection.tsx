@@ -11,6 +11,15 @@ const BulletinSummary = lazy(async () => {
 export function BulletinSection({ bulletins }: { bulletins: Bulletin[] }) {
   return (
     <section aria-label="Latest news">
+      <header className="mb-2 flex items-baseline justify-between pb-2">
+        <h2 className="text-sm font-semibold text-white">Latest news</h2>
+        <Link
+          className="text-sm font-medium text-[var(--primary-yellow)] transition hover:brightness-125"
+          to="/news"
+        >
+          All news
+        </Link>
+      </header>
       {bulletins.length ? (
         <ol className="space-y-2">
           {bulletins.map((bulletin) => (

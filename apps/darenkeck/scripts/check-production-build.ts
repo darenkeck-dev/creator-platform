@@ -31,6 +31,18 @@ if (!address || typeof address === "string") {
 }
 
 const baseUrl = `http://127.0.0.1:${address.port}`;
+
+async function navigateFromHome(
+  page: Page,
+  label: "Blog" | "Music" | "Resume"
+): Promise<void> {
+  const homePanel = page.locator("[data-home-panel]");
+  await homePanel.getByRole("button", { name: "Open navigation" }).click();
+  await homePanel
+    .getByRole("navigation", { name: "Primary" })
+    .getByRole("link", { name: label })
+    .click();
+}
 const combo = {
   source: "derived",
   selection: "primary",
@@ -48,6 +60,7 @@ const musicCatalog = {
     {
       id: "92f61076-ce78-44fa-917f-a3cc837b105d",
       title: "Moonlit Home",
+      audioAssetId: "production-smoke-audio",
       durationSeconds: 243,
       audioUrl: "https://media.invalid/moonlit-home.m3u8",
       purchaseLinks: [{ label: "Bandcamp", url: "https://example.com/moonlit-home" }],
@@ -66,6 +79,7 @@ const musicCatalog = {
         {
           id: "92f61076-ce78-44fa-917f-a3cc837b105d",
           title: "Moonlit Home",
+          audioAssetId: "production-smoke-audio",
           durationSeconds: 243,
           audioUrl: "https://media.invalid/moonlit-home.m3u8",
           purchaseLinks: [{ label: "Bandcamp", url: "https://example.com/moonlit-home" }],
@@ -112,21 +126,39 @@ try {
   await configureRoutes(page);
 
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+  await page.locator("[data-site-wordmark]").waitFor({ state: "visible" });
+  await page
+    .getByRole("link", { name: "View Moonlit Home on the Music page" })
+    .waitFor({ state: "visible" });
+  if ((await page.getByRole("link", { name: "Wayfarer Records", exact: true }).count()) !== 1) {
+    throw new Error("Homepage must expose one inline Wayfarer Records link.");
+  }
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  const homepagePrimaryNav = page.getByRole("navigation", { name: "Primary" });
+  await homepagePrimaryNav.getByRole("link", { name: "Resume" }).waitFor({ state: "visible" });
+  if ((await homepagePrimaryNav.getByRole("link", { name: "Home" }).count()) !== 0) {
+    throw new Error("Homepage primary navigation still includes Home.");
+  }
+  await page.keyboard.press("Escape");
+  await homepagePrimaryNav.waitFor({ state: "hidden" });
   const homePanelAlignment = await page.evaluate(() => {
     const shell = document.querySelector<HTMLElement>("[data-home-panel-shell]");
     const panel = document.querySelector<HTMLElement>("[data-home-panel]");
-    if (!shell || !panel) return null;
+    const controls = document.querySelector<HTMLElement>("[data-media-controls]");
+    if (!shell || !panel || !controls) return null;
     return {
-      actual: window.innerHeight - panel.getBoundingClientRect().bottom,
-      expected: Number.parseFloat(getComputedStyle(shell).bottom),
+      actual: panel.getBoundingClientRect().bottom,
+      expected: controls.getBoundingClientRect().top,
+      position: getComputedStyle(shell).position,
     };
   });
   if (
     !homePanelAlignment ||
+    homePanelAlignment.position === "fixed" ||
     Math.abs(homePanelAlignment.actual - homePanelAlignment.expected) > 1
   ) {
     throw new Error(
-      `Homepage panel is not anchored to its bottom inset: ${JSON.stringify(homePanelAlignment)}`
+      `Homepage panel does not grow to its bottom controls: ${JSON.stringify(homePanelAlignment)}`
     );
   }
   const homepageBulletinCount = await page.locator("[data-home-bulletin]").count();
@@ -148,59 +180,88 @@ try {
       homepageSummaryHref
     );
   }
-  await page.getByRole("link", { name: "View all news", exact: true }).click();
+  await page.getByRole("link", { name: "All news", exact: true }).click();
   await page.locator(".bulletin-document").waitFor({ state: "visible" });
+  const newsBreadcrumbColor = await page
+    .getByRole("navigation", { name: "Breadcrumb" })
+    .evaluate((navigation) => getComputedStyle(navigation).color);
+  if (newsBreadcrumbColor !== "rgb(233, 204, 0)") {
+    throw new Error(`News breadcrumbs use the wrong palette color: ${newsBreadcrumbColor}.`);
+  }
   await page.getByRole("link", { name: "Home", exact: true }).click();
-  await page.getByRole("link", { name: "Resume" }).click();
+  await navigateFromHome(page, "Resume");
   await page.locator(".resume-document").waitFor({ state: "visible" });
   await page.getByRole("link", { name: "Home", exact: true }).click();
-  await page.getByRole("link", { name: "Music" }).click();
+  await navigateFromHome(page, "Music");
   await page.getByLabel("Loading releases").waitFor({ state: "visible" });
   await page.getByRole("heading", { name: "Moonlit Home" }).waitFor({ state: "visible" });
+  const musicBreadcrumbColor = await page
+    .getByRole("navigation", { name: "Breadcrumb" })
+    .evaluate((navigation) => getComputedStyle(navigation).color);
+  if (musicBreadcrumbColor !== "rgb(250, 1, 0)") {
+    throw new Error(`Music breadcrumbs use the wrong palette color: ${musicBreadcrumbColor}.`);
+  }
   await page
     .getByRole("button", { name: "Moonlit Home" })
     .evaluate((button) => (button as HTMLElement).click());
-  await page.locator("[data-music-transport-loading]").waitFor({ state: "visible" });
+  const initialMusicLoader = page.locator("[data-music-transport-loading]");
+  await initialMusicLoader.waitFor({ state: "visible" });
+  await initialMusicLoader
+    .getByRole("button", { name: /^(Play|Pause) combo$/ })
+    .waitFor({ state: "visible" });
+  await initialMusicLoader.getByRole("button", { name: "Mute audio" }).waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "Minimize page" }).waitFor({ state: "visible" });
   await page.locator(".track-loading-ellipsis").waitFor({ state: "visible" });
   await page.locator("[data-music-transport]").waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Mute music" }).waitFor({ state: "visible" });
-  await page.locator("[data-document-nav]").evaluate((navigation) => {
-    const article = navigation.parentElement;
-    if (article) article.style.minHeight = "1800px";
+  const musicControlsBeforeScroll = await page.locator('[aria-label="Music player"]').boundingBox();
+  const musicProgressRail = await page.locator("[data-music-progress-rail]").boundingBox();
+  if (
+    !musicControlsBeforeScroll ||
+    !musicProgressRail ||
+    Math.abs(musicProgressRail.height - 4) > 0.5 ||
+    Math.abs(musicProgressRail.y + musicProgressRail.height - page.viewportSize()!.height) > 0.5
+  ) {
+    throw new Error(
+      `Music controls or progress rail are misplaced: ${JSON.stringify({ musicControlsBeforeScroll, musicProgressRail })}`
+    );
+  }
+  if (
+    (await page.locator("[data-document-nav]").count()) !== 1 ||
+    (await page.locator("[data-document-bottom-controls]").count()) !== 0
+  ) {
+    throw new Error("Music playback did not preserve only the upper breadcrumb row.");
+  }
+  await page.locator("main > div > article").evaluate((article) => {
+    article.style.minHeight = "1800px";
   });
   await page.evaluate(() => window.scrollTo(0, 600));
-  await page.locator("[data-document-music-controls]").waitFor({ state: "visible" });
+  const musicControlsAfterScroll = await page.locator('[aria-label="Music player"]').boundingBox();
   if (
-    (await page.locator("[data-music-transport]").count()) !== 0 ||
-    (await page.locator("[data-media-controls]").count()) !== 0
+    !musicControlsAfterScroll ||
+    Math.abs(musicControlsAfterScroll.y - musicControlsBeforeScroll.y) > 0.5
   ) {
-    throw new Error("Non-docked media controls remained visible after sticky controls mounted.");
-  }
-  const stickyMusicNav = await page.locator("[data-document-nav]").boundingBox();
-  if (!stickyMusicNav || stickyMusicNav.y < -1 || stickyMusicNav.y > 1) {
-    throw new Error(`Music controls did not enter the sticky row: ${JSON.stringify(stickyMusicNav)}`);
+    throw new Error(
+      `Music controls moved during scroll: ${JSON.stringify({ musicControlsBeforeScroll, musicControlsAfterScroll })}`
+    );
   }
   await page
     .getByRole("button", { name: "Moonlit Home" })
     .evaluate((button) => (button as HTMLElement).click());
-  await page
-    .locator("[data-document-center-control] .app-shell-loader")
-    .waitFor({ state: "visible" });
-  await page.locator("[data-document-music-controls]").waitFor({ state: "visible" });
+  await page.locator('[aria-label="Music player"] .app-shell-loader').waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "Mute music" }).waitFor({ state: "visible" });
   await page.locator(".track-loading-ellipsis").waitFor({ state: "visible" });
-  await page
-    .locator("[data-document-center-control] .app-shell-loader")
-    .waitFor({ state: "hidden" });
-  await page.locator("[data-document-music-controls]").waitFor({ state: "visible" });
-  await page.getByRole("link", { name: "Home", exact: true }).click();
-  await page.locator("[data-music-transport]").waitFor({ state: "visible" });
+  await page.locator('[aria-label="Music player"] .app-shell-loader').waitFor({ state: "hidden" });
+  await page.getByRole("button", { name: "Minimize page" }).click();
+  await page.getByRole("button", { name: "Restore page" }).click();
   await page.getByRole("link", { name: "View Moonlit Home on the Music page" }).click();
   await page.waitForURL("**/music#release-c4cd15e3-5ba5-4d5b-99ad-91fcf082a3aa");
   await page
     .locator("#release-c4cd15e3-5ba5-4d5b-99ad-91fcf082a3aa")
     .waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "Stop music and return to ambient playback" }).click();
   await page.getByRole("link", { name: "Home", exact: true }).click();
-  await page.getByRole("link", { name: "Blog" }).click();
+  await navigateFromHome(page, "Blog");
   await page.locator(".blog-document").waitFor({ state: "visible" });
 
   if (publishedSlug) {
@@ -222,12 +283,14 @@ try {
   mobilePage.on("pageerror", (error) => pageErrors.push(`mobile: ${error.message}`));
   await configureRoutes(mobilePage);
   await mobilePage.goto(`${baseUrl}/music`, { waitUntil: "domcontentloaded" });
+  await mobilePage.locator("[data-site-wordmark]").waitFor({ state: "visible" });
   await mobilePage.getByLabel("Loading releases").waitFor({ state: "visible" });
   await mobilePage.getByRole("heading", { name: "Moonlit Home" }).waitFor({ state: "visible" });
   await mobilePage.getByRole("button", { name: "Moonlit Home" }).click();
   await mobilePage.locator("[data-music-transport-loading]").waitFor({ state: "visible" });
+  await mobilePage.locator("[data-music-transport-loading]").waitFor({ state: "hidden" });
   const mobileTransportBounds = await mobilePage
-    .locator("[data-music-transport]")
+    .locator('[aria-label="Music player"]')
     .evaluate((element) => {
       const bounds = element.getBoundingClientRect();
       return {
@@ -247,67 +310,113 @@ try {
     );
   }
   const mobileTransportChildrenOverlap = await mobilePage
-    .locator("[data-music-transport]")
+    .locator('[aria-label="Music player"]')
     .evaluate((element) => {
       const boxes = Array.from(element.children)
         .map((child) => child.getBoundingClientRect())
         .sort((left, right) => left.left - right.left);
       return boxes.some((box, index) => {
         const next = boxes[index + 1];
-        return next ? box.right > next.left + 0.5 : false;
+        return next
+          ? box.right > next.left + 0.5 &&
+              box.bottom > next.top + 0.5 &&
+              next.bottom > box.top + 0.5
+          : false;
       });
     });
   if (mobileTransportChildrenOverlap) {
     throw new Error("Music transport controls overlap at 320px.");
   }
-  await mobilePage.locator("[data-document-nav]").evaluate((navigation) => {
-    const article = navigation.parentElement;
-    if (article) article.style.minHeight = "1800px";
-  });
-  await mobilePage.evaluate(() => window.scrollTo(0, 600));
-  const mobileStickyControls = mobilePage.locator("[data-document-music-controls]");
-  await mobileStickyControls.waitFor({ state: "visible" });
-  if ((await mobilePage.locator("[data-media-controls]").count()) !== 0) {
-    throw new Error("Ambient controls remained visible in mobile docked music mode.");
-  }
-  const [mobileStickyNavBox, mobileStickyControlsBox] = await Promise.all([
-    mobilePage.locator("[data-document-nav]").boundingBox(),
-    mobileStickyControls.boundingBox(),
+  const [mobileTrackLabelInlineBox, mobilePlayButtonBox] = await Promise.all([
+    mobilePage.getByRole("link", { name: "View Moonlit Home on the Music page" }).boundingBox(),
+    mobilePage.getByRole("button", { name: /^(Play|Pause) music$/ }).boundingBox(),
   ]);
   if (
-    !mobileStickyNavBox ||
-    !mobileStickyControlsBox ||
-    mobileStickyNavBox.y < -1 ||
-    mobileStickyNavBox.y > 1 ||
-    mobileStickyControlsBox.x < mobileStickyNavBox.x ||
-    mobileStickyControlsBox.x + mobileStickyControlsBox.width >
-      mobileStickyNavBox.x + mobileStickyNavBox.width
+    !mobileTrackLabelInlineBox ||
+    !mobilePlayButtonBox ||
+    mobileTrackLabelInlineBox.y + mobileTrackLabelInlineBox.height <= mobilePlayButtonBox.y ||
+    mobileTrackLabelInlineBox.y >= mobilePlayButtonBox.y + mobilePlayButtonBox.height
   ) {
     throw new Error(
-      `Music controls did not fit the mobile sticky row: ${JSON.stringify({ mobileStickyNavBox, mobileStickyControlsBox })}`
+      `Track label is not inline with 320px controls: ${JSON.stringify({ mobileTrackLabelInlineBox, mobilePlayButtonBox })}`
     );
   }
-  const mobileStickyButtonsOverlap = await mobilePage
-    .locator("[data-document-nav]")
-    .getByRole("button")
-    .evaluateAll((buttons) => {
-      const boxes = buttons
-        .map((button) => button.getBoundingClientRect())
-        .filter((box) => box.width > 0 && box.height > 0)
-        .sort((left, right) => left.left - right.left);
-      return boxes.some((box, index) => {
-        const next = boxes[index + 1];
-        return next ? box.right > next.left + 0.5 : false;
-      });
-    });
-  if (mobileStickyButtonsOverlap) {
-    throw new Error("Music controls overlap in the 320px sticky row.");
-  }
+  const mobileProgressRail = await mobilePage.locator("[data-music-progress-rail]").boundingBox();
   if (
-    (await mobilePage.locator('[data-document-nav] nav[aria-label="Breadcrumb"]').isVisible()) ||
-    (await mobilePage.locator("[data-document-minimize-control]").isVisible())
+    !mobileProgressRail ||
+    Math.abs(mobileProgressRail.height - 4) > 0.5 ||
+    Math.abs(mobileProgressRail.y + mobileProgressRail.height - 700) > 0.5
   ) {
-    throw new Error("Mobile docked music controls did not clear the breadcrumb row.");
+    throw new Error(`Music progress rail is misplaced at 320px: ${JSON.stringify(mobileProgressRail)}`);
+  }
+  await mobilePage.getByRole("button", { name: "Minimize page" }).click();
+  const minimizedWordmark = mobilePage.locator("[data-site-wordmark]");
+  const minimizedTrackLink = mobilePage.getByRole("link", {
+    name: "View Moonlit Home on the Music page",
+  });
+  await minimizedWordmark.waitFor({ state: "visible" });
+  const [minimizedWordmarkBox, minimizedMusicPlayBox, minimizedTrackBox] = await Promise.all([
+    minimizedWordmark.boundingBox(),
+    mobilePage.getByRole("button", { name: /^(Play|Pause) music$/ }).boundingBox(),
+    minimizedTrackLink.boundingBox(),
+  ]);
+  if (
+    !minimizedWordmarkBox ||
+    !minimizedMusicPlayBox ||
+    !minimizedTrackBox ||
+    minimizedWordmarkBox.x > 24 ||
+    minimizedWordmarkBox.y > 24 ||
+    minimizedTrackBox.y + minimizedTrackBox.height <= minimizedMusicPlayBox.y ||
+    minimizedTrackBox.y >= minimizedMusicPlayBox.y + minimizedMusicPlayBox.height ||
+    (await mobilePage.getByRole("button", { name: "Restore page" }).count()) !== 1
+  ) {
+    throw new Error(
+      `Minimized music layout is invalid at 320px: ${JSON.stringify({ minimizedWordmarkBox, minimizedMusicPlayBox, minimizedTrackBox })}`
+    );
+  }
+  await minimizedTrackLink.click();
+  await mobilePage.waitForURL("**/music#release-c4cd15e3-5ba5-4d5b-99ad-91fcf082a3aa");
+  await mobilePage.getByRole("button", { name: "Minimize page" }).waitFor({ state: "visible" });
+  if (
+    (await mobilePage.locator("[data-document-nav]").count()) !== 1 ||
+    (await mobilePage.locator("[data-document-bottom-controls]").count()) !== 0
+  ) {
+    throw new Error("Mobile music playback did not preserve only the upper breadcrumb row.");
+  }
+  await mobilePage.locator("main > div > article").evaluate((article) => {
+    article.style.minHeight = "1800px";
+  });
+  const mobileControlsBeforeScroll = await mobilePage
+    .locator('[aria-label="Music player"]')
+    .boundingBox();
+  await mobilePage.evaluate(() => window.scrollTo(0, 600));
+  const mobileControlsAfterScroll = await mobilePage
+    .locator('[aria-label="Music player"]')
+    .boundingBox();
+  if (
+    !mobileControlsBeforeScroll ||
+    !mobileControlsAfterScroll ||
+    Math.abs(mobileControlsBeforeScroll.y - mobileControlsAfterScroll.y) > 0.5
+  ) {
+    throw new Error(
+      `Mobile music controls moved during scroll: ${JSON.stringify({ mobileControlsBeforeScroll, mobileControlsAfterScroll })}`
+    );
+  }
+  const [mobileSizeControlBox, mobileTrackLabelBox] = await Promise.all([
+    mobilePage.getByRole("button", { name: "Minimize page" }).boundingBox(),
+    mobilePage.getByRole("link", { name: "View Moonlit Home on the Music page" }).boundingBox(),
+  ]);
+  if (
+    !mobileSizeControlBox ||
+    !mobileTrackLabelBox ||
+    (mobileSizeControlBox.x < mobileTrackLabelBox.x + mobileTrackLabelBox.width &&
+      mobileSizeControlBox.x + mobileSizeControlBox.width > mobileTrackLabelBox.x &&
+      mobileSizeControlBox.y < mobileTrackLabelBox.y + mobileTrackLabelBox.height &&
+      mobileSizeControlBox.y + mobileSizeControlBox.height > mobileTrackLabelBox.y)
+  ) {
+    throw new Error(
+      `Mobile size control obscures the persistent track label: ${JSON.stringify({ mobileSizeControlBox, mobileTrackLabelBox })}`
+    );
   }
   await mobilePage.close();
 

@@ -63,6 +63,15 @@ async function scrollDocument(page: Page, label: string): Promise<void> {
   if (scrollY <= 0) throw new Error(`${label} document did not become scrollable.`);
 }
 
+async function navigateFromHome(page: Page, label: "Blog" | "Resume"): Promise<void> {
+  const homePanel = page.locator("[data-home-panel]");
+  await homePanel.getByRole("button", { name: "Open navigation" }).click();
+  await homePanel
+    .getByRole("navigation", { name: "Primary" })
+    .getByRole("link", { name: label })
+    .click();
+}
+
 try {
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
@@ -82,34 +91,156 @@ try {
   });
 
   const homePanelBox = await page.locator("[data-home-panel]").boundingBox();
-  const homeMinimizeBox = await page.locator("[data-home-minimize-control]").boundingBox();
+  const homePageScroll = await page.evaluate(() => {
+    window.scrollTo(0, 100);
+    const state = {
+      scrollHeight: document.scrollingElement?.scrollHeight ?? 0,
+      scrollY: window.scrollY,
+      viewportHeight: window.innerHeight,
+    };
+    window.scrollTo(0, 0);
+    return state;
+  });
+  const homeNewsBox = await page.getByRole("region", { name: "Latest news" }).boundingBox();
+  const allNewsColor = await page
+    .getByRole("link", { name: "All news" })
+    .evaluate((link) => getComputedStyle(link).color);
+  const homePanelShellPosition = await page
+    .locator("[data-home-panel-shell]")
+    .evaluate((shell) => getComputedStyle(shell).position);
+  const homeMediaBackground = await page
+    .locator("[data-media-controls]")
+    .evaluate((controls) => getComputedStyle(controls).backgroundColor);
+  const homeCircleBorders = await page
+    .locator("[data-media-controls] button")
+    .evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).borderTopWidth));
+  const homeNavigationButton = page.getByRole("button", { name: "Open navigation" });
+  const homeNavigationButtonBox = await homeNavigationButton.boundingBox();
+  const homeNavigationButtonBorder = await homeNavigationButton.evaluate(
+    (button) => getComputedStyle(button).borderTopWidth
+  );
+  const homeNavigationGlyph = await homeNavigationButton.locator("svg path").evaluate((path) => {
+    const box = (path as SVGGraphicsElement).getBBox();
+    return { height: box.height, width: box.width };
+  });
+  const homeNavigationGlyphRects = await homeNavigationButton.locator("svg rect").count();
+  const homeHeaderControlsBox = await page.locator("[data-home-header-controls]").boundingBox();
+  const homeMediaBox = await page.locator("[data-media-controls]").boundingBox();
+  const homeMinimizeBox = await page.getByRole("button", { name: "Minimize page" }).boundingBox();
   const homeTitleBox = await page.locator("[data-home-panel] header strong").boundingBox();
   if (
     !homePanelBox ||
+    !homeMediaBox ||
     !homeMinimizeBox ||
+    !homeNewsBox ||
+    !homeNavigationButtonBox ||
+    !homeHeaderControlsBox ||
     !homeTitleBox ||
-    Math.abs(homeMinimizeBox.x + homeMinimizeBox.width - (homePanelBox.x + homePanelBox.width - 4)) >
+    homePageScroll.scrollY !== 0 ||
+    homePageScroll.scrollHeight > homePageScroll.viewportHeight + 1 ||
+    homePanelShellPosition === "fixed" ||
+    allNewsColor !== "rgb(233, 204, 0)" ||
+    homeMediaBackground === "rgba(0, 0, 0, 0)" ||
+    homeCircleBorders.some((borderWidth) => borderWidth !== "0px") ||
+    homeNavigationButtonBorder !== "0px" ||
+    homeNavigationGlyphRects !== 0 ||
+    homeNavigationGlyph.width < 14 ||
+    homeNavigationGlyph.height < 10 ||
+    Math.abs(homePanelBox.width - 896) > 1 ||
+    homeHeaderControlsBox.width > 72 ||
+    homeHeaderControlsBox.height > 32 ||
+    Math.abs(
+      homeHeaderControlsBox.x +
+        homeHeaderControlsBox.width -
+        (homePanelBox.x + homePanelBox.width - 56)
+    ) >
       1 ||
     Math.abs(
-      homeMinimizeBox.y +
-        homeMinimizeBox.height / 2 -
-        (homeTitleBox.y + homeTitleBox.height / 2)
-    ) > 1
+      homeNavigationButtonBox.y +
+        homeNavigationButtonBox.height / 2 -
+        (homeMinimizeBox.y + homeMinimizeBox.height / 2)
+    ) > 1 ||
+    Math.abs(homeNewsBox.y + homeNewsBox.height - (homePanelBox.y + homePanelBox.height)) > 1 ||
+    Math.abs(homePanelBox.y + homePanelBox.height - homeMediaBox.y) > 1
   ) {
     throw new Error(
-      `Homepage minimize control is not aligned with the title: ${JSON.stringify({ homeMinimizeBox, homePanelBox, homeTitleBox })}`
+      `Homepage shelf controls or viewport lock are invalid: ${JSON.stringify({ homeHeaderControlsBox, homeMinimizeBox, homeNavigationButtonBox, homePageScroll, homePanelBox, homeMediaBox, homePanelShellPosition, homeTitleBox })}`
     );
   }
 
+  await page.locator("[data-home-navigation-button]").click();
+  await page.waitForTimeout(250);
+  const expandedHomeMenu = page.locator("[data-home-navigation-menu]");
+  const [
+    expandedHomeMenuBackground,
+    expandedHomeMenuBox,
+    expandedHomeLinkBoxes,
+    expandedHomeHeaderOpacity,
+    expandedBurgerTransform,
+  ] =
+    await Promise.all([
+      expandedHomeMenu.evaluate((menu) => getComputedStyle(menu).backgroundColor),
+      expandedHomeMenu.boundingBox(),
+      expandedHomeMenu.locator("a").evaluateAll((links) =>
+        links.map((link) => {
+          const box = link.getBoundingClientRect();
+          const style = getComputedStyle(link);
+          return {
+            color: style.color,
+            fontSize: style.fontSize,
+            height: box.height,
+            width: box.width,
+            x: box.x,
+            y: box.y,
+          };
+        })
+      ),
+      page.locator("[data-home-intro]").evaluate((header) => getComputedStyle(header).opacity),
+      page
+        .locator("[data-home-navigation-button] svg")
+        .evaluate((svg) => {
+          const style = getComputedStyle(svg);
+          return { rotate: style.rotate, transform: style.transform };
+        }),
+    ]);
+  if (
+    !expandedHomeMenuBox ||
+    expandedHomeMenuBackground !== "rgba(0, 0, 0, 0)" ||
+    expandedHomeHeaderOpacity !== "0" ||
+    (expandedBurgerTransform.transform === "none" && expandedBurgerTransform.rotate === "none") ||
+    expandedBurgerTransform.rotate !== "-90deg" ||
+    expandedHomeMenuBox.x + expandedHomeMenuBox.width > homeNavigationButtonBox.x + 1 ||
+    expandedHomeLinkBoxes.map((box) => box.color).join("|") !==
+      "rgb(0, 134, 186)|rgb(253, 71, 0)|rgb(250, 1, 0)" ||
+    expandedHomeLinkBoxes.some((box) => box.fontSize !== "16px") ||
+    expandedHomeLinkBoxes.some(
+      (box) => Math.abs(box.y + box.height / 2 - (expandedHomeMenuBox.y + expandedHomeMenuBox.height / 2)) > 1
+    ) ||
+    Math.max(...expandedHomeLinkBoxes.map((box) => box.width)) -
+      Math.min(...expandedHomeLinkBoxes.map((box) => box.width)) >
+      1
+  ) {
+    throw new Error(
+      `Homepage navigation did not expand evenly without a background: ${JSON.stringify({ expandedBurgerTransform, expandedHomeHeaderOpacity, expandedHomeLinkBoxes, expandedHomeMenuBackground, expandedHomeMenuBox, homeNavigationButtonBox })}`
+    );
+  }
+  await page.keyboard.press("Escape");
+  await expandedHomeMenu.waitFor({ state: "hidden" });
+
   await page.getByRole("button", { name: "Minimize page" }).click();
-  await page.getByRole("button", { name: "Restore page" }).waitFor({ state: "visible" });
+  await page.locator("[data-site-wordmark]").waitFor({ state: "visible" });
   const sameVideoOnMinimizedHome = await page.evaluate(
     () =>
       (window as Window & { continuityVideo?: HTMLVideoElement }).continuityVideo ===
       document.querySelector("video")
   );
   if (!sameVideoOnMinimizedHome) throw new Error("Homepage minimize remounted ComboPlayer.");
-  await page.getByRole("button", { name: "Restore page" }).click();
+  const homeRestoreButton = page.getByRole("button", { name: "Restore page" });
+  if ((await homeRestoreButton.locator("svg rect").count()) !== 1) {
+    throw new Error("Homepage restore control does not use the same square outline as minimize.");
+  }
+  await homeRestoreButton.click();
+  await page.locator("[data-site-wordmark]").waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Minimize page" }).waitFor({ state: "visible" });
 
   await page.getByRole("button", { name: "Explore combinations by tone" }).click();
@@ -119,53 +250,60 @@ try {
   await page.getByRole("button", { name: "Close tone explorer" }).click();
   const requestCountBeforeNavigation = randomRequests;
 
-  await page.getByRole("link", { name: "Resume" }).click();
+  await navigateFromHome(page, "Resume");
   await page.locator(".resume-document").waitFor({ state: "visible" });
   const resumeBreadcrumbs = page.getByRole("navigation", { name: "Breadcrumb" });
   await resumeBreadcrumbs.getByRole("link", { name: "Home" }).waitFor({ state: "visible" });
   await resumeBreadcrumbs.getByText("resume", { exact: true }).waitFor({ state: "visible" });
+  const resumeBreadcrumbColor = await resumeBreadcrumbs.evaluate(
+    (navigation) => getComputedStyle(navigation).color
+  );
+  if (resumeBreadcrumbColor !== "rgb(0, 134, 186)") {
+    throw new Error(`Resume breadcrumbs use the wrong palette color: ${resumeBreadcrumbColor}.`);
+  }
   await page.getByRole("link", { name: "Download" }).waitFor({ state: "visible" });
   const resumeCardBox = await page.locator(".resume-document").boundingBox();
   const resumeNavBox = await page.locator("[data-document-nav]").boundingBox();
+  const desktopMediaBox = await page.locator("[data-media-controls]").boundingBox();
   const desktopBreadcrumbBox = await resumeBreadcrumbs.boundingBox();
   const desktopMinimizeBox = await page
     .locator("[data-document-minimize-control]")
     .boundingBox();
-  if (!resumeCardBox || !resumeNavBox || Math.abs(resumeCardBox.y - resumeNavBox.y) > 1) {
+  const resumeNavPosition = await page
+    .locator("[data-document-nav]")
+    .evaluate((navigation) => getComputedStyle(navigation).position);
+  if (
+    !resumeCardBox ||
+    !resumeNavBox ||
+    !desktopMediaBox ||
+    resumeNavPosition !== "sticky" ||
+    Math.abs(resumeNavBox.x + resumeNavBox.width / 2 - 640) > 1 ||
+    Math.abs(resumeNavBox.y - resumeCardBox.y) > 1 ||
+    Math.abs(resumeNavBox.height - 64) > 1 ||
+    Math.abs(desktopMediaBox.y + desktopMediaBox.height - 720) > 1
+  ) {
     throw new Error(
-      `Document navigation is not flush with its container: ${JSON.stringify({ resumeCardBox, resumeNavBox })}`
+      `Document breadcrumb or bottom-control rows are misplaced: ${JSON.stringify({ resumeCardBox, resumeNavBox, desktopMediaBox, resumeNavPosition })}`
     );
   }
   if (
     !desktopMinimizeBox ||
     !desktopBreadcrumbBox ||
     Math.abs(
-      desktopMinimizeBox.x +
-        desktopMinimizeBox.width -
-        (resumeNavBox.x + resumeNavBox.width - 4)
-    ) >
-      1 ||
-    Math.abs(
-      desktopMinimizeBox.y +
-        desktopMinimizeBox.height / 2 -
+        desktopMinimizeBox.y +
+          desktopMinimizeBox.height / 2 -
         (desktopBreadcrumbBox.y + desktopBreadcrumbBox.height / 2)
     ) > 1
   ) {
     throw new Error(
-      `Document minimize control is not aligned with breadcrumbs: ${JSON.stringify({ desktopBreadcrumbBox, desktopMinimizeBox, resumeNavBox })}`
+      `Document minimize control is not aligned with upper navigation: ${JSON.stringify({ desktopBreadcrumbBox, desktopMediaBox, desktopMinimizeBox, resumeNavBox })}`
     );
   }
-  const matchingTopCorners = await page.evaluate(() => {
-    const card = document.querySelector(".resume-document");
-    const nav = document.querySelector("[data-document-nav]");
-    if (!card || !nav) return false;
-    return (
-      getComputedStyle(card).borderTopLeftRadius === getComputedStyle(nav).borderTopLeftRadius &&
-      getComputedStyle(card).borderTopRightRadius === getComputedStyle(nav).borderTopRightRadius
-    );
-  });
-  if (!matchingTopCorners) {
-    throw new Error("Document navigation corners do not match the container.");
+  if (
+    (await page.locator("[data-top-left-scrim]").count()) !== 1 ||
+    (await page.locator("[data-top-right-scrim]").count()) !== 1
+  ) {
+    throw new Error("Top-corner legibility scrims are missing.");
   }
   await page.getByRole("button", { name: "Minimize page" }).waitFor({ state: "visible" });
 
@@ -185,9 +323,8 @@ try {
       document.querySelector(".resume-document") ?? undefined;
   });
   await scrollDocument(page, "Desktop resume before minimize");
-  const desktopScrollBeforeMinimize = await page.evaluate(() => window.scrollY);
   await page.getByRole("button", { name: "Minimize page" }).click();
-  await page.getByRole("button", { name: "Restore page" }).waitFor({ state: "visible" });
+  await page.locator("[data-site-wordmark]").waitFor({ state: "visible" });
   await page.locator(".resume-document").waitFor({ state: "hidden" });
   const desktopMinimizedState = await page.evaluate(() => ({
     sameDocument:
@@ -204,13 +341,7 @@ try {
   }
   await page.getByRole("button", { name: "Restore page" }).click();
   await page.locator(".resume-document").waitFor({ state: "visible" });
-  await page.waitForFunction((scrollY) => window.scrollY === scrollY, desktopScrollBeforeMinimize);
-  const focusReturnedToMinimize = await page
-    .getByRole("button", { name: "Minimize page" })
-    .evaluate((button) => document.activeElement === button);
-  if (!focusReturnedToMinimize) {
-    throw new Error("Restoring the desktop document did not return focus to Minimize.");
-  }
+  await page.locator("[data-site-wordmark]").waitFor({ state: "visible" });
   if (randomRequests !== requestCountBeforeNavigation) {
     throw new Error("Minimizing the desktop document triggered another random combo request.");
   }
@@ -231,17 +362,23 @@ try {
   );
   if (!sameVideoAfterBack) throw new Error("ComboPlayer remounted after browser Back.");
 
-  await page.getByRole("link", { name: "Blog" }).click();
+  await navigateFromHome(page, "Blog");
   await page.locator(".blog-document").waitFor({ state: "visible" });
   const blogBreadcrumbs = page.getByRole("navigation", { name: "Breadcrumb" });
   await blogBreadcrumbs.getByRole("link", { name: "Home" }).waitFor({ state: "visible" });
   await blogBreadcrumbs.getByText("blog", { exact: true }).waitFor({ state: "visible" });
+  const blogBreadcrumbColor = await blogBreadcrumbs.evaluate(
+    (navigation) => getComputedStyle(navigation).color
+  );
+  if (blogBreadcrumbColor !== "rgb(253, 71, 0)") {
+    throw new Error(`Blog breadcrumbs use the wrong palette color: ${blogBreadcrumbColor}.`);
+  }
   const blogIndexCardBox = await page.locator(".blog-document").boundingBox();
   const desktopViewport = page.viewportSize();
   if (
     !blogIndexCardBox ||
     !desktopViewport ||
-    Math.abs(blogIndexCardBox.y + blogIndexCardBox.height - (desktopViewport.height - 40)) > 1
+    Math.abs(blogIndexCardBox.y + blogIndexCardBox.height - (desktopViewport.height - 64)) > 1
   ) {
     throw new Error(
       `Blog index card is not bottom aligned: ${JSON.stringify({ blogIndexCardBox, desktopViewport })}`
@@ -270,9 +407,13 @@ try {
       .waitFor({ state: "visible" });
     const documentNav = page.locator("[data-document-nav]");
     await scrollDocument(page, "Desktop blog");
-    const stickyNavBox = await documentNav.boundingBox();
-    if (!stickyNavBox || stickyNavBox.y < -1 || stickyNavBox.y > 1) {
-      throw new Error(`Document navigation did not remain sticky: ${JSON.stringify(stickyNavBox)}`);
+    const fixedNavBox = await documentNav.boundingBox();
+    if (
+      !fixedNavBox ||
+      Math.abs(fixedNavBox.y) > 1 ||
+      (await documentNav.getByRole("button", { name: "Open navigation" }).count()) !== 0
+    ) {
+      throw new Error(`Document navigation did not dock at the top: ${JSON.stringify(fixedNavBox)}`);
     }
     const markdownTable = page.locator("[data-markdown-table]").first();
     if ((await markdownTable.count()) > 0) {
@@ -301,22 +442,34 @@ try {
   });
   const mobileHomeControls = mobilePage.locator("[data-media-controls]");
   await mobileHomeControls.waitFor({ state: "visible" });
-  const homeControlPosition = await mobileHomeControls
-    .getByRole("button", { name: "Unmute audio" })
-    .evaluate((button) => getComputedStyle(button).position);
-  if (homeControlPosition !== "fixed") {
-    throw new Error(
-      `Mobile homepage controls must remain floating, received ${homeControlPosition}.`
-    );
+  const homeControlPosition = await mobileHomeControls.evaluate(
+    (controls) => getComputedStyle(controls).position
+  );
+  const mobileControlsInitialBox = await mobileHomeControls.boundingBox();
+  const mobileHomeScroll = await mobilePage.evaluate(() => {
+    window.scrollTo(0, 100);
+    const state = {
+      scrollHeight: document.scrollingElement?.scrollHeight ?? 0,
+      scrollY: window.scrollY,
+      viewportHeight: window.innerHeight,
+    };
+    window.scrollTo(0, 0);
+    return state;
+  });
+  if (
+    homeControlPosition !== "fixed" ||
+    !mobileControlsInitialBox ||
+    mobileHomeScroll.scrollY !== 0 ||
+    mobileHomeScroll.scrollHeight > mobileHomeScroll.viewportHeight + 1
+  ) {
+    throw new Error(`Mobile homepage controls must remain fixed: ${homeControlPosition}.`);
   }
 
-  await mobilePage.getByRole("link", { name: "Resume" }).click();
+  await navigateFromHome(mobilePage, "Resume");
   const mobileResumeNav = mobilePage.locator("[data-document-nav]");
-  const mobileAudioControl = mobileResumeNav.locator("[data-document-audio-control]");
-  const mobileToneControl = mobileResumeNav.locator("[data-document-tone-control]");
-  const mobileMinimizeControl = mobileResumeNav.getByRole("button", { name: "Minimize page" });
-  await mobileAudioControl.waitFor({ state: "visible" });
-  await mobileToneControl.waitFor({ state: "visible" });
+  const mobileMinimizeControl = mobileResumeNav.getByRole("button", {
+    name: "Minimize page",
+  });
   await mobileMinimizeControl.waitFor({ state: "visible" });
   const mobileResumeCardBox = await mobilePage.locator(".resume-document").boundingBox();
   if (!mobileResumeCardBox || Math.abs(mobileResumeCardBox.width - 390) > 1) {
@@ -324,49 +477,85 @@ try {
       `Mobile resume card did not fill the viewport: ${JSON.stringify(mobileResumeCardBox)}`
     );
   }
-  const embeddedControlPosition = await mobileAudioControl
-    .getByRole("button", { name: "Unmute audio" })
-    .evaluate((button) => getComputedStyle(button).position);
-  if (embeddedControlPosition !== "relative") {
-    throw new Error(
-      `Mobile document controls must be embedded, received ${embeddedControlPosition}.`
-    );
-  }
-  const mobileAudioBox = await mobileAudioControl.boundingBox();
   const mobileBreadcrumb = mobileResumeNav.getByRole("navigation", { name: "Breadcrumb" });
-  const mobileBreadcrumbBox = await mobileBreadcrumb.boundingBox();
-  const mobileMinimizeBox = await mobileMinimizeControl.boundingBox();
-  const mobileToneBox = await mobileToneControl.boundingBox();
+  const mobileDocumentFavicon = mobileResumeNav.locator("[data-document-favicon]");
+  await mobileBreadcrumb.waitFor({ state: "visible" });
+  await mobileDocumentFavicon.waitFor({ state: "visible" });
   if (
-    !mobileAudioBox ||
-    !mobileBreadcrumbBox ||
-    !mobileMinimizeBox ||
-    !mobileToneBox ||
-    mobileAudioBox.x + mobileAudioBox.width > mobileBreadcrumbBox.x ||
-    mobileBreadcrumbBox.x + mobileBreadcrumbBox.width > mobileToneBox.x ||
-    mobileToneBox.x + mobileToneBox.width > mobileMinimizeBox.x
+    (await mobileResumeNav.locator("[data-document-audio-control]").count()) !== 0 ||
+    (await mobileResumeNav.locator("[data-document-tone-control]").count()) !== 0
   ) {
-    throw new Error(
-      `Mobile controls do not flank breadcrumbs: ${JSON.stringify({ mobileAudioBox, mobileBreadcrumbBox, mobileMinimizeBox, mobileToneBox })}`
-    );
+    throw new Error("Mobile upper navigation still contains media controls.");
   }
   const mobileBreadcrumbJustification = await mobileBreadcrumb
     .locator("ol")
     .evaluate((list) => getComputedStyle(list).justifyContent);
-  if (mobileBreadcrumbJustification !== "center") {
-    throw new Error(`Mobile breadcrumbs are not centered: ${mobileBreadcrumbJustification}.`);
+  const [mobileUndockedBreadcrumbBox, mobileUndockedFaviconBox] = await Promise.all([
+    mobileBreadcrumb.boundingBox(),
+    mobileDocumentFavicon.boundingBox(),
+  ]);
+  if (
+    mobileBreadcrumbJustification !== "flex-start" ||
+    !mobileUndockedBreadcrumbBox ||
+    !mobileUndockedFaviconBox ||
+    Math.abs(
+      mobileUndockedBreadcrumbBox.x -
+        (mobileUndockedFaviconBox.x + mobileUndockedFaviconBox.width + 8)
+    ) > 1
+  ) {
+    throw new Error(
+      `Mobile undocked breadcrumbs are misplaced: ${JSON.stringify({ mobileBreadcrumbJustification, mobileUndockedBreadcrumbBox, mobileUndockedFaviconBox })}`
+    );
   }
+  await mobilePage.locator("[data-tone-floating]").waitFor({ state: "visible" });
   await scrollDocument(mobilePage, "Mobile resume before tone selection");
-  const mobileScrollBeforeTone = await mobilePage.evaluate(() => window.scrollY);
+  await mobileResumeNav.locator("[data-document-tone-control]").waitFor({ state: "visible" });
+  const mobileDockedFavicon = mobileDocumentFavicon;
+  await mobileDockedFavicon.waitFor({ state: "visible" });
+  await mobilePage.locator("[data-tone-floating]").waitFor({ state: "hidden" });
+  await mobilePage.locator("[data-site-wordmark]").waitFor({ state: "hidden" });
+  if (
+    (await mobilePage.locator("[data-top-left-scrim]").count()) !== 0 ||
+    (await mobilePage.locator("[data-top-right-scrim]").count()) !== 0
+  ) {
+    throw new Error("Top-corner scrims remained visible after document navigation docked.");
+  }
+  const dockedBreadcrumbBox = await mobileBreadcrumb.boundingBox();
+  const dockedBreadcrumbJustification = await mobileBreadcrumb
+    .locator("ol")
+    .evaluate((list) => getComputedStyle(list).justifyContent);
+  const mobileDockedFaviconBox = await mobileDockedFavicon.boundingBox();
+  const mobileBottomNavBox = await mobileResumeNav.boundingBox();
+  const mobileMediaBox = await mobileHomeControls.boundingBox();
+  if (
+    !dockedBreadcrumbBox ||
+    !mobileDockedFaviconBox ||
+    !mobileBottomNavBox ||
+    !mobileMediaBox ||
+    dockedBreadcrumbJustification !== "flex-start" ||
+    Math.abs(
+      dockedBreadcrumbBox.x -
+        (mobileDockedFaviconBox.x + mobileDockedFaviconBox.width + 8)
+    ) > 1 ||
+    Math.abs(mobileBottomNavBox.y) > 1 ||
+    Math.abs(mobileBottomNavBox.height - 64) > 1 ||
+    Math.abs(mobileMediaBox.y + mobileMediaBox.height - 844) > 1
+  ) {
+    throw new Error(
+      `Upper breadcrumb dock or bottom controls are misplaced: ${JSON.stringify({ dockedBreadcrumbBox, dockedBreadcrumbJustification, mobileBottomNavBox, mobileDockedFaviconBox, mobileMediaBox })}`
+    );
+  }
+  let mobileScrollBeforeTone = await mobilePage.evaluate(() => window.scrollY);
   await mobileMinimizeControl.click();
-  const mobileRestoreControl = mobilePage.getByRole("button", { name: "Restore page" });
-  await mobileRestoreControl.waitFor({ state: "visible" });
+  const mobileMinimizedWordmark = mobilePage.locator("[data-site-wordmark]");
+  await mobileMinimizedWordmark.waitFor({ state: "visible" });
   await mobilePage.locator(".resume-document").waitFor({ state: "hidden" });
   const minimizedFloatingControls = mobilePage.locator("[data-media-controls]");
   await minimizedFloatingControls.waitFor({ state: "visible" });
-  const minimizedAudioPosition = await minimizedFloatingControls
-    .getByRole("button", { name: "Unmute audio" })
-    .evaluate((button) => getComputedStyle(button).position);
+  await mobilePage.locator("[data-tone-floating]").waitFor({ state: "visible" });
+  const minimizedAudioPosition = await minimizedFloatingControls.evaluate(
+    (controls) => getComputedStyle(controls).position
+  );
   const sameMobileVideoWhileMinimized = await mobilePage.evaluate(
     () =>
       (window as Window & { mobileContinuityVideo?: HTMLVideoElement }).mobileContinuityVideo ===
@@ -377,31 +566,31 @@ try {
       `Mobile minimize did not preserve playback or float controls: ${JSON.stringify({ minimizedAudioPosition, sameMobileVideoWhileMinimized })}`
     );
   }
-  await mobileRestoreControl.click();
-  await mobileAudioControl.waitFor({ state: "visible" });
-  await mobilePage.waitForFunction((scrollY) => window.scrollY === scrollY, mobileScrollBeforeTone);
-  await mobileAudioControl.getByRole("button", { name: "Unmute audio" }).click();
-  await mobileAudioControl
+  if ((await minimizedFloatingControls.getByRole("button", { name: "Restore page" }).count()) !== 1) {
+    throw new Error("Minimized controls do not expose one restore button.");
+  }
+  await minimizedFloatingControls.getByRole("button", { name: "Restore page" }).click();
+  await mobilePage.locator(".resume-document").waitFor({ state: "visible" });
+  await mobileHomeControls.waitFor({ state: "visible" });
+  await mobileMinimizedWordmark.waitFor({ state: "visible" });
+  mobileScrollBeforeTone = await mobilePage.evaluate(() => window.scrollY);
+  await mobileHomeControls.getByRole("button", { name: "Unmute audio" }).click();
+  await mobileHomeControls
     .getByRole("button", { name: "Mute audio" })
     .waitFor({ state: "visible" });
-  await mobileToneControl.getByRole("button", { name: "Explore combinations by tone" }).click();
+  await mobilePage.getByRole("button", { name: "Explore combinations by tone" }).click();
   const mobileExplainerAccept = mobilePage.getByRole("button", { name: "OK" });
   if (await mobileExplainerAccept.isVisible()) await mobileExplainerAccept.click();
-  await mobileToneControl
-    .getByRole("button", { name: "Explore combinations by tone" })
+  const mobileToneClose = mobilePage.getByRole("button", { name: "Close tone explorer" });
+  await mobileToneClose
     .waitFor({ state: "visible" });
-  if ((await mobileResumeNav.locator("[data-document-audio-control]").count()) !== 0) {
-    throw new Error("Embedded mute control remained visible while tone selection was open.");
-  }
-  const mobileOverlayClose = mobilePage.locator("[data-tone-explorer-close]");
-  await mobileOverlayClose.waitFor({ state: "visible" });
   const mobileToneBackdropBox = await mobilePage
     .locator("[data-tone-explorer-backdrop]")
     .boundingBox();
   const mobileToneSuggestionsBox = await mobilePage
     .locator("[data-tone-explorer-suggestions]")
     .boundingBox();
-  const mobileOpenToneBox = await mobileOverlayClose.boundingBox();
+  const mobileOpenToneBox = await mobileToneClose.boundingBox();
   const mobileScrollLock = await mobilePage.evaluate(() => ({
     bodyPosition: document.body.style.position,
     bodyTop: document.body.style.top,
@@ -419,14 +608,15 @@ try {
     mobileToneSuggestionsBox.y < mobileOpenToneBox.y + mobileOpenToneBox.height ||
     mobileScrollLock.rootOverflow !== "hidden" ||
     mobileScrollLock.bodyPosition !== "fixed" ||
-    mobileScrollLock.bodyTop !== `-${mobileScrollBeforeTone}px`
+    mobileScrollLock.bodyTop !==
+      (mobileScrollBeforeTone === 0 ? "0px" : `-${mobileScrollBeforeTone}px`)
   ) {
     throw new Error(
       `Mobile tone explorer layout or scroll lock is invalid: ${JSON.stringify({ mobileToneBackdropBox, mobileToneSuggestionsBox, mobileOpenToneBox, mobileScrollLock, mobileScrollBeforeTone })}`
     );
   }
-  await mobileOverlayClose.click();
-  await mobileAudioControl.waitFor({ state: "visible" });
+  await mobileToneClose.click();
+  await mobileHomeControls.waitFor({ state: "visible" });
   const mobileScrollAfterTone = await mobilePage.evaluate(() => ({
     bodyPosition: document.body.style.position,
     rootOverflow: document.documentElement.style.overflow,
@@ -442,21 +632,21 @@ try {
     );
   }
 
-  await mobileToneControl.getByRole("button", { name: "Explore combinations by tone" }).click();
-  await mobileOverlayClose.waitFor({ state: "visible" });
+  await mobilePage.getByRole("button", { name: "Explore combinations by tone" }).click();
+  await mobileToneClose.waitFor({ state: "visible" });
   const toneSubmittedAt = Date.now();
   await mobilePage.getByTitle("Start random walk").click();
   await mobilePage
     .locator('[data-submit-state="succeeded"]')
     .waitFor({ state: "visible", timeout: 500 });
-  await mobileOverlayClose.waitFor({ state: "hidden", timeout: 2000 });
+  await mobileToneClose.waitFor({ state: "hidden", timeout: 2000 });
   const toneSuccessDuration = Date.now() - toneSubmittedAt;
   if (toneSuccessDuration < 900) {
     throw new Error(
       `Tone explorer closed before its success check was readable: ${toneSuccessDuration}ms.`
     );
   }
-  await mobileAudioControl.waitFor({ state: "visible" });
+  await mobileHomeControls.waitFor({ state: "visible" });
   await mobilePage.evaluate(() => {
     (window as Window & { mobileContinuityVideo?: HTMLVideoElement }).mobileContinuityVideo =
       document.querySelector("video") ?? undefined;
@@ -464,23 +654,15 @@ try {
 
   await scrollDocument(mobilePage, "Mobile resume");
   const mobileStickyNavBox = await mobileResumeNav.boundingBox();
-  const mobileStickyAudioBox = await mobileAudioControl.boundingBox();
-  const mobileStickyToneBox = await mobileToneControl.boundingBox();
+  const mobileControlsAfterScroll = await mobileHomeControls.boundingBox();
   if (
     !mobileStickyNavBox ||
-    !mobileStickyAudioBox ||
-    !mobileStickyToneBox ||
-    mobileStickyNavBox.y < -1 ||
-    mobileStickyNavBox.y > 1 ||
-    mobileStickyAudioBox.y < mobileStickyNavBox.y ||
-    mobileStickyToneBox.y < mobileStickyNavBox.y ||
-    mobileStickyAudioBox.y + mobileStickyAudioBox.height >
-      mobileStickyNavBox.y + mobileStickyNavBox.height ||
-    mobileStickyToneBox.y + mobileStickyToneBox.height >
-      mobileStickyNavBox.y + mobileStickyNavBox.height
+    !mobileControlsAfterScroll ||
+    Math.abs(mobileStickyNavBox.y - mobileBottomNavBox.y) > 1 ||
+    Math.abs(mobileControlsAfterScroll.y - mobileMediaBox.y) > 1
   ) {
     throw new Error(
-      `Mobile media controls did not remain inside sticky navigation: ${JSON.stringify({ mobileStickyNavBox, mobileStickyAudioBox, mobileStickyToneBox })}`
+      `Mobile bottom controls moved during document scroll: ${JSON.stringify({ mobileStickyNavBox, mobileMediaBox, mobileControlsAfterScroll })}`
     );
   }
   const sameMobileVideo = await mobilePage.evaluate(
@@ -490,10 +672,15 @@ try {
   );
   if (!sameMobileVideo) throw new Error("ComboPlayer remounted on the mobile resume route.");
 
+  await mobileMinimizeControl.click();
+  await mobilePage.locator("[data-site-wordmark]").waitFor({ state: "visible" });
+  await mobilePage.getByRole("button", { name: "Restore page" }).click();
+  await mobilePage.locator(".resume-document").waitFor({ state: "visible" });
   await mobileResumeNav.getByRole("link", { name: "Home" }).click();
-  await mobilePage.getByRole("link", { name: "Blog" }).click();
-  await mobilePage.locator("[data-document-audio-control]").waitFor({ state: "visible" });
-  await mobilePage.locator("[data-document-tone-control]").waitFor({ state: "visible" });
+  await navigateFromHome(mobilePage, "Blog");
+  await mobilePage.locator(".blog-document").waitFor({ state: "visible" });
+  await mobilePage.getByRole("button", { name: "Minimize page" }).waitFor({ state: "visible" });
+  await mobilePage.locator("[data-media-controls]").waitFor({ state: "visible" });
   if (mobileRandomRequests !== 2) {
     throw new Error("Mobile document navigation triggered another random combo request.");
   }
@@ -509,7 +696,7 @@ try {
     (window as Window & { mediumContinuityVideo?: HTMLVideoElement }).mediumContinuityVideo =
       document.querySelector("video") ?? undefined;
   });
-  await mediumPage.getByRole("link", { name: "Blog" }).click();
+  await navigateFromHome(mediumPage, "Blog");
   const mediumBlogCard = mediumPage.locator(".blog-document");
   await mediumBlogCard.waitFor({ state: "visible" });
   const mediumCardBox = await mediumBlogCard.boundingBox();
@@ -523,30 +710,13 @@ try {
     await mediumPage.locator(".blog-document h1").waitFor({ state: "visible" });
   }
   const mediumNav = mediumPage.locator("[data-document-nav]");
-  const mediumAudio = mediumNav.locator("[data-document-audio-control]");
-  const mediumTone = mediumNav.locator("[data-document-tone-control]");
   const mediumMinimize = mediumNav.getByRole("button", { name: "Minimize page" });
-  await mediumAudio.waitFor({ state: "visible" });
-  await mediumTone.waitFor({ state: "visible" });
   await mediumMinimize.waitFor({ state: "visible" });
-  const mediumAudioBox = await mediumAudio.boundingBox();
   const mediumBreadcrumb = mediumNav.getByRole("navigation", { name: "Breadcrumb" });
-  const mediumBreadcrumbBox = await mediumBreadcrumb.boundingBox();
-  const mediumMinimizeBox = await mediumMinimize.boundingBox();
-  const mediumToneBox = await mediumTone.boundingBox();
-  if (
-    !mediumAudioBox ||
-    !mediumBreadcrumbBox ||
-    !mediumMinimizeBox ||
-    !mediumToneBox ||
-    mediumAudioBox.x + mediumAudioBox.width > mediumBreadcrumbBox.x ||
-    mediumBreadcrumbBox.x + mediumBreadcrumbBox.width > mediumToneBox.x ||
-    mediumToneBox.x + mediumToneBox.width > mediumMinimizeBox.x
-  ) {
-    throw new Error(
-      `Medium controls do not flank breadcrumbs: ${JSON.stringify({ mediumAudioBox, mediumBreadcrumbBox, mediumMinimizeBox, mediumToneBox })}`
-    );
-  }
+  await mediumBreadcrumb.waitFor({ state: "visible" });
+  const mediumControls = mediumPage.locator("[data-media-controls]");
+  await mediumControls.waitFor({ state: "visible" });
+  const mediumControlsBeforeScroll = await mediumControls.boundingBox();
   const mediumBreadcrumbJustification = await mediumBreadcrumb
     .locator("ol")
     .evaluate((list) => getComputedStyle(list).justifyContent);
@@ -555,9 +725,18 @@ try {
   }
   await scrollDocument(mediumPage, "Medium blog");
   const mediumStickyNavBox = await mediumNav.boundingBox();
-  if (!mediumStickyNavBox || mediumStickyNavBox.y < -1 || mediumStickyNavBox.y > 1) {
+  const mediumControlsAfterScroll = await mediumControls.boundingBox();
+  if (
+    !mediumStickyNavBox ||
+    !mediumControlsBeforeScroll ||
+    !mediumControlsAfterScroll ||
+    Math.abs(mediumStickyNavBox.y) > 1 ||
+    Math.abs(mediumStickyNavBox.height - 64) > 1 ||
+    Math.abs(mediumControlsAfterScroll.y + mediumControlsAfterScroll.height - 600) > 1 ||
+    Math.abs(mediumControlsBeforeScroll.y - mediumControlsAfterScroll.y) > 1
+  ) {
     throw new Error(
-      `Medium document navigation did not remain sticky: ${JSON.stringify(mediumStickyNavBox)}`
+      `Medium navigation or bottom controls moved incorrectly: ${JSON.stringify({ mediumStickyNavBox, mediumControlsBeforeScroll, mediumControlsAfterScroll })}`
     );
   }
   const sameMediumVideo = await mediumPage.evaluate(

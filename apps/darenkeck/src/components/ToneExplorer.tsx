@@ -111,7 +111,7 @@ export function ToneExplorer({
       {showCloseControl && open ? (
         <button
           aria-label="Close tone explorer"
-          className="pointer-events-auto fixed z-[130] inline-flex h-10 w-10 items-center justify-center rounded-full border border-sky-300 bg-black/55 text-sky-200 shadow-[0_0_24px_rgba(56,189,248,0.45)] backdrop-blur-sm transition hover:bg-black/75 [right:max(1.5rem,env(safe-area-inset-right))] [top:max(1.5rem,env(safe-area-inset-top))] print:hidden"
+          className="pointer-events-auto fixed z-[130] inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/55 text-sky-200 shadow-[0_0_24px_rgba(56,189,248,0.45)] backdrop-blur-sm transition hover:bg-black/75 [right:max(1.5rem,env(safe-area-inset-right))] [top:max(1.5rem,env(safe-area-inset-top))] print:hidden"
           data-tone-explorer-close
           onClick={closeExplorer}
           title="Close tone explorer"
@@ -150,7 +150,7 @@ export function ToneExplorer({
 
       <div
         aria-hidden={!open}
-        className={`pointer-events-none fixed left-4 z-[120] max-w-[calc(100vw-2rem)] transition-opacity duration-200 [bottom:max(1.5rem,calc(env(safe-area-inset-bottom)+1rem))] sm:left-6 sm:[bottom:max(2.5rem,calc(env(safe-area-inset-bottom)+2rem))] print:hidden ${open ? "visible opacity-100" : "invisible opacity-0"}`}
+        className={`pointer-events-none fixed left-4 z-[120] max-w-[calc(100vw-2rem)] transition-opacity duration-200 [bottom:max(6rem,calc(env(safe-area-inset-bottom)+5rem))] sm:left-6 print:hidden ${open ? "visible opacity-100" : "invisible opacity-0"}`}
       >
         <ToneWordSubmitPile
           maxColumns={1}

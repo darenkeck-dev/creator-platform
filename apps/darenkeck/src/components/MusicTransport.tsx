@@ -2,45 +2,93 @@ import type { PublicMusicTrack } from "@media-manager/contracts";
 import { Link } from "react-router-dom";
 
 import { formatMusicDuration } from "../lib/music";
+import { ContentSizeButton } from "./ContentSizeButton";
 import { ShellLoader } from "./ShellLoader";
 
 type MusicTransportProps = {
   audioMuted: boolean;
+  contentMinimized: boolean;
   currentTime: number;
   duration: number;
   loading?: boolean;
   playing: boolean;
   releaseId: string;
   releaseTitle: string;
+  showBottomMinimize: boolean;
   track: PublicMusicTrack;
   onExit: () => void;
   onMuteToggle: () => void;
+  onMinimize: () => void;
+  onNavigate: () => void;
   onPlayToggle: () => void;
   onSeek: (seconds: number) => void;
 };
 
 const controlClassName =
-  "flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/40 bg-black/45 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/65";
-const transportClassName =
-  "pointer-events-auto fixed left-1/2 top-[max(1rem,env(safe-area-inset-top))] z-[140] flex w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 items-center gap-2 rounded-2xl border border-white/35 bg-black/75 p-2 text-white shadow-2xl backdrop-blur-md sm:gap-3 sm:px-3";
+  "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-md transition hover:bg-black/65 supports-[backdrop-filter]:bg-black/30 min-[360px]:h-12 min-[360px]:w-12";
+const controlsClassName =
+  "pointer-events-none fixed inset-x-0 bottom-0 z-[140] grid h-[max(4rem,calc(env(safe-area-inset-bottom)+3.5rem))] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-t border-white/25 bg-black/40 px-4 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(0,0,0,0.3)] backdrop-blur-md sm:gap-3 sm:px-6";
+const centerClassName =
+  "flex min-w-0 justify-center px-1 text-center text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.95)]";
 
-export function MusicTransportLoader() {
+export function MusicTransportLoader({
+  audioMuted,
+  contentMinimized,
+  onMuteToggle,
+  onMinimize,
+  onNavigate,
+  onPlayToggle,
+  playing,
+  showBottomMinimize,
+}: {
+  audioMuted: boolean;
+  contentMinimized: boolean;
+  onMuteToggle: () => void;
+  onMinimize: () => void;
+  onNavigate: () => void;
+  onPlayToggle: () => void;
+  playing: boolean;
+  showBottomMinimize: boolean;
+}) {
   return (
-    <aside
-      aria-label="Music player loading"
-      className={`${transportClassName} min-h-16 justify-center`}
-      data-music-transport
-      data-music-transport-loading
-    >
-      <ShellLoader />
-    </aside>
+    <>
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[125] h-28 bg-gradient-to-t from-black/65 to-transparent" />
+      <aside
+        aria-label="Music player loading"
+        className={controlsClassName}
+        data-music-transport
+        data-music-transport-loading
+      >
+        <div className="pointer-events-auto flex items-center gap-2">
+          <MusicPlayButton context="combo" onClick={onPlayToggle} playing={playing} />
+          <MusicMuteButton audioMuted={audioMuted} context="audio" onClick={onMuteToggle} />
+        </div>
+        <div className={centerClassName}><ShellLoader /></div>
+        <div className="pointer-events-auto flex items-center gap-2">
+          {contentMinimized || showBottomMinimize ? (
+            <ContentSizeButton
+              expanded={!contentMinimized}
+              onClick={contentMinimized ? onNavigate : onMinimize}
+            />
+          ) : null}
+        </div>
+      </aside>
+    </>
   );
 }
 
-export function MusicPlayButton({ playing, onClick }: { playing: boolean; onClick: () => void }) {
+export function MusicPlayButton({
+  context = "music",
+  playing,
+  onClick,
+}: {
+  context?: "combo" | "music";
+  playing: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
-      aria-label={playing ? "Pause music" : "Play music"}
+      aria-label={playing ? `Pause ${context}` : `Play ${context}`}
       className={controlClassName}
       onClick={onClick}
       type="button"
@@ -60,14 +108,16 @@ export function MusicPlayButton({ playing, onClick }: { playing: boolean; onClic
 
 export function MusicMuteButton({
   audioMuted,
+  context = "music",
   onClick,
 }: {
   audioMuted: boolean;
+  context?: "audio" | "music";
   onClick: () => void;
 }) {
   return (
     <button
-      aria-label={audioMuted ? "Unmute music" : "Mute music"}
+      aria-label={audioMuted ? `Unmute ${context}` : `Mute ${context}`}
       className={controlClassName}
       onClick={onClick}
       type="button"
@@ -93,14 +143,14 @@ export function MusicMuteButton({
 export function MusicExitButton({ onClick }: { onClick: () => void }) {
   return (
     <button
-      aria-label="Return to ambient playback"
+      aria-label="Stop music and return to ambient playback"
       className={controlClassName}
       onClick={onClick}
-      title="Return to ambient playback"
+      title="Stop music"
       type="button"
     >
-      <svg aria-hidden="true" fill="none" height="24" stroke="currentColor" strokeLinecap="round" strokeWidth="2" viewBox="0 0 24 24" width="24">
-        <path d="M6 6l12 12M18 6 6 18" />
+      <svg aria-hidden="true" fill="currentColor" height="24" viewBox="0 0 24 24" width="24">
+        <rect height="12" rx="1" width="12" x="6" y="6" />
       </svg>
     </button>
   );
@@ -108,61 +158,79 @@ export function MusicExitButton({ onClick }: { onClick: () => void }) {
 
 export function MusicTransport({
   audioMuted,
+  contentMinimized,
   currentTime,
   duration,
   loading = false,
   playing,
   releaseId,
   releaseTitle,
+  showBottomMinimize,
   track,
   onExit,
+  onMinimize,
   onMuteToggle,
+  onNavigate,
   onPlayToggle,
   onSeek,
 }: MusicTransportProps) {
+  const progress = duration > 0 ? Math.min(1, Math.max(0, currentTime / duration)) : 0;
+
   return (
-    <aside
-      aria-label="Music player"
-      className={transportClassName}
-      data-music-transport
-    >
-      <MusicPlayButton onClick={onPlayToggle} playing={playing} />
-      <MusicMuteButton audioMuted={audioMuted} onClick={onMuteToggle} />
-      <div className="flex min-w-0 flex-1 justify-center">
-        {loading ? (
-          <ShellLoader />
-        ) : (
-          <div className="min-w-0 flex-1">
+    <>
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[125] h-28 bg-gradient-to-t from-black/65 to-transparent" />
+      <aside aria-label="Music player" className={controlsClassName} data-music-transport>
+        <div className="pointer-events-auto col-start-1 flex items-center gap-2">
+          <MusicPlayButton onClick={onPlayToggle} playing={playing} />
+          <MusicMuteButton audioMuted={audioMuted} onClick={onMuteToggle} />
+        </div>
+        <div className={`${centerClassName} col-start-2`}>
+          {loading ? (
+            <ShellLoader />
+          ) : (
             <Link
               aria-label={`View ${releaseTitle} on the Music page`}
-              className="flex min-w-0 items-baseline gap-2 transition hover:text-cyan-100"
+              className="pointer-events-auto min-w-0 transition hover:text-cyan-100"
+              onClick={onNavigate}
               to={`/music#release-${releaseId}`}
             >
-              <strong className="truncate text-sm">{track.title}</strong>
-              <span className="hidden truncate text-xs text-white/55 sm:inline">{releaseTitle}</span>
+              <strong className="block truncate text-sm">{track.title}</strong>
+              <span className="mt-1 hidden truncate text-[11px] text-white/60 sm:block">
+                {releaseTitle}
+              </span>
             </Link>
-            <div className="mt-1 flex items-center gap-2">
-              <span className="hidden w-9 text-right text-[10px] tabular-nums text-white/60 sm:block">
-                {formatMusicDuration(currentTime) ?? "0:00"}
-              </span>
-              <input
-                aria-label="Music progress"
-                className="min-w-0 flex-1 accent-cyan-200"
-                max={duration || 0}
-                min={0}
-                onChange={(event) => onSeek(Number(event.target.value))}
-                step={0.1}
-                type="range"
-                value={Math.min(currentTime, duration || currentTime)}
-              />
-              <span className="hidden w-9 text-[10px] tabular-nums text-white/60 sm:block">
-                {formatMusicDuration(duration) ?? "0:00"}
-              </span>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
+        <div className="pointer-events-auto col-start-3 flex items-center gap-2">
+          <MusicExitButton onClick={onExit} />
+          {contentMinimized || showBottomMinimize ? (
+            <ContentSizeButton
+              expanded={!contentMinimized}
+              onClick={contentMinimized ? onNavigate : onMinimize}
+            />
+          ) : null}
+        </div>
+      </aside>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-[145] h-1 bg-white/20"
+        data-music-progress-rail
+      >
+        <div
+          className="h-full bg-cyan-100 transition-[width] duration-150 ease-linear motion-reduce:transition-none"
+          style={{ width: `${progress * 100}%` }}
+        />
       </div>
-      <MusicExitButton onClick={onExit} />
-    </aside>
+      <input
+        aria-label={`Music progress: ${formatMusicDuration(currentTime) ?? "0:00"} of ${formatMusicDuration(duration) ?? "0:00"}`}
+        className="fixed inset-x-0 bottom-0 z-[150] h-5 w-full cursor-pointer opacity-0"
+        max={duration || 0}
+        min={0}
+        onChange={(event) => onSeek(Number(event.target.value))}
+        step={0.1}
+        type="range"
+        value={Math.min(currentTime, duration || currentTime)}
+      />
+    </>
   );
 }

@@ -79,16 +79,17 @@ export function MusicPage() {
       ) : null}
       {playback.error ? <p className="mb-4 text-sm text-red-200">{playback.error}</p> : null}
 
-      <div className="divide-y divide-white/15 border-y border-white/15">
-        {releases.map((release) => (
+      {releases.length > 0 ? (
+        <div className="divide-y divide-white/15 border-y border-white/15">
+          {releases.map((release) => (
           <article
-            className="grid scroll-mt-24 gap-6 py-8 sm:grid-cols-[12rem_minmax(0,1fr)]"
+            className="grid scroll-mt-24 gap-6 pt-8 sm:grid-cols-[12rem_minmax(0,1fr)]"
             id={`release-${release.id}`}
             key={release.id}
           >
             <img
               alt={release.coverAlt}
-              className="aspect-square w-full max-w-48 rounded-xl border border-white/15 object-cover"
+              className="mx-auto aspect-square w-full max-w-48 rounded-xl border border-white/15 object-cover sm:mx-0"
               decoding="async"
               loading="lazy"
               src={release.coverUrl}
@@ -118,7 +119,7 @@ export function MusicPage() {
                       >
                         <span className="flex w-5 shrink-0 justify-end text-xs tabular-nums text-white/45">
                           {current && playback.playing ? (
-                            <svg aria-hidden="true" fill="currentColor" height="11" viewBox="0 0 24 24" width="11">
+                            <svg aria-hidden="true" fill="currentColor" height="16" viewBox="0 0 24 24" width="16">
                               <path d="M8 5v14l11-7z" />
                             </svg>
                           ) : (
@@ -149,8 +150,9 @@ export function MusicPage() {
               </ol>
             </div>
           </article>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : null}
     </DocumentShell>
   );
 }

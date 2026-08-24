@@ -6,6 +6,10 @@
   --ink: oklch(0.96 0.01 260);
   --panel: oklch(0.2 0.03 250 / 0.82);
   --panel-border: oklch(0.72 0.08 230 / 0.3);
+  --primary-red: #fa0100;
+  --primary-orange: #fd4700;
+  --primary-yellow: #e9cc00;
+  --primary-blue: #0086ba;
 }
 
 * {
@@ -14,14 +18,14 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
+  min-height: 100dvh;
   color: var(--ink);
   background: #000;
   font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
 }
 
 #root {
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .glass-card {
