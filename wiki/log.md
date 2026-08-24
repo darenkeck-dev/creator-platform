@@ -2,6 +2,7 @@
 
 ## [2026-08-24] web | experimental homepage navigation
 
+- Published Darenkeck production from content revision `9e6eb043f4a05729771d569057edda3f7f746a66`; CloudFront invalidation `I4PU4ZXG0UEA7OXEXS1RE68VJU` completed and the live shell serves the new application bundle.
 - Deployed `MediaManagerApiStack` with public `audioAssetId`, verified all 15 tracks across two live releases expose identity, joined a live random combo to its release, removed the temporary URL/title fallback, and made the client contract require asset identity.
 - Changed the Home navigation transition from a vertical rise to a right-to-left clip-path expansion that retracts toward the hamburger.
 - Removed the Home shelf's desktop bottom corner rounding.
