@@ -78,6 +78,7 @@ Darenkeck homepage explorer:
 - Opening the explorer temporarily collapses the bulletin; closing it restores the prior bulletin state.
 - Selected words use the shared review-style submit pile. Submit remains available with no words, which switches playback to a fully random sequence.
 - `App` is the persistent React Router layout for `/` and `/dev`; it owns the fixed player, slot manager, mute state, picker state, and random/search/walk journey while child route content changes through an outlet.
+- `DocumentShell` keeps favicon, breadcrumbs, and expanded `-` in a stable 64px sticky row at the top of the document shelf, then portals playback and route actions into a separate 40%-black blurred dock flush to the viewport base. Breadcrumb-bearing rows omit hamburger. When sticky, Tone moves immediately before `-` on the right; the floating signature and Tone hide. Mobile breadcrumbs always left-align eight pixels after the favicon, while desktop breadcrumbs stay centered. This frees the bottom center for track metadata. Minimized states expose `+` in the base row.
 
 ## Public developer profile
 
@@ -110,7 +111,7 @@ Darenkeck homepage explorer:
 - Track records reference authoritative audio assets; release records reference a cover image asset plus ordered track IDs. Neither record duplicates HLS or cover delivery URLs.
 - Authenticated `/music/*` routes provide revision-checked administration. Library renders the release index alongside assets; `/releases/new` and `/releases/:id` provide release creation, cover and batch-track upload, ordering, purchase-link editing, readiness, HLS preview, and explicit publication.
 - Publication validates current assets, makes required media public, and atomically publishes catalog records and reverse-link aggregates in the existing Assets DynamoDB table.
-- Read-only `GET /public/music` resolves current HLS and signed cover delivery from authoritative assets, omitting unavailable tracks and dependent releases.
+- Read-only `GET /public/music` resolves current HLS, public audio-asset identity, and signed cover delivery from authoritative assets, omitting unavailable tracks and dependent releases. Darenkeck uses audio-asset identity to link a random combo's soundtrack back to its published release.
 - Asset privacy and direct/recursive deletion honor official-music reverse links so published media cannot be silently detached or orphaned.
 
 ## Deployment model

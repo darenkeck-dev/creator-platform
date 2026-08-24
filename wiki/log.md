@@ -1,10 +1,45 @@
 # Wiki Log
 
+## [2026-08-23] web | restore minimized content from bottom controls
+
+- Removed the hamburger navigation and made the rightmost bottom-row control `-` while expanded and `+` while minimized.
+- Moved document breadcrumbs, minimization, route actions, and ambient playback into one portaled row flush to the screen base. Home, minimized, and music states use the same base-row geometry, and homepage/document panels end directly at the dock without spacer gaps. The document dock hides for minimized content, music playback, and the tone explorer. The wordmark and Tone remain in darkened upper corners.
+- Replaced Home's fixed compact panel with the Blog index's full-width shelf styling and normal-flow, bottom-aligned growth behavior while retaining the shared edge dock.
+- Moved Home's internal route links beside the introduction, demoted the external Wayfarer link, replaced the footer chevron with an All news heading action, and let latest news finish the shelf at the bottom dock.
+- Reworked Home navigation into a top Home-icon/Resume/Blog/Music rail and moved the sole Wayfarer Records link inline into the introduction.
+- Removed Home and all framing from the shelf navigation, tightened Resume/Blog/Music link padding, and gave Home's bottom controls the same filled dock surface as document routes.
+- Restored the shelf navigation to `text-sm`, reduced only its vertical padding and surrounding spacing, and distributed its three neutral links evenly; the current site palette does not contain three sufficiently distinct established navigation colors.
+- Constrained Home navigation to the left two-thirds with equally distributed left-aligned links, and moved document breadcrumbs into a narrow sticky upper row so the filled bottom row's center is available for media metadata.
+- Moved expanded document `-` controls into the upper breadcrumb row and strengthened all bottom media docks with darker fill, heavier backdrop blur, and a deeper upward shadow.
+- Replaced Home's horizontal route rail with a borderless upper-right 2x2 cluster: Resume / `-` above Blog / Music. Expanded Home no longer duplicates `-` in the bottom media dock.
+- Replaced Home's oversized 2x2 cluster with a compact borderless hamburger beside `-`; its popover contains Resume, Blog, and Music.
+- Matched Home's hamburger to the adjacent `-` control with the same 32px square treatment, hover behavior, stroke weight, and inner rounded-square outline.
+- Promoted the hamburger into every sticky document breadcrumb row beside `-`; non-Home menus include Home and remain attached while the row docks.
+- Removed borders from circular playback and Tone buttons, and standardized every minimized `+` on the same compact square control and inner outline as `-`.
+- Removed the hamburger glyph's inner square and expanded its three strokes to occupy the same visual footprint as the adjacent size control.
+- Removed the divider beneath the homepage Latest news heading.
+- Replaced the music transport exit `X` with a filled stop-square glyph and an explicit stop-music label.
+- Increased bottom media-dock transparency from 85% to 70% black while retaining the stronger blur and upward shadow.
+- Increased bottom media-dock transparency to 40% black and reduced its blur and upward shadow.
+- Increased the sticky document row to a stable 64px and restored docking handoff: signature moves left of breadcrumbs, Tone moves immediately left of hamburger, and their floating corner instances hide until undocked or minimized.
+- Removed hamburger from breadcrumb-bearing rows. On Home, opening hamburger rotates its strokes vertical, fades the introduction, and expands Resume/Blog/Music horizontally to the left.
+- Reversed the Home hamburger opening rotation counterclockwise, enlarged and spaced its horizontal links, and established favicon-sampled red/orange/yellow/blue tokens for Music/Blog/All news/Resume navigation.
+- Extended favicon palette coding to document breadcrumbs: Music red, Blog orange, News yellow, and Resume blue, with parent crumbs expressed through opacity.
+- Removed the Home navigation text backdrop and distributed Resume, Blog, and Music evenly across three equal horizontal columns.
+- Prevented Home page scrolling by normalizing the root height chain to `100dvh` and constraining the Home experience to a clipped dynamic viewport; document routes retain normal scrolling.
+- Replaced the docked signature with the favicon and left-aligned mobile docked breadcrumbs eight pixels to its right; desktop docked breadcrumbs remain centered.
+- Kept the favicon visible in undocked document rows and applied the same mobile left alignment before and after docking.
+- Hid both upper-corner darkening scrims while document navigation is docked; they return when undocked or minimized.
+- Halved both opacity stops in the upper-corner darkening gradients.
+- Kept play/pause, mute/unmute, and size controls mounted during initial track loading; only the transport's center metadata slot changes to the loading indicator.
+
 ## [2026-08-22] web | add Darenkeck music catalog and persistent player
 
 - Added the lazy `/music` document route, homepage navigation, sitemap entry, validated `GET /public/music` loading, newest-first release rendering, covers, purchase links, and ordered clickable tracks.
-- Added persistent app-level music queues and transport controls. Each track pairs official audio with a fresh random looping video; audio remains timeline authority while muted, progress seeking targets the song, tracks auto-advance within its release, and the final track returns to the retained ambient combo assignment. Direct track selection starts unmuted, while automatic advancement preserves the listener's current mute choice. Player labels link back to the matching release section without interrupting playback. On long document pages, the floating transport hands its matching play, mute, and exit controls into the pinned breadcrumb row while scrolled. Music catalog loading, track selection, and auto-advance reuse the combo busy indicator inside the catalog, transport shell, or center of the docked row without unmounting an active player's controls; selected track rows retain their title and animate a one-to-three-dot suffix.
+- Added persistent app-level music queues and floating bottom controls. Each track pairs official audio with a fresh random looping video; audio remains timeline authority while muted, progress seeking targets the song, tracks auto-advance within its release, and the final track returns to the retained ambient combo assignment. Direct track selection starts unmuted, while automatic advancement preserves the listener's current mute choice. Music mode keeps a linked track label visible above the controls and exposes a full-width `4px` screen-edge seek rail; ambient mode omits the rail. Music catalog loading, track selection, and auto-advance reuse the combo busy indicator without unmounting active controls; selected track rows retain their title and animate a one-to-three-dot suffix.
 - Extended the shared `ComboPlayer` with explicit timeline authority, background progress reporting, and imperative play/pause/seek controls without changing default ambient behavior.
+- Added public audio-asset identity to published track payloads so random combos using released music show a persistent track/release link. The `Daren Keck` wordmark now remains upper-left across home, document, music, and minimized states. Released-track navigation restores minimized content before navigating.
+- Moved ambient Tone out of the bottom controls so it remains upper-right independently of document navigation.
 - Verified 31 Darenkeck tests, Darenkeck and shared typechecks/lints, the Darenkeck production build, route continuity, and desktop plus 320px production browser smokes. This source update is not deployed, and all prepared releases remain drafts.
 
 ## [2026-08-22] web | move release index into Library
