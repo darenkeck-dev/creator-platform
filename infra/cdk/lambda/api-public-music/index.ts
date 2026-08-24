@@ -139,6 +139,7 @@ export async function handler(): Promise<{
       publicTracks.set(track.id, {
         id: track.id,
         title: track.title,
+        audioAssetId: track.assetId,
         durationSeconds: track.durationSeconds,
         audioUrl: asset.stream.hlsMasterUrl,
         purchaseLinks: track.purchaseLinks,

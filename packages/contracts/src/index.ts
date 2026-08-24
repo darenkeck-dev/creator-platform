@@ -959,6 +959,7 @@ export const PublicMusicTrackSchema = z
   .object({
     id: MusicIdSchema,
     title: MusicTitleSchema,
+    audioAssetId: z.string().trim().min(1).optional(),
     durationSeconds: z.number().positive().finite().optional(),
     audioUrl: z.string().url(),
     purchaseLinks: MusicPurchaseLinksSchema.min(1),

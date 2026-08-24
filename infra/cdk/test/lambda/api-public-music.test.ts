@@ -132,6 +132,7 @@ describe("api-public-music lambda", () => {
     expect(result.statusCode).toBe(200);
     const body = JSON.parse(result.body);
     expect(body.tracks).toHaveLength(1);
+    expect(body.tracks[0].audioAssetId).toBe("audio-1");
     expect(body.tracks[0].audioUrl).toBe("https://cdn.example.com/audio-1.m3u8");
     expect(body.releases).toHaveLength(1);
     expect(body.releases[0].coverUrl).toContain("X-Amz-Signature");
@@ -139,7 +140,6 @@ describe("api-public-music lambda", () => {
     expect(result.headers?.["cache-control"]).toBe("public, max-age=300");
     expect(calls.filter((call) => call instanceof BatchGetCommand)).toHaveLength(1);
     expect(JSON.stringify(body)).not.toContain("ownerEmail");
-    expect(JSON.stringify(body)).not.toContain("assetId");
     expect(JSON.stringify(body)).not.toContain("publicationStatus");
   });
 
