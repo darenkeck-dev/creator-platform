@@ -15,7 +15,6 @@ import { Link, useLocation, useOutlet } from "react-router-dom";
 import { BulletinSection } from "./components/BulletinSection";
 import { ContentSizeButton } from "./components/ContentSizeButton";
 import { DocumentControlsProvider } from "./components/DocumentControlsContext";
-import { NavigationMenu } from "./components/NavigationMenu";
 import { MusicPlaybackContext } from "./components/MusicPlaybackContext";
 import {
   MusicPlayButton,
@@ -449,6 +448,7 @@ export function App() {
   const [homeNavigationOpen, setHomeNavigationOpen] = useState(false);
   const [documentNavStuck, setDocumentNavStuck] = useState(false);
   const [isToneExplorerOpen, setIsToneExplorerOpen] = useState(false);
+  const [toneExplorerOpenedFromDock, setToneExplorerOpenedFromDock] = useState(false);
   const [showToneExplorerExplainer, setShowToneExplorerExplainer] = useState(false);
   const [toneExplorerAcknowledged, setToneExplorerAcknowledged] = useState(false);
   const [playerEnabled, setPlayerEnabled] = useState(false);
@@ -700,15 +700,20 @@ export function App() {
     if (isToneExplorerOpen) {
       return;
     }
+    setToneExplorerOpenedFromDock(
+      documentNavStuck && isDocumentPath(location.pathname) && !isContentMinimized
+    );
     setIsToneExplorerOpen(true);
   };
 
   const closeToneExplorer = () => {
+    setToneExplorerOpenedFromDock(false);
     setIsToneExplorerOpen(false);
   };
 
   const closeToneExplorerForNavigation = useEffectEvent(() => {
     setShowToneExplorerExplainer(false);
+    setToneExplorerOpenedFromDock(false);
     if (!isToneExplorerOpen) {
       return;
     }
@@ -725,6 +730,7 @@ export function App() {
 
   const handleContentMinimize = () => {
     setShowToneExplorerExplainer(false);
+    setToneExplorerOpenedFromDock(false);
     setIsToneExplorerOpen(false);
     setIsContentMinimized(true);
   };
@@ -732,6 +738,7 @@ export function App() {
   const handleMenuNavigate = () => {
     setIsContentMinimized(false);
     setShowToneExplorerExplainer(false);
+    setToneExplorerOpenedFromDock(false);
     setIsToneExplorerOpen(false);
   };
 
@@ -1032,7 +1039,7 @@ export function App() {
               onClose={closeToneExplorer}
               onSubmit={handleToneSubmit}
               open={isToneExplorerOpen}
-              showCloseControl={false}
+              showCloseControl={toneExplorerOpenedFromDock}
             />
           ) : null}
 
@@ -1112,30 +1119,126 @@ export function App() {
           <div className="relative mx-auto w-full max-w-4xl">
             <div
               data-home-panel
-              className={`relative overflow-hidden transition-all duration-300 ease-in-out ${
+              className={`relative transition-all duration-300 ease-in-out ${
                 !isContentMinimized && !isToneExplorerOpen
-                  ? "rounded-none border-y bg-black/65 px-6 pb-0 pt-2 shadow-2xl shadow-black/30 backdrop-blur-[10px] sm:px-10 lg:rounded-2xl lg:border lg:px-14"
+                  ? ""
                   : "rounded-none border-0 p-0 shadow-none lg:rounded-2xl"
               }`}
             >
               <div
                 aria-hidden={isContentMinimized || isToneExplorerOpen}
-                className={`grid overflow-hidden transition-all duration-300 ease-in-out ${
+                className={`grid transition-all duration-300 ease-in-out ${
                   !isContentMinimized && !isToneExplorerOpen
-                    ? "grid-rows-[1fr] opacity-100"
-                    : "pointer-events-none grid-rows-[0fr] opacity-0"
+                    ? "grid-rows-[1fr] overflow-visible opacity-100"
+                    : "pointer-events-none grid-rows-[0fr] overflow-hidden opacity-0"
                 }`}
                 inert={isContentMinimized || isToneExplorerOpen}
               >
                 <div className="min-h-0">
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
-                    <header
-                      aria-hidden={homeNavigationOpen}
-                      className={`max-w-xl pt-1 transition-opacity duration-200 ${homeNavigationOpen ? "pointer-events-none opacity-0" : "opacity-100"}`}
-                      data-home-intro
-                      inert={homeNavigationOpen}
-                    >
-                      <p className="text-sm leading-relaxed text-white/85">
+                  <nav
+                    aria-hidden={!homeNavigationOpen}
+                    aria-label="Primary"
+                    className={`absolute inset-x-0 bottom-full z-0 grid h-40 grid-rows-4 gap-1 transition-[opacity,transform] duration-200 ease-out ${homeNavigationOpen ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-full opacity-0"}`}
+                    data-home-navigation-rows
+                    inert={!homeNavigationOpen}
+                  >
+                    {[
+                      { color: "var(--primary-blue)", label: "Resume", offset: 87, route: "/dev" },
+                      {
+                        color: "var(--primary-orange)",
+                        label: "Blog",
+                        offset: 56,
+                        route: "/blog",
+                      },
+                      {
+                        color: "var(--primary-red)",
+                        label: "Music",
+                        offset: 35,
+                        route: "/music",
+                      },
+                      { color: "var(--primary-yellow)", label: "News", offset: 10, route: "/news" },
+                    ].map(({ color, label, offset, route }) => {
+                      const maskId = `home-navigation-${label.toLowerCase()}-mask`;
+                      const edgeMaskId = `home-navigation-${label.toLowerCase()}-edge-mask`;
+                      return (
+                        <Link
+                          className="group relative block min-h-0 overflow-hidden backdrop-blur-[4px] transition hover:brightness-110"
+                          key={route}
+                          onClick={() => setHomeNavigationOpen(false)}
+                          to={route}
+                        >
+                          <svg aria-hidden="true" className="h-full w-full">
+                            <defs>
+                              <mask id={maskId}>
+                                <rect fill="white" height="100%" width="100%" />
+                                <text
+                                  dominantBaseline="central"
+                                  fill="#333333"
+                                  fontFamily="inherit"
+                                  fontSize="44"
+                                  fontWeight="900"
+                                  letterSpacing="0.5"
+                                  textAnchor={offset === 10 ? "start" : offset === 87 ? "end" : "middle"}
+                                  x={`${offset}%`}
+                                  y="50%"
+                                >
+                                  {label.toUpperCase()}
+                                </text>
+                              </mask>
+                              <mask id={edgeMaskId}>
+                                <rect fill="white" height="100%" width="100%" />
+                                <text
+                                  dominantBaseline="central"
+                                  fill="black"
+                                  fontFamily="inherit"
+                                  fontSize="44"
+                                  fontWeight="900"
+                                  letterSpacing="0.5"
+                                  textAnchor={offset === 10 ? "start" : offset === 87 ? "end" : "middle"}
+                                  x={`${offset}%`}
+                                  y="50%"
+                                >
+                                  {label.toUpperCase()}
+                                </text>
+                              </mask>
+                            </defs>
+                            <rect
+                              data-navigation-row-fill
+                              fill={color}
+                              height="100%"
+                              mask={`url(#${maskId})`}
+                              width="100%"
+                            />
+                            <text
+                              data-navigation-label-edge="dark"
+                              dominantBaseline="central"
+                              fill="none"
+                              fontFamily="inherit"
+                              fontSize="44"
+                              fontWeight="900"
+                              letterSpacing="0.5"
+                              mask={`url(#${edgeMaskId})`}
+                              stroke="rgba(0,0,0,0.62)"
+                              strokeLinejoin="round"
+                              strokeWidth="1"
+                              textAnchor={offset === 10 ? "start" : offset === 87 ? "end" : "middle"}
+                              x={`${offset}%`}
+                              y="50%"
+                            >
+                              {label.toUpperCase()}
+                            </text>
+                          </svg>
+                          <span className="sr-only">{label}</span>
+                        </Link>
+                      );
+                    })}
+                  </nav>
+                  <div
+                    className="relative z-10 rounded-none border-y bg-black/65 px-6 pb-0 pt-3 shadow-2xl shadow-black/30 backdrop-blur-[10px] sm:px-10 lg:border lg:px-14"
+                    data-home-panel-surface
+                  >
+                    <header className="relative" data-home-header-controls data-home-intro>
+                      <p className="max-w-xl pr-20 text-sm leading-relaxed text-white/85">
                         <strong className="text-base font-bold text-white">Hey!</strong> I'm a
                         full-stack developer with a decade of experience, and I write music at{" "}
                         <a
@@ -1148,17 +1251,40 @@ export function App() {
                         </a>
                         !
                       </p>
+                      <div className="absolute -top-1 right-3 flex items-center gap-1" data-home-minimize-control>
+                        <button
+                          aria-expanded={homeNavigationOpen}
+                          aria-label={homeNavigationOpen ? "Hide navigation" : "Show navigation"}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-white transition hover:bg-black/35"
+                          data-home-navigation-toggle
+                          onClick={() => setHomeNavigationOpen((open) => !open)}
+                          type="button"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            fill="none"
+                            height="20"
+                            stroke="currentColor"
+                            strokeLinecap="round"
+                            strokeWidth="1.8"
+                            viewBox="0 0 24 24"
+                            width="20"
+                          >
+                            <path d="M5 7h14M5 12h14M5 17h14" />
+                          </svg>
+                        </button>
+                        <ContentSizeButton
+                          expanded
+                          onClick={() => {
+                            setHomeNavigationOpen(false);
+                            handleContentMinimize();
+                          }}
+                        />
+                      </div>
                     </header>
-                    <div className="flex items-center gap-1" data-home-header-controls>
-                      <NavigationMenu
-                        key={isContentMinimized ? "minimized" : "expanded"}
-                        onOpenChange={setHomeNavigationOpen}
-                      />
-                      <ContentSizeButton expanded onClick={handleContentMinimize} />
+                    <div className="mt-4">
+                      <BulletinSection bulletins={latestBulletins} />
                     </div>
-                  </div>
-                  <div className="mt-4 space-y-6">
-                    <BulletinSection bulletins={latestBulletins} />
                   </div>
                   {/* {!slotAssignment ? (
                   <p className="text-xs text-white/70">

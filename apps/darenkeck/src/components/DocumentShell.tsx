@@ -24,13 +24,16 @@ export function DocumentShell({
   const stickySentinelRef = useRef<HTMLDivElement | null>(null);
   const [stuck, setStuck] = useState(false);
   const breadcrumbLabels = breadcrumbs.map((breadcrumb) => breadcrumb.label.toLowerCase());
-  const breadcrumbColorClass = breadcrumbLabels.includes("music")
-    ? "text-[var(--primary-red)]"
+  const sectionNavigation = breadcrumbLabels.includes("music")
+    ? { color: "var(--primary-red)", label: "MUSIC", offset: 35, to: "/music" }
     : breadcrumbLabels.includes("blog")
-      ? "text-[var(--primary-orange)]"
+      ? { color: "var(--primary-orange)", label: "BLOG", offset: 56, to: "/blog" }
       : breadcrumbLabels.includes("news")
-        ? "text-[var(--primary-yellow)]"
-        : "text-[var(--primary-blue)]";
+        ? { color: "var(--primary-yellow)", label: "NEWS", offset: 10, to: "/news" }
+        : { color: "var(--primary-blue)", label: "RESUME", offset: 87, to: "/dev" };
+  const sectionMaskId = `document-navigation-${sectionNavigation.label.toLowerCase()}-mask`;
+  const sectionEdgeMaskId = `document-navigation-${sectionNavigation.label.toLowerCase()}-edge-mask`;
+  const sectionTextAnchor = sectionNavigation.offset === 10 ? "start" : sectionNavigation.offset === 87 ? "end" : "middle";
 
   useEffect(() => {
     const sentinel = stickySentinelRef.current;
@@ -74,86 +77,140 @@ export function DocumentShell({
       >
         <div className="mx-auto w-full max-w-4xl">
           <article
-            className={`${className} rounded-none border-y bg-black/65 px-6 pb-8 pt-5 shadow-2xl shadow-black/30 backdrop-blur-[10px] sm:px-10 sm:pb-12 sm:pt-6 lg:rounded-2xl lg:border lg:px-14 print:rounded-none print:border-0 print:bg-transparent print:p-0 print:text-black print:shadow-none print:backdrop-blur-none`}
+            className={`${className} rounded-none print:text-black`}
           >
             <div aria-hidden="true" className="-mt-px h-px" ref={stickySentinelRef} />
             <div
-              className="sticky top-0 z-20 -mx-6 -mt-5 mb-5 flex min-h-16 w-[calc(100%+3rem)] items-center justify-center bg-black/70 px-6 py-2 text-sm leading-none text-white/65 shadow-lg backdrop-blur-md sm:-mx-10 sm:-mt-6 sm:w-[calc(100%+5rem)] sm:px-10 lg:-mx-14 lg:w-[calc(100%+7rem)] lg:rounded-t-2xl lg:px-14 print:hidden"
+              className={`sticky top-0 z-20 flex h-10 w-full items-center transition-[backdrop-filter] duration-200 print:hidden ${stuck ? "backdrop-blur-xl" : "backdrop-blur-sm"}`}
               data-document-nav
               data-document-nav-stuck={stuck ? "" : undefined}
             >
-              <img
-                alt=""
-                aria-hidden="true"
-                className="absolute left-4 top-1/2 h-8 w-8 -translate-y-1/2 object-contain sm:left-6"
-                data-document-favicon
-                src="/favicon.png"
-              />
-              <nav
-                aria-label="Breadcrumb"
-                className={`absolute left-14 right-24 min-w-0 sm:static sm:max-w-[calc(100%-16rem)] ${breadcrumbColorClass}`}
+              <svg aria-hidden="true" className="absolute inset-0 h-full w-full overflow-hidden">
+                <defs>
+                  <mask id={sectionMaskId}>
+                    <rect fill="white" height="100%" width="100%" />
+                    <text
+                      dominantBaseline="central"
+                      fill="#333333"
+                      fontFamily="inherit"
+                      fontSize="44"
+                      fontWeight="900"
+                      letterSpacing="0.5"
+                      textAnchor={sectionTextAnchor}
+                      x={`${sectionNavigation.offset}%`}
+                      y="50%"
+                    >
+                      {sectionNavigation.label}
+                    </text>
+                  </mask>
+                  <mask id={sectionEdgeMaskId}>
+                    <rect fill="white" height="100%" width="100%" />
+                    <text
+                      dominantBaseline="central"
+                      fill="black"
+                      fontFamily="inherit"
+                      fontSize="44"
+                      fontWeight="900"
+                      letterSpacing="0.5"
+                      textAnchor={sectionTextAnchor}
+                      x={`${sectionNavigation.offset}%`}
+                      y="50%"
+                    >
+                      {sectionNavigation.label}
+                    </text>
+                  </mask>
+                </defs>
+                <rect
+                  data-document-nav-fill
+                  fill={sectionNavigation.color}
+                  fillOpacity={stuck ? "0.94" : "0.72"}
+                  height="100%"
+                  mask={`url(#${sectionMaskId})`}
+                  width="100%"
+                />
+                <text
+                  data-document-label-edge="dark"
+                  dominantBaseline="central"
+                  fill="none"
+                  fontFamily="inherit"
+                  fontSize="44"
+                  fontWeight="900"
+                  letterSpacing="0.5"
+                  mask={`url(#${sectionEdgeMaskId})`}
+                  stroke="rgba(0,0,0,0.62)"
+                  strokeLinejoin="round"
+                  strokeWidth="1"
+                  textAnchor={sectionTextAnchor}
+                  x={`${sectionNavigation.offset}%`}
+                  y="50%"
+                >
+                  {sectionNavigation.label}
+                </text>
+              </svg>
+              <Link
+                aria-label="Home"
+                className="absolute left-2 top-1/2 z-10 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-white transition hover:bg-black/25 sm:left-4"
+                data-document-home-link
+                to="/"
               >
-                <ol className="flex min-w-0 items-center justify-start gap-2 sm:justify-center">
-                  {breadcrumbs.map((breadcrumb, index) => {
-                    const current = index === breadcrumbs.length - 1;
-                    return (
-                      <li
-                        className="flex min-w-0 items-center gap-2"
-                        key={`${breadcrumb.label}-${index}`}
-                      >
-                        {index > 0 ? <span aria-hidden="true">/</span> : null}
-                        {breadcrumb.to ? (
-                          <Link
-                            aria-label={
-                              index === 0 && breadcrumb.to === "/" ? "Home" : undefined
-                            }
-                            className="truncate opacity-70 transition hover:opacity-100"
-                            to={breadcrumb.to}
-                          >
-                            {index === 0 && breadcrumb.to === "/" ? (
-                              <svg
-                                aria-hidden="true"
-                                fill="currentColor"
-                                height="18"
-                                viewBox="0 0 24 24"
-                                width="18"
-                              >
-                                <path
-                                  clipRule="evenodd"
-                                  d="M1.5 11.5 12 2.5l10.5 9H18V20H6v-8.5zM9.75 20v-6.5h4.5V20z"
-                                  fillRule="evenodd"
-                                />
-                              </svg>
-                            ) : (
-                              breadcrumb.label
-                            )}
-                          </Link>
-                        ) : (
-                          <span
-                            aria-current={current ? "page" : undefined}
-                            className="truncate"
-                          >
-                            {breadcrumb.label}
-                          </span>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ol>
-              </nav>
+                <svg
+                  aria-hidden="true"
+                  fill="currentColor"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  width="20"
+                >
+                  <path
+                    clipRule="evenodd"
+                    d="M1.5 11.5 12 2.5l10.5 9H18V20H6v-8.5zM9.75 20v-6.5h4.5V20z"
+                    fillRule="evenodd"
+                  />
+                </svg>
+              </Link>
+              <Link
+                aria-label={`${sectionNavigation.label[0]}${sectionNavigation.label.slice(1).toLowerCase()}`}
+                className="absolute top-0 z-10 flex h-full items-center text-[44px] font-black leading-none tracking-[0.5px] text-transparent no-underline"
+                data-document-section-link
+                style={{
+                  left: `${sectionNavigation.offset}%`,
+                  transform:
+                    sectionTextAnchor === "start"
+                      ? undefined
+                      : sectionTextAnchor === "end"
+                        ? "translateX(-100%)"
+                        : "translateX(-50%)",
+                }}
+                to={sectionNavigation.to}
+              >
+                {sectionNavigation.label}
+              </Link>
+              <span
+                aria-hidden="true"
+                data-document-section-offset={sectionNavigation.offset}
+              />
               {documentControls ? (
                 <div
-                  className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1"
+                  className="absolute right-2 top-1/2 z-20 flex -translate-y-1/2 items-center gap-1"
                   data-document-minimize-control
                 >
                   {stuck && documentControls.dockedTone ? (
-                    <div data-document-tone-control>{documentControls.dockedTone}</div>
+                    <div
+                      className="flex h-8 w-8 items-center justify-center leading-none [&_[data-tone-control]]:!h-8 [&_[data-tone-control]]:!w-8 [&_[data-tone-control]]:!rounded-none [&_[data-tone-control]]:!bg-transparent [&_[data-tone-control]]:!shadow-none [&_[data-tone-control]]:!backdrop-blur-none [&_[data-tone-control]]:hover:!bg-black/20"
+                      data-document-tone-control
+                    >
+                      {documentControls.dockedTone}
+                    </div>
                   ) : null}
                   <ContentSizeButton expanded onClick={documentControls.onMinimize} />
                 </div>
               ) : null}
             </div>
-            {children}
+            <div
+              className="mt-2 border-b border-white/25 bg-black/65 px-6 pb-8 pt-5 shadow-2xl shadow-black/30 backdrop-blur-[10px] sm:px-10 sm:pb-12 sm:pt-6 lg:rounded-b-2xl lg:border-x lg:border-b lg:px-14 print:mt-0 print:rounded-none print:border-0 print:bg-transparent print:p-0 print:shadow-none print:backdrop-blur-none"
+              data-document-content-surface
+            >
+              {children}
+            </div>
           </article>
         </div>
       </main>

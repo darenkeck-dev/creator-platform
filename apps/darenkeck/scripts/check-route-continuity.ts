@@ -65,11 +65,12 @@ async function scrollDocument(page: Page, label: string): Promise<void> {
 
 async function navigateFromHome(page: Page, label: "Blog" | "Resume"): Promise<void> {
   const homePanel = page.locator("[data-home-panel]");
-  await homePanel.getByRole("button", { name: "Open navigation" }).click();
-  await homePanel
-    .getByRole("navigation", { name: "Primary" })
-    .getByRole("link", { name: label })
-    .click();
+  await homePanel.waitFor({ state: "visible" });
+  const navigation = homePanel.locator("[data-home-navigation-rows]");
+  if ((await navigation.getAttribute("aria-hidden")) === "true") {
+    await homePanel.getByRole("button", { name: "Show navigation" }).click();
+  }
+  await navigation.getByRole("link", { name: label }).click();
 }
 
 try {
@@ -91,6 +92,17 @@ try {
   });
 
   const homePanelBox = await page.locator("[data-home-panel]").boundingBox();
+  const homePanelBackground = await page
+    .locator("[data-home-panel]")
+    .evaluate((panel) => getComputedStyle(panel).backgroundColor);
+  const homePanelSurface = page.locator("[data-home-panel-surface]");
+  const homePanelSurfaceBox = await homePanelSurface.boundingBox();
+  const homePanelSurfaceBackground = await homePanelSurface.evaluate(
+    (surface) => getComputedStyle(surface).backgroundColor
+  );
+  const homePanelSurfaceBottomRadius = await homePanelSurface.evaluate(
+    (surface) => getComputedStyle(surface).borderBottomRightRadius
+  );
   const homePageScroll = await page.evaluate(() => {
     window.scrollTo(0, 100);
     const state = {
@@ -102,9 +114,48 @@ try {
     return state;
   });
   const homeNewsBox = await page.getByRole("region", { name: "Latest news" }).boundingBox();
-  const allNewsColor = await page
-    .getByRole("link", { name: "All news" })
-    .evaluate((link) => getComputedStyle(link).color);
+  const homeNewsDateBox = await page.locator("[data-home-bulletin] time").first().boundingBox();
+  const homeNavigationRows = page.locator("[data-home-navigation-rows]");
+  const initialHomeNavigationOpacity = await homeNavigationRows.evaluate(
+    (navigation) => getComputedStyle(navigation).opacity
+  );
+  await page.getByRole("button", { name: "Show navigation" }).click();
+  await page.waitForTimeout(250);
+  const homeNavigationRowsBox = await homeNavigationRows.boundingBox();
+  const homePanelSurfaceBoxAfterOpen = await homePanelSurface.boundingBox();
+  const homeNavigationRowBoxes = await homeNavigationRows.locator("a").evaluateAll((links) =>
+    links.map((link) => {
+      const box = link.getBoundingClientRect();
+      return {
+        backdropFilter: getComputedStyle(link).backdropFilter,
+        height: box.height,
+        width: box.width,
+        x: box.x,
+        y: box.y,
+      };
+    })
+  );
+  const homeNavigationRowFills = await homeNavigationRows
+    .locator("[data-navigation-row-fill]")
+    .evaluateAll((fills) =>
+      fills.map((fill) => ({
+        color: getComputedStyle(fill).fill,
+        mask: fill.getAttribute("mask"),
+      }))
+    );
+  const homeNavigationMaskLabels = await homeNavigationRows
+    .locator("mask[id$='-mask']:not([id$='-edge-mask']) text")
+    .allTextContents();
+  const homeNavigationMaskPositions = await homeNavigationRows
+    .locator("mask[id$='-mask']:not([id$='-edge-mask']) text")
+    .evaluateAll((labels) =>
+      labels.map((label) => ({
+        baseline: label.getAttribute("dominant-baseline"),
+        fill: label.getAttribute("fill"),
+        fontSize: label.getAttribute("font-size"),
+        x: label.getAttribute("x"),
+      }))
+    );
   const homePanelShellPosition = await page
     .locator("[data-home-panel-shell]")
     .evaluate((shell) => getComputedStyle(shell).position);
@@ -114,16 +165,6 @@ try {
   const homeCircleBorders = await page
     .locator("[data-media-controls] button")
     .evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).borderTopWidth));
-  const homeNavigationButton = page.getByRole("button", { name: "Open navigation" });
-  const homeNavigationButtonBox = await homeNavigationButton.boundingBox();
-  const homeNavigationButtonBorder = await homeNavigationButton.evaluate(
-    (button) => getComputedStyle(button).borderTopWidth
-  );
-  const homeNavigationGlyph = await homeNavigationButton.locator("svg path").evaluate((path) => {
-    const box = (path as SVGGraphicsElement).getBBox();
-    return { height: box.height, width: box.width };
-  });
-  const homeNavigationGlyphRects = await homeNavigationButton.locator("svg rect").count();
   const homeHeaderControlsBox = await page.locator("[data-home-header-controls]").boundingBox();
   const homeMediaBox = await page.locator("[data-media-controls]").boundingBox();
   const homeMinimizeBox = await page.getByRole("button", { name: "Minimize page" }).boundingBox();
@@ -133,99 +174,84 @@ try {
     !homeMediaBox ||
     !homeMinimizeBox ||
     !homeNewsBox ||
-    !homeNavigationButtonBox ||
+    !homeNewsDateBox ||
+    !homeNavigationRowsBox ||
+    !homePanelSurfaceBox ||
+    !homePanelSurfaceBoxAfterOpen ||
     !homeHeaderControlsBox ||
     !homeTitleBox ||
+    initialHomeNavigationOpacity !== "0" ||
+    (await homeNavigationRows.getAttribute("aria-hidden")) !== "false" ||
+    (await page.getByRole("button", { name: "Hide navigation" }).count()) !== 1 ||
     homePageScroll.scrollY !== 0 ||
     homePageScroll.scrollHeight > homePageScroll.viewportHeight + 1 ||
     homePanelShellPosition === "fixed" ||
-    allNewsColor !== "rgb(233, 204, 0)" ||
+    homePanelBackground !== "rgba(0, 0, 0, 0)" ||
+    homePanelSurfaceBackground === "rgba(0, 0, 0, 0)" ||
+    homePanelSurfaceBottomRadius !== "0px" ||
     homeMediaBackground === "rgba(0, 0, 0, 0)" ||
     homeCircleBorders.some((borderWidth) => borderWidth !== "0px") ||
-    homeNavigationButtonBorder !== "0px" ||
-    homeNavigationGlyphRects !== 0 ||
-    homeNavigationGlyph.width < 14 ||
-    homeNavigationGlyph.height < 10 ||
+    (await page.getByRole("heading", { name: "Latest news" }).count()) !== 0 ||
+    homeNavigationRowBoxes.length !== 4 ||
+    homeNavigationRowBoxes.some((box) => !box.backdropFilter.includes("blur")) ||
+    homeNavigationRowFills.map((fill) => fill.color).join("|") !==
+      "rgb(0, 134, 186)|rgb(253, 71, 0)|rgb(250, 1, 0)|rgb(233, 204, 0)" ||
+    homeNavigationRowFills.some((fill) => !fill.mask?.startsWith("url(#home-navigation-")) ||
+    (await homeNavigationRows.locator('[data-navigation-label-edge="dark"]').count()) !== 4 ||
+    (await homeNavigationRows.locator('[data-navigation-label-edge="dark"][stroke-width="1"]').count()) !== 4 ||
+    (await homeNavigationRows
+      .locator('[data-navigation-label-edge="dark"][stroke-linejoin="round"]')
+      .count()) !== 4 ||
+    (await homeNavigationRows.locator("mask[id$='-edge-mask']").count()) !== 4 ||
+    (await homeNavigationRows.locator('[data-navigation-label-edge="light"]').count()) !== 0 ||
+    homeNavigationMaskLabels.join("|") !== "RESUME|BLOG|MUSIC|NEWS" ||
+    homeNavigationMaskPositions.map((label) => label.x).join("|") !==
+      "87%|56%|35%|10%" ||
+    homeNavigationMaskPositions.some((label) => label.baseline !== "central") ||
+    homeNavigationMaskPositions.some((label) => label.fill !== "#333333") ||
+    homeNavigationMaskPositions.some((label) => label.fontSize !== "44") ||
+    homeNavigationRowBoxes.some(
+      (box) =>
+        Math.abs(box.x - homeNavigationRowsBox.x) > 1 ||
+        Math.abs(box.width - homeNavigationRowsBox.width) > 1
+    ) ||
+    homeNavigationRowBoxes.slice(1).some(
+      (box, index) =>
+        Math.abs(box.y - (homeNavigationRowBoxes[index]!.y + homeNavigationRowBoxes[index]!.height) - 4) > 1
+    ) ||
     Math.abs(homePanelBox.width - 896) > 1 ||
-    homeHeaderControlsBox.width > 72 ||
-    homeHeaderControlsBox.height > 32 ||
+    Math.abs(homePanelSurfaceBox.width - homePanelBox.width) > 1 ||
+    Math.abs(homePanelSurfaceBoxAfterOpen.x - homePanelSurfaceBox.x) > 1 ||
+    Math.abs(homePanelSurfaceBoxAfterOpen.y - homePanelSurfaceBox.y) > 1 ||
     Math.abs(
-      homeHeaderControlsBox.x +
-        homeHeaderControlsBox.width -
-        (homePanelBox.x + homePanelBox.width - 56)
+      homePanelSurfaceBox.y - (homeNavigationRowsBox.y + homeNavigationRowsBox.height)
+    ) > 1 ||
+    Math.abs(
+      homeMinimizeBox.x +
+        homeMinimizeBox.width -
+        (homeNewsDateBox.x + homeNewsDateBox.width)
     ) >
       1 ||
     Math.abs(
-      homeNavigationButtonBox.y +
-        homeNavigationButtonBox.height / 2 -
-        (homeMinimizeBox.y + homeMinimizeBox.height / 2)
-    ) > 1 ||
+      homeMinimizeBox.y + homeMinimizeBox.height / 2 - (homeTitleBox.y + homeTitleBox.height / 2)
+    ) > 2 ||
     Math.abs(homeNewsBox.y + homeNewsBox.height - (homePanelBox.y + homePanelBox.height)) > 1 ||
     Math.abs(homePanelBox.y + homePanelBox.height - homeMediaBox.y) > 1
   ) {
     throw new Error(
-      `Homepage shelf controls or viewport lock are invalid: ${JSON.stringify({ homeHeaderControlsBox, homeMinimizeBox, homeNavigationButtonBox, homePageScroll, homePanelBox, homeMediaBox, homePanelShellPosition, homeTitleBox })}`
+      `Homepage row navigation, shelf controls, or viewport lock are invalid: ${JSON.stringify({ homeHeaderControlsBox, homeMinimizeBox, homeNavigationMaskLabels, homeNavigationMaskPositions, homeNavigationRowBoxes, homeNavigationRowFills, homeNavigationRowsBox, homeNewsDateBox, homePageScroll, homePanelBackground, homePanelBox, homePanelSurfaceBackground, homePanelSurfaceBottomRadius, homePanelSurfaceBox, homeMediaBox, homePanelShellPosition, homeTitleBox })}`
     );
   }
 
-  await page.locator("[data-home-navigation-button]").click();
+  await page.getByRole("button", { name: "Hide navigation" }).click();
   await page.waitForTimeout(250);
-  const expandedHomeMenu = page.locator("[data-home-navigation-menu]");
-  const [
-    expandedHomeMenuBackground,
-    expandedHomeMenuBox,
-    expandedHomeLinkBoxes,
-    expandedHomeHeaderOpacity,
-    expandedBurgerTransform,
-  ] =
-    await Promise.all([
-      expandedHomeMenu.evaluate((menu) => getComputedStyle(menu).backgroundColor),
-      expandedHomeMenu.boundingBox(),
-      expandedHomeMenu.locator("a").evaluateAll((links) =>
-        links.map((link) => {
-          const box = link.getBoundingClientRect();
-          const style = getComputedStyle(link);
-          return {
-            color: style.color,
-            fontSize: style.fontSize,
-            height: box.height,
-            width: box.width,
-            x: box.x,
-            y: box.y,
-          };
-        })
-      ),
-      page.locator("[data-home-intro]").evaluate((header) => getComputedStyle(header).opacity),
-      page
-        .locator("[data-home-navigation-button] svg")
-        .evaluate((svg) => {
-          const style = getComputedStyle(svg);
-          return { rotate: style.rotate, transform: style.transform };
-        }),
-    ]);
   if (
-    !expandedHomeMenuBox ||
-    expandedHomeMenuBackground !== "rgba(0, 0, 0, 0)" ||
-    expandedHomeHeaderOpacity !== "0" ||
-    (expandedBurgerTransform.transform === "none" && expandedBurgerTransform.rotate === "none") ||
-    expandedBurgerTransform.rotate !== "-90deg" ||
-    expandedHomeMenuBox.x + expandedHomeMenuBox.width > homeNavigationButtonBox.x + 1 ||
-    expandedHomeLinkBoxes.map((box) => box.color).join("|") !==
-      "rgb(0, 134, 186)|rgb(253, 71, 0)|rgb(250, 1, 0)" ||
-    expandedHomeLinkBoxes.some((box) => box.fontSize !== "16px") ||
-    expandedHomeLinkBoxes.some(
-      (box) => Math.abs(box.y + box.height / 2 - (expandedHomeMenuBox.y + expandedHomeMenuBox.height / 2)) > 1
-    ) ||
-    Math.max(...expandedHomeLinkBoxes.map((box) => box.width)) -
-      Math.min(...expandedHomeLinkBoxes.map((box) => box.width)) >
-      1
+    (await homeNavigationRows.evaluate((navigation) => getComputedStyle(navigation).opacity)) !==
+      "0" ||
+    (await homeNavigationRows.getAttribute("aria-hidden")) !== "true"
   ) {
-    throw new Error(
-      `Homepage navigation did not expand evenly without a background: ${JSON.stringify({ expandedBurgerTransform, expandedHomeHeaderOpacity, expandedHomeLinkBoxes, expandedHomeMenuBackground, expandedHomeMenuBox, homeNavigationButtonBox })}`
-    );
+    throw new Error("Homepage navigation rows did not lower and hide.");
   }
-  await page.keyboard.press("Escape");
-  await expandedHomeMenu.waitFor({ state: "hidden" });
 
   await page.getByRole("button", { name: "Minimize page" }).click();
   await page.locator("[data-site-wordmark]").waitFor({ state: "visible" });
@@ -252,20 +278,31 @@ try {
 
   await navigateFromHome(page, "Resume");
   await page.locator(".resume-document").waitFor({ state: "visible" });
-  const resumeBreadcrumbs = page.getByRole("navigation", { name: "Breadcrumb" });
-  await resumeBreadcrumbs.getByRole("link", { name: "Home" }).waitFor({ state: "visible" });
-  await resumeBreadcrumbs.getByText("resume", { exact: true }).waitFor({ state: "visible" });
-  const resumeBreadcrumbColor = await resumeBreadcrumbs.evaluate(
-    (navigation) => getComputedStyle(navigation).color
-  );
-  if (resumeBreadcrumbColor !== "rgb(0, 134, 186)") {
-    throw new Error(`Resume breadcrumbs use the wrong palette color: ${resumeBreadcrumbColor}.`);
+  const resumeDocumentNav = page.locator("[data-document-nav]");
+  const resumeHomeLink = resumeDocumentNav.getByRole("link", { name: "Home" });
+  const resumeSectionLink = resumeDocumentNav.getByRole("link", { name: "Resume" });
+  await resumeHomeLink.waitFor({ state: "visible" });
+  await resumeSectionLink.waitFor({ state: "visible" });
+  const resumeNavigationColor = await resumeDocumentNav
+    .locator("[data-document-nav-fill]")
+    .evaluate((fill) => getComputedStyle(fill).fill);
+  if (
+    resumeNavigationColor !== "rgb(0, 134, 186)" ||
+    (await resumeDocumentNav.getByRole("navigation", { name: "Breadcrumb" }).count()) !== 0
+  ) {
+    throw new Error(`Resume navigation is invalid: ${resumeNavigationColor}.`);
   }
   await page.getByRole("link", { name: "Download" }).waitFor({ state: "visible" });
   const resumeCardBox = await page.locator(".resume-document").boundingBox();
-  const resumeNavBox = await page.locator("[data-document-nav]").boundingBox();
+  const resumeNavBox = await resumeDocumentNav.boundingBox();
+  const resumeContentSurface = page.locator("[data-document-content-surface]");
+  const resumeContentSurfaceBox = await resumeContentSurface.boundingBox();
+  const resumeContentSurfaceTopBorder = await resumeContentSurface.evaluate(
+    (surface) => getComputedStyle(surface).borderTopWidth
+  );
   const desktopMediaBox = await page.locator("[data-media-controls]").boundingBox();
-  const desktopBreadcrumbBox = await resumeBreadcrumbs.boundingBox();
+  const desktopHomeLinkBox = await resumeHomeLink.boundingBox();
+  const desktopSectionLinkBox = await resumeSectionLink.boundingBox();
   const desktopMinimizeBox = await page
     .locator("[data-document-minimize-control]")
     .boundingBox();
@@ -275,28 +312,44 @@ try {
   if (
     !resumeCardBox ||
     !resumeNavBox ||
+    !resumeContentSurfaceBox ||
     !desktopMediaBox ||
     resumeNavPosition !== "sticky" ||
     Math.abs(resumeNavBox.x + resumeNavBox.width / 2 - 640) > 1 ||
     Math.abs(resumeNavBox.y - resumeCardBox.y) > 1 ||
-    Math.abs(resumeNavBox.height - 64) > 1 ||
+    Math.abs(resumeNavBox.height - 40) > 1 ||
+    Math.abs(resumeContentSurfaceBox.y - (resumeNavBox.y + resumeNavBox.height) - 8) > 1 ||
+    resumeContentSurfaceTopBorder !== "0px" ||
+    (await resumeDocumentNav.locator("[data-document-nav-fill]").getAttribute("fill-opacity")) !==
+      "0.72" ||
+    (await resumeDocumentNav.locator('[data-document-label-edge="dark"]').count()) !== 1 ||
+    (await resumeDocumentNav.locator('[data-document-label-edge="dark"][stroke-width="1"]').count()) !== 1 ||
+    (await resumeDocumentNav
+      .locator('[data-document-label-edge="dark"][stroke-linejoin="round"]')
+      .count()) !== 1 ||
+    (await resumeDocumentNav.locator("mask[id$='-edge-mask']").count()) !== 1 ||
+    (await resumeDocumentNav.locator('[data-document-label-edge="light"]').count()) !== 0 ||
     Math.abs(desktopMediaBox.y + desktopMediaBox.height - 720) > 1
   ) {
     throw new Error(
-      `Document breadcrumb or bottom-control rows are misplaced: ${JSON.stringify({ resumeCardBox, resumeNavBox, desktopMediaBox, resumeNavPosition })}`
+      `Document section or bottom-control rows are misplaced: ${JSON.stringify({ resumeCardBox, resumeNavBox, desktopMediaBox, resumeNavPosition })}`
     );
   }
   if (
     !desktopMinimizeBox ||
-    !desktopBreadcrumbBox ||
+    !desktopHomeLinkBox ||
+    !desktopSectionLinkBox ||
+    !resumeNavBox ||
+    Math.abs(desktopHomeLinkBox.x - (resumeNavBox.x + 16)) > 1 ||
     Math.abs(
-        desktopMinimizeBox.y +
-          desktopMinimizeBox.height / 2 -
-        (desktopBreadcrumbBox.y + desktopBreadcrumbBox.height / 2)
+      desktopSectionLinkBox.x + desktopSectionLinkBox.width - (resumeNavBox.x + resumeNavBox.width * 0.87)
+    ) > 1 ||
+    Math.abs(
+      desktopMinimizeBox.x + desktopMinimizeBox.width - (resumeNavBox.x + resumeNavBox.width - 8)
     ) > 1
   ) {
     throw new Error(
-      `Document minimize control is not aligned with upper navigation: ${JSON.stringify({ desktopBreadcrumbBox, desktopMediaBox, desktopMinimizeBox, resumeNavBox })}`
+      `Document links or minimize control are not aligned with upper navigation: ${JSON.stringify({ desktopHomeLinkBox, desktopMediaBox, desktopMinimizeBox, desktopSectionLinkBox, resumeNavBox })}`
     );
   }
   if (
@@ -364,14 +417,14 @@ try {
 
   await navigateFromHome(page, "Blog");
   await page.locator(".blog-document").waitFor({ state: "visible" });
-  const blogBreadcrumbs = page.getByRole("navigation", { name: "Breadcrumb" });
-  await blogBreadcrumbs.getByRole("link", { name: "Home" }).waitFor({ state: "visible" });
-  await blogBreadcrumbs.getByText("blog", { exact: true }).waitFor({ state: "visible" });
-  const blogBreadcrumbColor = await blogBreadcrumbs.evaluate(
-    (navigation) => getComputedStyle(navigation).color
-  );
-  if (blogBreadcrumbColor !== "rgb(253, 71, 0)") {
-    throw new Error(`Blog breadcrumbs use the wrong palette color: ${blogBreadcrumbColor}.`);
+  const blogDocumentNav = page.locator("[data-document-nav]");
+  await blogDocumentNav.getByRole("link", { name: "Home" }).waitFor({ state: "visible" });
+  await blogDocumentNav.getByRole("link", { name: "Blog" }).waitFor({ state: "visible" });
+  const blogNavigationColor = await blogDocumentNav
+    .locator("[data-document-nav-fill]")
+    .evaluate((fill) => getComputedStyle(fill).fill);
+  if (blogNavigationColor !== "rgb(253, 71, 0)") {
+    throw new Error(`Blog navigation uses the wrong palette color: ${blogNavigationColor}.`);
   }
   const blogIndexCardBox = await page.locator(".blog-document").boundingBox();
   const desktopViewport = page.viewportSize();
@@ -402,8 +455,8 @@ try {
       .first()
       .waitFor({ state: "visible" });
     await page
-      .getByRole("navigation", { name: "Breadcrumb" })
-      .getByRole("link", { name: "blog" })
+      .locator("[data-document-nav]")
+      .getByRole("link", { name: "Blog" })
       .waitFor({ state: "visible" });
     const documentNav = page.locator("[data-document-nav]");
     await scrollDocument(page, "Desktop blog");
@@ -411,6 +464,11 @@ try {
     if (
       !fixedNavBox ||
       Math.abs(fixedNavBox.y) > 1 ||
+      (await documentNav.locator("[data-document-nav-fill]").getAttribute("fill-opacity")) !==
+        "0.94" ||
+      !(await documentNav.evaluate((navigation) =>
+        getComputedStyle(navigation).backdropFilter.includes("blur")
+      )) ||
       (await documentNav.getByRole("button", { name: "Open navigation" }).count()) !== 0
     ) {
       throw new Error(`Document navigation did not dock at the top: ${JSON.stringify(fixedNavBox)}`);
@@ -425,6 +483,9 @@ try {
         document.querySelector("video")
     );
     if (!sameVideoOnEntry) throw new Error("ComboPlayer remounted while opening a blog entry.");
+    await documentNav.getByRole("link", { name: "Blog" }).click();
+    await page.waitForURL(/\/blog$/);
+    await page.locator(".blog-document").waitFor({ state: "visible" });
   }
 
   const mobilePage = await browser.newPage({ viewport: { width: 390, height: 844 } });
@@ -477,41 +538,54 @@ try {
       `Mobile resume card did not fill the viewport: ${JSON.stringify(mobileResumeCardBox)}`
     );
   }
-  const mobileBreadcrumb = mobileResumeNav.getByRole("navigation", { name: "Breadcrumb" });
-  const mobileDocumentFavicon = mobileResumeNav.locator("[data-document-favicon]");
-  await mobileBreadcrumb.waitFor({ state: "visible" });
-  await mobileDocumentFavicon.waitFor({ state: "visible" });
+  const mobileHomeLink = mobileResumeNav.getByRole("link", { name: "Home" });
+  const mobileSectionLink = mobileResumeNav.getByRole("link", { name: "Resume" });
+  await mobileHomeLink.waitFor({ state: "visible" });
+  await mobileSectionLink.waitFor({ state: "visible" });
   if (
     (await mobileResumeNav.locator("[data-document-audio-control]").count()) !== 0 ||
-    (await mobileResumeNav.locator("[data-document-tone-control]").count()) !== 0
+    (await mobileResumeNav.locator("[data-document-tone-control]").count()) !== 0 ||
+    (await mobileResumeNav.getByRole("navigation", { name: "Breadcrumb" }).count()) !== 0
   ) {
     throw new Error("Mobile upper navigation still contains media controls.");
   }
-  const mobileBreadcrumbJustification = await mobileBreadcrumb
-    .locator("ol")
-    .evaluate((list) => getComputedStyle(list).justifyContent);
-  const [mobileUndockedBreadcrumbBox, mobileUndockedFaviconBox] = await Promise.all([
-    mobileBreadcrumb.boundingBox(),
-    mobileDocumentFavicon.boundingBox(),
+  const [mobileUndockedHomeBox, mobileUndockedSectionBox, mobileUndockedNavBox] = await Promise.all([
+    mobileHomeLink.boundingBox(),
+    mobileSectionLink.boundingBox(),
+    mobileResumeNav.boundingBox(),
   ]);
   if (
-    mobileBreadcrumbJustification !== "flex-start" ||
-    !mobileUndockedBreadcrumbBox ||
-    !mobileUndockedFaviconBox ||
+    !mobileUndockedHomeBox ||
+    !mobileUndockedSectionBox ||
+    !mobileUndockedNavBox ||
+    Math.abs(mobileUndockedHomeBox.x - (mobileUndockedNavBox.x + 8)) > 1 ||
     Math.abs(
-      mobileUndockedBreadcrumbBox.x -
-        (mobileUndockedFaviconBox.x + mobileUndockedFaviconBox.width + 8)
+      mobileUndockedSectionBox.x +
+        mobileUndockedSectionBox.width -
+        (mobileUndockedNavBox.x + mobileUndockedNavBox.width * 0.87)
     ) > 1
   ) {
     throw new Error(
-      `Mobile undocked breadcrumbs are misplaced: ${JSON.stringify({ mobileBreadcrumbJustification, mobileUndockedBreadcrumbBox, mobileUndockedFaviconBox })}`
+      `Mobile undocked document navigation is misplaced: ${JSON.stringify({ mobileUndockedHomeBox, mobileUndockedNavBox, mobileUndockedSectionBox })}`
     );
   }
   await mobilePage.locator("[data-tone-floating]").waitFor({ state: "visible" });
   await scrollDocument(mobilePage, "Mobile resume before tone selection");
-  await mobileResumeNav.locator("[data-document-tone-control]").waitFor({ state: "visible" });
-  const mobileDockedFavicon = mobileDocumentFavicon;
-  await mobileDockedFavicon.waitFor({ state: "visible" });
+  const mobileDockedTone = mobileResumeNav.locator("[data-document-tone-control] [data-tone-control]");
+  await mobileDockedTone.waitFor({ state: "visible" });
+  const mobileDockedToneStyle = await mobileDockedTone.evaluate((button) => {
+    const box = button.getBoundingClientRect();
+    const style = getComputedStyle(button);
+    return {
+      backgroundColor: style.backgroundColor,
+      borderRadius: style.borderRadius,
+      height: box.height,
+      width: box.width,
+      x: box.x,
+      y: box.y,
+    };
+  });
+  await mobileHomeLink.waitFor({ state: "visible" });
   await mobilePage.locator("[data-tone-floating]").waitFor({ state: "hidden" });
   await mobilePage.locator("[data-site-wordmark]").waitFor({ state: "hidden" });
   if (
@@ -520,31 +594,50 @@ try {
   ) {
     throw new Error("Top-corner scrims remained visible after document navigation docked.");
   }
-  const dockedBreadcrumbBox = await mobileBreadcrumb.boundingBox();
-  const dockedBreadcrumbJustification = await mobileBreadcrumb
-    .locator("ol")
-    .evaluate((list) => getComputedStyle(list).justifyContent);
-  const mobileDockedFaviconBox = await mobileDockedFavicon.boundingBox();
+  const dockedHomeLinkBox = await mobileHomeLink.boundingBox();
+  const dockedSectionLinkBox = await mobileSectionLink.boundingBox();
   const mobileBottomNavBox = await mobileResumeNav.boundingBox();
+  const mobileDockedMinimizeBox = await mobileMinimizeControl.boundingBox();
   const mobileMediaBox = await mobileHomeControls.boundingBox();
   if (
-    !dockedBreadcrumbBox ||
-    !mobileDockedFaviconBox ||
+    !dockedHomeLinkBox ||
+    !dockedSectionLinkBox ||
     !mobileBottomNavBox ||
+    !mobileDockedMinimizeBox ||
     !mobileMediaBox ||
-    dockedBreadcrumbJustification !== "flex-start" ||
+    mobileDockedToneStyle.backgroundColor !== "rgba(0, 0, 0, 0)" ||
+    mobileDockedToneStyle.borderRadius !== "0px" ||
+    Math.abs(mobileDockedToneStyle.height - 32) > 1 ||
+    Math.abs(mobileDockedToneStyle.width - 32) > 1 ||
     Math.abs(
-      dockedBreadcrumbBox.x -
-        (mobileDockedFaviconBox.x + mobileDockedFaviconBox.width + 8)
+      mobileDockedToneStyle.y +
+        mobileDockedToneStyle.height / 2 -
+        (mobileDockedMinimizeBox.y + mobileDockedMinimizeBox.height / 2)
+    ) > 1 ||
+    Math.abs(dockedHomeLinkBox.x - (mobileBottomNavBox.x + 8)) > 1 ||
+    Math.abs(
+      dockedSectionLinkBox.x +
+        dockedSectionLinkBox.width -
+        (mobileBottomNavBox.x + mobileBottomNavBox.width * 0.87)
     ) > 1 ||
     Math.abs(mobileBottomNavBox.y) > 1 ||
-    Math.abs(mobileBottomNavBox.height - 64) > 1 ||
+    Math.abs(mobileBottomNavBox.height - 40) > 1 ||
     Math.abs(mobileMediaBox.y + mobileMediaBox.height - 844) > 1
   ) {
     throw new Error(
-      `Upper breadcrumb dock or bottom controls are misplaced: ${JSON.stringify({ dockedBreadcrumbBox, dockedBreadcrumbJustification, mobileBottomNavBox, mobileDockedFaviconBox, mobileMediaBox })}`
+      `Upper document dock or bottom controls are misplaced: ${JSON.stringify({ dockedHomeLinkBox, dockedSectionLinkBox, mobileBottomNavBox, mobileDockedMinimizeBox, mobileDockedToneStyle, mobileMediaBox })}`
     );
   }
+  await mobileDockedTone.click();
+  const dockedToneExplainerAccept = mobilePage.getByRole("button", { name: "OK" });
+  if (await dockedToneExplainerAccept.isVisible()) await dockedToneExplainerAccept.click();
+  const dockedToneClose = mobilePage.locator("[data-tone-explorer-close]");
+  await dockedToneClose.waitFor({ state: "visible" });
+  await dockedToneClose.click();
+  await dockedToneClose.waitFor({ state: "hidden" });
+  await mobileResumeNav
+    .getByRole("button", { name: "Explore combinations by tone" })
+    .waitFor({ state: "visible" });
   let mobileScrollBeforeTone = await mobilePage.evaluate(() => window.scrollY);
   await mobileMinimizeControl.click();
   const mobileMinimizedWordmark = mobilePage.locator("[data-site-wordmark]");
@@ -712,16 +805,27 @@ try {
   const mediumNav = mediumPage.locator("[data-document-nav]");
   const mediumMinimize = mediumNav.getByRole("button", { name: "Minimize page" });
   await mediumMinimize.waitFor({ state: "visible" });
-  const mediumBreadcrumb = mediumNav.getByRole("navigation", { name: "Breadcrumb" });
-  await mediumBreadcrumb.waitFor({ state: "visible" });
+  const mediumSectionLink = mediumNav.getByRole("link", { name: "Blog" });
+  await mediumSectionLink.waitFor({ state: "visible" });
   const mediumControls = mediumPage.locator("[data-media-controls]");
   await mediumControls.waitFor({ state: "visible" });
   const mediumControlsBeforeScroll = await mediumControls.boundingBox();
-  const mediumBreadcrumbJustification = await mediumBreadcrumb
-    .locator("ol")
-    .evaluate((list) => getComputedStyle(list).justifyContent);
-  if (mediumBreadcrumbJustification !== "center") {
-    throw new Error(`Medium breadcrumbs are not centered: ${mediumBreadcrumbJustification}.`);
+  const [mediumNavBox, mediumSectionLinkBox] = await Promise.all([
+    mediumNav.boundingBox(),
+    mediumSectionLink.boundingBox(),
+  ]);
+  if (
+    !mediumNavBox ||
+    !mediumSectionLinkBox ||
+    Math.abs(
+      mediumSectionLinkBox.x +
+        mediumSectionLinkBox.width / 2 -
+        (mediumNavBox.x + mediumNavBox.width * 0.56)
+    ) > 1
+  ) {
+    throw new Error(
+      `Medium section navigation is misplaced: ${JSON.stringify({ mediumNavBox, mediumSectionLinkBox })}`
+    );
   }
   await scrollDocument(mediumPage, "Medium blog");
   const mediumStickyNavBox = await mediumNav.boundingBox();
@@ -731,7 +835,7 @@ try {
     !mediumControlsBeforeScroll ||
     !mediumControlsAfterScroll ||
     Math.abs(mediumStickyNavBox.y) > 1 ||
-    Math.abs(mediumStickyNavBox.height - 64) > 1 ||
+    Math.abs(mediumStickyNavBox.height - 40) > 1 ||
     Math.abs(mediumControlsAfterScroll.y + mediumControlsAfterScroll.height - 600) > 1 ||
     Math.abs(mediumControlsBeforeScroll.y - mediumControlsAfterScroll.y) > 1
   ) {

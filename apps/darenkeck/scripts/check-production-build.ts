@@ -34,14 +34,15 @@ const baseUrl = `http://127.0.0.1:${address.port}`;
 
 async function navigateFromHome(
   page: Page,
-  label: "Blog" | "Music" | "Resume"
+  label: "Blog" | "Music" | "News" | "Resume"
 ): Promise<void> {
   const homePanel = page.locator("[data-home-panel]");
-  await homePanel.getByRole("button", { name: "Open navigation" }).click();
-  await homePanel
-    .getByRole("navigation", { name: "Primary" })
-    .getByRole("link", { name: label })
-    .click();
+  await homePanel.waitFor({ state: "visible" });
+  const navigation = homePanel.locator("[data-home-navigation-rows]");
+  if ((await navigation.getAttribute("aria-hidden")) === "true") {
+    await homePanel.getByRole("button", { name: "Show navigation" }).click();
+  }
+  await navigation.getByRole("link", { name: label }).click();
 }
 const combo = {
   source: "derived",
@@ -133,14 +134,18 @@ try {
   if ((await page.getByRole("link", { name: "Wayfarer Records", exact: true }).count()) !== 1) {
     throw new Error("Homepage must expose one inline Wayfarer Records link.");
   }
-  await page.getByRole("button", { name: "Open navigation" }).click();
-  const homepagePrimaryNav = page.getByRole("navigation", { name: "Primary" });
+  const homepagePrimaryNav = page.locator("[data-home-navigation-rows]");
+  if (
+    (await homepagePrimaryNav.getAttribute("aria-hidden")) !== "true" ||
+    (await homepagePrimaryNav.evaluate((navigation) => getComputedStyle(navigation).opacity)) !== "0"
+  ) {
+    throw new Error("Homepage navigation rows are not hidden by default.");
+  }
+  await page.getByRole("button", { name: "Show navigation" }).click();
   await homepagePrimaryNav.getByRole("link", { name: "Resume" }).waitFor({ state: "visible" });
   if ((await homepagePrimaryNav.getByRole("link", { name: "Home" }).count()) !== 0) {
     throw new Error("Homepage primary navigation still includes Home.");
   }
-  await page.keyboard.press("Escape");
-  await homepagePrimaryNav.waitFor({ state: "hidden" });
   const homePanelAlignment = await page.evaluate(() => {
     const shell = document.querySelector<HTMLElement>("[data-home-panel-shell]");
     const panel = document.querySelector<HTMLElement>("[data-home-panel]");
@@ -180,13 +185,13 @@ try {
       homepageSummaryHref
     );
   }
-  await page.getByRole("link", { name: "All news", exact: true }).click();
+  await navigateFromHome(page, "News");
   await page.locator(".bulletin-document").waitFor({ state: "visible" });
-  const newsBreadcrumbColor = await page
-    .getByRole("navigation", { name: "Breadcrumb" })
-    .evaluate((navigation) => getComputedStyle(navigation).color);
-  if (newsBreadcrumbColor !== "rgb(233, 204, 0)") {
-    throw new Error(`News breadcrumbs use the wrong palette color: ${newsBreadcrumbColor}.`);
+  const newsNavigationColor = await page
+    .locator("[data-document-nav-fill]")
+    .evaluate((fill) => getComputedStyle(fill).fill);
+  if (newsNavigationColor !== "rgb(233, 204, 0)") {
+    throw new Error(`News navigation uses the wrong palette color: ${newsNavigationColor}.`);
   }
   await page.getByRole("link", { name: "Home", exact: true }).click();
   await navigateFromHome(page, "Resume");
@@ -195,11 +200,11 @@ try {
   await navigateFromHome(page, "Music");
   await page.getByLabel("Loading releases").waitFor({ state: "visible" });
   await page.getByRole("heading", { name: "Moonlit Home" }).waitFor({ state: "visible" });
-  const musicBreadcrumbColor = await page
-    .getByRole("navigation", { name: "Breadcrumb" })
-    .evaluate((navigation) => getComputedStyle(navigation).color);
-  if (musicBreadcrumbColor !== "rgb(250, 1, 0)") {
-    throw new Error(`Music breadcrumbs use the wrong palette color: ${musicBreadcrumbColor}.`);
+  const musicNavigationColor = await page
+    .locator("[data-document-nav-fill]")
+    .evaluate((fill) => getComputedStyle(fill).fill);
+  if (musicNavigationColor !== "rgb(250, 1, 0)") {
+    throw new Error(`Music navigation uses the wrong palette color: ${musicNavigationColor}.`);
   }
   await page
     .getByRole("button", { name: "Moonlit Home" })
@@ -230,7 +235,7 @@ try {
     (await page.locator("[data-document-nav]").count()) !== 1 ||
     (await page.locator("[data-document-bottom-controls]").count()) !== 0
   ) {
-    throw new Error("Music playback did not preserve only the upper breadcrumb row.");
+    throw new Error("Music playback did not preserve only the upper section row.");
   }
   await page.locator("main > div > article").evaluate((article) => {
     article.style.minHeight = "1800px";
@@ -381,7 +386,7 @@ try {
     (await mobilePage.locator("[data-document-nav]").count()) !== 1 ||
     (await mobilePage.locator("[data-document-bottom-controls]").count()) !== 0
   ) {
-    throw new Error("Mobile music playback did not preserve only the upper breadcrumb row.");
+    throw new Error("Mobile music playback did not preserve only the upper section row.");
   }
   await mobilePage.locator("main > div > article").evaluate((article) => {
     article.style.minHeight = "1800px";
