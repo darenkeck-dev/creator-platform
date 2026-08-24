@@ -495,7 +495,7 @@ export function App() {
         const references = new Map<string, PublishedAudioReference>();
         for (const release of catalog.releases) {
           for (const track of release.tracks) {
-            if (!track.audioAssetId || references.has(track.audioAssetId)) continue;
+            if (references.has(track.audioAssetId)) continue;
             references.set(track.audioAssetId, {
               releaseId: release.id,
               releaseTitle: release.title,
@@ -1138,7 +1138,7 @@ export function App() {
                   <nav
                     aria-hidden={!homeNavigationOpen}
                     aria-label="Primary"
-                    className={`absolute inset-x-0 bottom-full z-0 grid h-40 grid-rows-4 gap-1 transition-[opacity,transform] duration-200 ease-out ${homeNavigationOpen ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-full opacity-0"}`}
+                    className={`absolute inset-x-0 bottom-full z-0 grid h-40 grid-rows-4 gap-1 transition-[clip-path,opacity] duration-200 ease-out ${homeNavigationOpen ? "[clip-path:inset(0_0_0_0)] opacity-100" : "pointer-events-none [clip-path:inset(0_0_0_100%)] opacity-0"}`}
                     data-home-navigation-rows
                     inert={!homeNavigationOpen}
                   >

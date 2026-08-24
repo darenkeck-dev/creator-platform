@@ -116,12 +116,16 @@ try {
   const homeNewsBox = await page.getByRole("region", { name: "Latest news" }).boundingBox();
   const homeNewsDateBox = await page.locator("[data-home-bulletin] time").first().boundingBox();
   const homeNavigationRows = page.locator("[data-home-navigation-rows]");
-  const initialHomeNavigationOpacity = await homeNavigationRows.evaluate(
-    (navigation) => getComputedStyle(navigation).opacity
-  );
+  const initialHomeNavigationStyle = await homeNavigationRows.evaluate((navigation) => ({
+    clipPath: getComputedStyle(navigation).clipPath,
+    opacity: getComputedStyle(navigation).opacity,
+  }));
   await page.getByRole("button", { name: "Show navigation" }).click();
   await page.waitForTimeout(250);
   const homeNavigationRowsBox = await homeNavigationRows.boundingBox();
+  const openHomeNavigationClipPath = await homeNavigationRows.evaluate(
+    (navigation) => getComputedStyle(navigation).clipPath
+  );
   const homePanelSurfaceBoxAfterOpen = await homePanelSurface.boundingBox();
   const homeNavigationRowBoxes = await homeNavigationRows.locator("a").evaluateAll((links) =>
     links.map((link) => {
@@ -180,7 +184,9 @@ try {
     !homePanelSurfaceBoxAfterOpen ||
     !homeHeaderControlsBox ||
     !homeTitleBox ||
-    initialHomeNavigationOpacity !== "0" ||
+    initialHomeNavigationStyle.opacity !== "0" ||
+    !initialHomeNavigationStyle.clipPath.includes("100%") ||
+    openHomeNavigationClipPath.includes("100%") ||
     (await homeNavigationRows.getAttribute("aria-hidden")) !== "false" ||
     (await page.getByRole("button", { name: "Hide navigation" }).count()) !== 1 ||
     homePageScroll.scrollY !== 0 ||
@@ -248,9 +254,12 @@ try {
   if (
     (await homeNavigationRows.evaluate((navigation) => getComputedStyle(navigation).opacity)) !==
       "0" ||
+    !(await homeNavigationRows.evaluate((navigation) =>
+      getComputedStyle(navigation).clipPath.includes("100%")
+    )) ||
     (await homeNavigationRows.getAttribute("aria-hidden")) !== "true"
   ) {
-    throw new Error("Homepage navigation rows did not lower and hide.");
+    throw new Error("Homepage navigation rows did not retract rightward and hide.");
   }
 
   await page.getByRole("button", { name: "Minimize page" }).click();
