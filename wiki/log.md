@@ -2,6 +2,8 @@
 
 ## [2026-08-24] web | experimental homepage navigation
 
+- Deployed `MediaManagerApiStack` with public `audioAssetId`, verified all 15 tracks across two live releases expose identity, joined a live random combo to its release, removed the temporary URL/title fallback, and made the client contract require asset identity.
+- Changed the Home navigation transition from a vertical rise to a right-to-left clip-path expansion that retracts toward the hamburger.
 - Removed the Home shelf's desktop bottom corner rounding.
 - Showed ToneExplorer's fixed `x` when opened from a docked document header, where the trigger's own close state sits below the overlay.
 - Raised docked Tone and `-` above the transparent section-link hit area so Resume cannot intercept control clicks.

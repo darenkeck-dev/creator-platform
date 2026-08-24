@@ -11,7 +11,7 @@
 - Upload/delete UI context should consistently respect active folder path.
 - Queued tone/conversion reprocessing jobs currently report queueing completion, not downstream tone/MediaConvert completion; link downstream worker progress to jobs if richer completion tracking is needed.
 - Publish and validate the Media Manager `/combos` controlled explorer; the source build is complete but this repository has no web deployment target.
-- Publish at least one ready release, deploy the source-complete Darenkeck `/music` catalog/player, and validate real HLS auto-advance, seeking, mute, route persistence, and ambient return across the target browser/device matrix.
+- Validate the published Darenkeck `/music` catalog/player with real HLS auto-advance, seeking, mute, route persistence, released-track ambient labels, and ambient return across the target browser/device matrix.
 - Darenkeck mobile focus-loss handling needs hardening (background/foreground transitions should not leave combo state machine desynced).
 - Darenkeck mobile native play/pause interactions need explicit state-machine handling so UI and media element state stay aligned.
 - Tone extraction output needs simplification: reassess whether `.tonebundle.tar.gz` is needed now that display-ready tone summary/scores are stored directly on the asset record.

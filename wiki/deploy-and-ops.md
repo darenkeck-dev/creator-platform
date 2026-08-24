@@ -70,6 +70,7 @@ Migration note:
 ## Post-deploy quick checks
 
 - API health: call `GET /public/combos/random` and verify 200 payload with `videoSrc/audioSrc`.
+- Music identity: call `GET /public/music`, verify every release track has `audioAssetId`, then confirm a released random combo joins by that ID.
 - Tone payload health: for a pair with eligible taxonomy-v2 source vectors, verify random and controlled responses contain all ten bounded `predictedTone` dimensions.
 - Walk health: call `POST /public/combos/select` with `schemaVersion=public-combo-selection-request/v1`, `mode=walk`, current public audio/video IDs, and bounded combo/audio/video history. Verify either exact walk metadata or an explicit random fallback reason, and confirm neither current source repeats.
 - Darenkeck: verify homepage loads + combo playback starts.
