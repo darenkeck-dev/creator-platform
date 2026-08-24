@@ -1,5 +1,31 @@
 # Wiki Log
 
+## [2026-08-24] web | experimental homepage navigation
+
+- Removed the Home shelf's desktop bottom corner rounding.
+- Showed ToneExplorer's fixed `x` when opened from a docked document header, where the trigger's own close state sits below the overlay.
+- Raised docked Tone and `-` above the transparent section-link hit area so Resume cannot intercept control clicks.
+- Vertically centered docked Tone with the adjacent `-` by giving its wrapper an explicit 32px flex box without baseline line-height.
+- Shifted Blog to 56% and Resume to 87% across Home and document navigation.
+- Shifted the shared label grid to 10%/35%/60%/85% and removed the docked Tone control's circular background, shadow, and local blur.
+- Clipped the 1px dark label stroke to letter exteriors with rounded joins, removing internal overlap artifacts in `M`, `B`, and `N`.
+- Reduced the dark label edge to 1px to prevent overlap in dense letterforms such as `B` and `M`.
+- Removed the light inner label edge, retaining only the dark outer edge.
+- Added dark outer and light inner SVG edge passes to transparent Home and document labels for contrast across changing video luminance.
+- Reduced Home and document label tint to 20% while retaining the stronger blur.
+- Set label tint to 40% and increased Home's cutout backdrop blur to 4px.
+- Increased the primary-color tint inside Home and document label cutouts from 30% to 50%.
+- Changed Home and document label cutouts from fully transparent to 30% primary-color tint while preserving the video reveal.
+- Tightened Home's middle diagonal to Music 40% and Blog 55%, and added a light blur behind the transparent label cutouts.
+- Matched Home's label positions to document navigation at 10%, 36.667%, 63.333%, and 90%.
+- Reduced document navigation to the Home-row scale, removed upper rounding and separator styling, split the document backing to expose an 8px video gap, and increased row opacity/blur only while docked.
+- Rebuilt document headers as section-colored navigation rows with Home left, `-` right, and clickable knockout section names at News 10%, Music one-third, Blog two-thirds, and Resume 90%; removed breadcrumbs and the favicon.
+- Vertically centered the uppercase knockout labels in each navigation row using the SVG central baseline.
+- Extended the diagonal knockout labels across the full row width at 0%, one-third, two-thirds, and 100%; enlarged them to row height and aligned the hamburger/`-` group with news dates at the shelf's right edge.
+- Enlarged and uppercased the transparent row labels, offsetting News/Music/Blog/Resume at 0%/25%/50%/75% to form a diagonal.
+- Replaced the paint streaks with four normal horizontal primary-color rows, restored the hamburger show/hide control, and rendered route names as transparent SVG mask cutouts.
+- Replaced Home's hidden tabs and hamburger/caret toggle with four progressively longer paint-splatter navigation streaks that rise rightward from above the Hey introduction, with each route link at its streak midpoint.
+
 ## [2026-08-23] web | restore minimized content from bottom controls
 
 - Removed the hamburger navigation and made the rightmost bottom-row control `-` while expanded and `+` while minimized.
@@ -29,6 +55,12 @@
 - Prevented Home page scrolling by normalizing the root height chain to `100dvh` and constraining the Home experience to a clipped dynamic viewport; document routes retain normal scrolling.
 - Replaced the docked signature with the favicon and left-aligned mobile docked breadcrumbs eight pixels to its right; desktop docked breadcrumbs remain centered.
 - Kept the favicon visible in undocked document rows and applied the same mobile left alignment before and after docking.
+- Removed Home's hamburger and Latest news/All news heading row; added four always-visible, equal-width Resume/Blog/Music/News tabs with 8px gaps across the shelf top.
+- Gave each Home navigation tab a tinted physical surface with rounded top corners, top/side edges, and an inset highlight while preserving transparent 8px gaps between tabs.
+- Moved Home's `-` back beside the Hey introduction and split the transparent tab strip from the shelf surface so the container background starts exactly at the tabs' bottom edge.
+- Narrowed the Home tab strip to a compact maximum width, removed tab borders, and increased each favicon-color tint's opacity.
+- Replaced colored tab fills with one translucent blurred-black surface; favicon palette colors remain only on tab text.
+- Hid Home tabs behind the shelf by default and added a hamburger/up-caret morph that raises and lowers them without changing shelf geometry.
 - Hid both upper-corner darkening scrims while document navigation is docked; they return when undocked or minimized.
 - Halved both opacity stops in the upper-corner darkening gradients.
 - Kept play/pause, mute/unmute, and size controls mounted during initial track loading; only the transport's center metadata slot changes to the loading indicator.
