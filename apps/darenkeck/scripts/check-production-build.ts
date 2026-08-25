@@ -227,7 +227,18 @@ try {
   const newsNavigationColor = await page
     .locator("[data-document-nav-fill]")
     .evaluate((fill) => getComputedStyle(fill).fill);
-  if (newsNavigationColor !== "rgb(233, 204, 0)") {
+  const newsRowsAbove = await page
+    .locator('[data-document-navigation-rows="above"] [data-document-navigation-row]')
+    .evaluateAll((rows) => rows.map((row) => row.getAttribute("data-document-navigation-row")));
+  if (
+    newsNavigationColor !== "rgb(233, 204, 0)" ||
+    newsRowsAbove.join("|") !== "resume|blog|music" ||
+    (await page.locator('[data-document-navigation-rows="below"]').count()) !== 0 ||
+    (await page
+      .locator("[data-document-nav]")
+      .getByRole("button", { name: "Show navigation" })
+      .count()) !== 1
+  ) {
     throw new Error(`News navigation uses the wrong palette color: ${newsNavigationColor}.`);
   }
   await page.getByRole("link", { name: "Home", exact: true }).click();
@@ -240,7 +251,21 @@ try {
   const musicNavigationColor = await page
     .locator("[data-document-nav-fill]")
     .evaluate((fill) => getComputedStyle(fill).fill);
-  if (musicNavigationColor !== "rgb(250, 1, 0)") {
+  const musicRowsAbove = await page
+    .locator('[data-document-navigation-rows="above"] [data-document-navigation-row]')
+    .evaluateAll((rows) => rows.map((row) => row.getAttribute("data-document-navigation-row")));
+  const musicRowsBelow = await page
+    .locator('[data-document-navigation-rows="below"] [data-document-navigation-row]')
+    .evaluateAll((rows) => rows.map((row) => row.getAttribute("data-document-navigation-row")));
+  if (
+    musicNavigationColor !== "rgb(250, 1, 0)" ||
+    musicRowsAbove.join("|") !== "resume|blog" ||
+    musicRowsBelow.join("|") !== "news" ||
+    (await page
+      .locator("[data-document-nav]")
+      .getByRole("button", { name: "Show navigation" })
+      .count()) !== 1
+  ) {
     throw new Error(`Music navigation uses the wrong palette color: ${musicNavigationColor}.`);
   }
   await page
@@ -319,6 +344,10 @@ try {
   }
   if (
     (await page.locator("[data-document-nav]").count()) !== 1 ||
+    (await page
+      .locator("[data-document-nav]")
+      .getByRole("button", { name: "Show navigation" })
+      .count()) !== 1 ||
     (await page.locator("[data-document-bottom-controls]").count()) !== 0
   ) {
     throw new Error("Music playback did not preserve only the upper section row.");
@@ -515,6 +544,10 @@ try {
   await mobilePage.getByRole("button", { name: "Minimize page" }).waitFor({ state: "visible" });
   if (
     (await mobilePage.locator("[data-document-nav]").count()) !== 1 ||
+    (await mobilePage
+      .locator("[data-document-nav]")
+      .getByRole("button", { name: "Show navigation" })
+      .count()) !== 1 ||
     (await mobilePage.locator("[data-document-bottom-controls]").count()) !== 0
   ) {
     throw new Error("Mobile music playback did not preserve only the upper section row.");

@@ -2,6 +2,12 @@
 
 ## [2026-08-25] web | strengthen player track hover
 
+- Returned docked navigation cutout blur to 16px while retaining reduced brightness and saturation.
+- Moved docked inactive-row backdrop filtering to the clipped row groups so every expanded navigation row blurs the document behind its letter cutouts.
+- Increased docked inactive-row cutout isolation to 32px blur with 45% brightness and 55% saturation, further obscuring underlying document text.
+- Kept expanded docked navigation at 40px so it does not shift page content, and increased inactive-row backdrop blur to 16px while docked to soften text behind letter cutouts.
+- Added general hamburger navigation to every document route: inactive rows reveal in canonical order above and below the active section, expansion pushes content down, the hamburger/caret stays white, and docked Tone holds the adjacent left slot.
+- Removed the circular fill, radius, shadow, and local blur from the ambient mute/unmute control, matching the unframed music controls.
 - Removed the upward dock shadow and depth gradient from minimized ambient, loading, and dedicated music controls while retaining expanded depth treatment.
 - Replaced faint cyan hover text with primary Music red on ambient and dedicated lower-player track links.
 

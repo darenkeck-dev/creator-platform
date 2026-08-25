@@ -354,7 +354,7 @@ function AudioControl({
   return (
     <button
       aria-label={audioButtonTitle}
-      className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-md transition hover:bg-black/65 supports-[backdrop-filter]:bg-black/30 min-[360px]:h-12 min-[360px]:w-12 print:hidden"
+      className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center text-white transition hover:text-white/70 min-[360px]:h-12 min-[360px]:w-12 print:hidden"
       data-audio-control
       onClick={(event) => {
         event.preventDefault();
@@ -1318,14 +1318,9 @@ export function App() {
                         <button
                           aria-expanded={homeNavigationOpen}
                           aria-label={homeNavigationOpen ? "Hide navigation" : "Show navigation"}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg transition-[background-color,color] duration-200 hover:bg-black/35"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-white transition-colors duration-200 hover:bg-black/35"
                           data-home-navigation-toggle
                           onClick={() => setHomeNavigationOpen((open) => !open)}
-                          style={{
-                            color: homeNavigationOpen
-                              ? "var(--primary-yellow)"
-                              : "var(--primary-orange)",
-                          }}
                           type="button"
                         >
                           <svg
