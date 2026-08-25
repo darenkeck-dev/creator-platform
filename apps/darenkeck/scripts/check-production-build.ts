@@ -132,9 +132,18 @@ try {
   if ((await wordmarkHomeLink.getAttribute("href")) !== "/") {
     throw new Error("Daren Keck wordmark does not link to Home.");
   }
-  await page
-    .getByRole("link", { name: "View Moonlit Home on the Music page" })
-    .waitFor({ state: "visible" });
+  const ambientTrackLink = page.getByRole("link", {
+    name: "View Moonlit Home on the Music page",
+  });
+  await ambientTrackLink.waitFor({ state: "visible" });
+  await ambientTrackLink.hover();
+  await page.waitForTimeout(200);
+  const ambientTrackHoverColor = await ambientTrackLink.evaluate(
+    (link) => getComputedStyle(link).color
+  );
+  if (ambientTrackHoverColor !== "rgb(250, 1, 0)") {
+    throw new Error(`Ambient track hover is not Music red: ${ambientTrackHoverColor}.`);
+  }
   const homeAmbientAlignment = await page.evaluate(() => {
     const controls = document.querySelector<HTMLElement>("[data-media-controls]");
     const label = document.querySelector<HTMLElement>(
@@ -267,6 +276,12 @@ try {
   const musicControlsBeforeScroll = await page.locator('[aria-label="Music player"]').boundingBox();
   const musicProgressRail = await page.locator("[data-music-progress-rail]").boundingBox();
   const musicTrackLabelBox = await page.locator("[data-music-track-label]").boundingBox();
+  const musicTrackLink = page.locator("[data-music-track-label] a");
+  await musicTrackLink.hover();
+  await page.waitForTimeout(200);
+  const musicTrackHoverColor = await musicTrackLink.evaluate(
+    (link) => getComputedStyle(link).color
+  );
   const musicControlStyles = await page
     .locator('[aria-label="Music player"] [data-player-control]')
     .evaluateAll((controls) =>
@@ -279,6 +294,7 @@ try {
     !musicControlsBeforeScroll ||
     !musicProgressRail ||
     !musicTrackLabelBox ||
+    musicTrackHoverColor !== "rgb(250, 1, 0)" ||
     Math.abs(musicControlsBeforeScroll.width - 896) > 1 ||
     Math.abs(musicProgressRail.width - musicControlsBeforeScroll.width) > 1 ||
     Math.abs(musicProgressRail.x - musicControlsBeforeScroll.x) > 1 ||
@@ -337,14 +353,19 @@ try {
   const stopAfterMinimize = await page
     .getByRole("button", { name: "Stop music and return to ambient playback" })
     .boundingBox();
+  const minimizedMusicShadow = await page
+    .locator('[aria-label="Music player"]')
+    .evaluate((controls) => getComputedStyle(controls).boxShadow);
   if (
     !stopBeforeMinimize ||
     !stopAfterMinimize ||
+    minimizedMusicShadow !== "none" ||
+    (await page.locator("[data-player-depth-gradient]").count()) !== 0 ||
     Math.abs(stopBeforeMinimize.x - stopAfterMinimize.x) > 1 ||
     Math.abs(stopBeforeMinimize.y - stopAfterMinimize.y) > 1
   ) {
     throw new Error(
-      `Music Stop moved when content minimized: ${JSON.stringify({ stopAfterMinimize, stopBeforeMinimize })}`
+      `Minimized music controls retained depth treatment or moved Stop: ${JSON.stringify({ minimizedMusicShadow, stopAfterMinimize, stopBeforeMinimize })}`
     );
   }
   await page.getByRole("button", { name: "Restore page" }).click();

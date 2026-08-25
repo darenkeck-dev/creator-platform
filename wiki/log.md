@@ -1,5 +1,10 @@
 # Wiki Log
 
+## [2026-08-25] web | strengthen player track hover
+
+- Removed the upward dock shadow and depth gradient from minimized ambient, loading, and dedicated music controls while retaining expanded depth treatment.
+- Replaced faint cyan hover text with primary Music red on ambient and dedicated lower-player track links.
+
 ## [2026-08-24] web | experimental homepage navigation
 
 - Applied Resume primary blue to the `Download` action and the contact links directly below the heading without changing later document links.

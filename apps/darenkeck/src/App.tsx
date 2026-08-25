@@ -880,7 +880,7 @@ export function App() {
   const ambientTrackLabel = ambientAudioReference ? (
     <Link
       aria-label={`View ${ambientAudioReference.releaseTitle} on the Music page`}
-      className="pointer-events-auto block min-w-0 text-center text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.95)] transition hover:text-cyan-100"
+      className="pointer-events-auto block min-w-0 text-center text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.95)] transition hover:text-[var(--primary-red)]"
       onClick={handleMenuNavigate}
       to={`/music#release-${ambientAudioReference.releaseId}`}
     >
@@ -998,10 +998,15 @@ export function App() {
             />
           ) : (
             <>
-              <div className="pointer-events-none fixed bottom-0 left-1/2 z-[125] h-28 w-full max-w-4xl -translate-x-1/2 bg-gradient-to-t from-black/65 to-transparent" />
+              {!isContentMinimized ? (
+                <div
+                  className="pointer-events-none fixed bottom-0 left-1/2 z-[125] h-28 w-full max-w-4xl -translate-x-1/2 bg-gradient-to-t from-black/65 to-transparent"
+                  data-player-depth-gradient
+                />
+              ) : null}
               {!documentDockVisible ? (
                 <div
-                  className="pointer-events-none fixed bottom-0 left-1/2 z-[140] grid h-[max(4rem,calc(env(safe-area-inset-bottom)+3.5rem))] w-full max-w-4xl -translate-x-1/2 grid-cols-[5.5rem_minmax(0,1fr)_5.5rem] items-center gap-2 border-t border-white/25 bg-black/40 px-4 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(0,0,0,0.3)] backdrop-blur-md min-[360px]:grid-cols-[7rem_minmax(0,1fr)_7rem] sm:gap-3 sm:px-6"
+                  className={`pointer-events-none fixed bottom-0 left-1/2 z-[140] grid h-[max(4rem,calc(env(safe-area-inset-bottom)+3.5rem))] w-full max-w-4xl -translate-x-1/2 grid-cols-[5.5rem_minmax(0,1fr)_5.5rem] items-center gap-2 border-t border-white/25 bg-black/40 px-4 pb-[env(safe-area-inset-bottom)] backdrop-blur-md min-[360px]:grid-cols-[7rem_minmax(0,1fr)_7rem] sm:gap-3 sm:px-6 ${isContentMinimized ? "" : "shadow-[0_-8px_24px_rgba(0,0,0,0.3)]"}`}
                   data-media-controls
                 >
                   {isContentMinimized ? (

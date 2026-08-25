@@ -185,6 +185,9 @@ try {
   const homeMediaBackground = await page
     .locator("[data-media-controls]")
     .evaluate((controls) => getComputedStyle(controls).backgroundColor);
+  const homeMediaShadow = await page
+    .locator("[data-media-controls]")
+    .evaluate((controls) => getComputedStyle(controls).boxShadow);
   const homeCircleBorders = await page
     .locator("[data-media-controls] button")
     .evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).borderTopWidth));
@@ -238,6 +241,8 @@ try {
     homePanelSurfaceBackground === "rgba(0, 0, 0, 0)" ||
     homePanelSurfaceBottomRadius !== "0px" ||
     homeMediaBackground === "rgba(0, 0, 0, 0)" ||
+    homeMediaShadow === "none" ||
+    (await page.locator("[data-player-depth-gradient]").count()) !== 1 ||
     homeCircleBorders.some((borderWidth) => borderWidth !== "0px") ||
     homeMinimizeColor !== "rgb(250, 1, 0)" ||
     homeMinimizeIcon.height !== "24" ||
@@ -336,6 +341,9 @@ try {
     hitTargetHeight: border.getBoundingClientRect().height,
     visibleHeight: border.firstElementChild?.getBoundingClientRect().height ?? 0,
   }));
+  const minimizedPlayerShadow = await page
+    .locator("[data-media-controls]")
+    .evaluate((controls) => getComputedStyle(controls).boxShadow);
   const sameVideoOnMinimizedHome = await page.evaluate(
     () =>
       (window as Window & { continuityVideo?: HTMLVideoElement }).continuityVideo ===
@@ -343,13 +351,15 @@ try {
   );
   if (
     !sameVideoOnMinimizedHome ||
+    minimizedPlayerShadow !== "none" ||
+    (await page.locator("[data-player-depth-gradient]").count()) !== 0 ||
     Math.abs(minimizedPlayerColorBorderStyle.visibleHeight - 2) > 0.5 ||
     minimizedPlayerColorBorderStyle.hitTargetHeight < 20 ||
     minimizedPlayerColorBorderStyle.colors.join("|") !==
       "rgb(233, 204, 0)|rgb(250, 1, 0)|rgb(253, 71, 0)|rgb(0, 134, 186)"
   ) {
     throw new Error(
-      `Homepage minimize remounted ComboPlayer or lost its color edge: ${JSON.stringify(minimizedPlayerColorBorderStyle)}`
+      `Homepage minimize retained depth treatment, remounted ComboPlayer, or lost its color edge: ${JSON.stringify({ minimizedPlayerColorBorderStyle, minimizedPlayerShadow })}`
     );
   }
   const homeRestoreButton = page.getByRole("button", { name: "Restore page" });
