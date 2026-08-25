@@ -116,16 +116,29 @@ try {
   const homeNewsBox = await page.getByRole("region", { name: "Latest news" }).boundingBox();
   const homeNewsDateBox = await page.locator("[data-home-bulletin] time").first().boundingBox();
   const homeNavigationRows = page.locator("[data-home-navigation-rows]");
+  const homeColorBorder = page.locator("[data-home-color-border]");
+  const initialHomeColorBorder = await homeColorBorder.evaluate((border) => ({
+    colors: Array.from(border.children).map((segment) => getComputedStyle(segment).backgroundColor),
+    hitTargetHeight: border.getBoundingClientRect().height,
+    opacity: getComputedStyle(border).opacity,
+    visibleHeight: border.firstElementChild?.getBoundingClientRect().height ?? 0,
+  }));
   const initialHomeNavigationStyle = await homeNavigationRows.evaluate((navigation) => ({
     clipPath: getComputedStyle(navigation).clipPath,
     opacity: getComputedStyle(navigation).opacity,
   }));
-  await page.getByRole("button", { name: "Show navigation" }).click();
+  await page.getByRole("button", { name: "Open navigation from color border" }).click();
   await page.waitForTimeout(250);
   const homeNavigationRowsBox = await homeNavigationRows.boundingBox();
   const openHomeNavigationClipPath = await homeNavigationRows.evaluate(
     (navigation) => getComputedStyle(navigation).clipPath
   );
+  const openHomeColorBorderOpacity = await homeColorBorder.evaluate(
+    (border) => getComputedStyle(border).opacity
+  );
+  const openHomeNavigationIconOpacities = await page
+    .locator("[data-home-navigation-toggle] [data-home-navigation-icon]")
+    .evaluateAll((icons) => icons.map((icon) => getComputedStyle(icon).opacity));
   const homePanelSurfaceBoxAfterOpen = await homePanelSurface.boundingBox();
   const homeNavigationRowBoxes = await homeNavigationRows.locator("a").evaluateAll((links) =>
     links.map((link) => {
@@ -187,6 +200,14 @@ try {
     initialHomeNavigationStyle.opacity !== "0" ||
     !initialHomeNavigationStyle.clipPath.includes("100%") ||
     openHomeNavigationClipPath.includes("100%") ||
+    openHomeNavigationIconOpacities.join("|") !== "0|1" ||
+    initialHomeColorBorder.opacity !== "1" ||
+    Math.abs(initialHomeColorBorder.visibleHeight - 2) > 0.5 ||
+    initialHomeColorBorder.hitTargetHeight < 20 ||
+    initialHomeColorBorder.colors.join("|") !==
+      "rgb(233, 204, 0)|rgb(250, 1, 0)|rgb(253, 71, 0)|rgb(0, 134, 186)" ||
+    openHomeColorBorderOpacity !== "0" ||
+    (await page.locator("[data-minimized-player-color-border]").count()) !== 0 ||
     (await homeNavigationRows.getAttribute("aria-hidden")) !== "false" ||
     (await page.getByRole("button", { name: "Hide navigation" }).count()) !== 1 ||
     homePageScroll.scrollY !== 0 ||
@@ -227,6 +248,8 @@ try {
     ) ||
     Math.abs(homePanelBox.width - 896) > 1 ||
     Math.abs(homePanelSurfaceBox.width - homePanelBox.width) > 1 ||
+    Math.abs(homeMediaBox.x - homePanelBox.x) > 1 ||
+    Math.abs(homeMediaBox.width - homePanelBox.width) > 1 ||
     Math.abs(homePanelSurfaceBoxAfterOpen.x - homePanelSurfaceBox.x) > 1 ||
     Math.abs(homePanelSurfaceBoxAfterOpen.y - homePanelSurfaceBox.y) > 1 ||
     Math.abs(
@@ -257,6 +280,11 @@ try {
     !(await homeNavigationRows.evaluate((navigation) =>
       getComputedStyle(navigation).clipPath.includes("100%")
     )) ||
+    (await page
+      .locator("[data-home-navigation-toggle] [data-home-navigation-icon]")
+      .evaluateAll((icons) => icons.map((icon) => getComputedStyle(icon).opacity).join("|"))) !==
+      "1|0" ||
+    (await homeColorBorder.evaluate((border) => getComputedStyle(border).opacity)) !== "1" ||
     (await homeNavigationRows.getAttribute("aria-hidden")) !== "true"
   ) {
     throw new Error("Homepage navigation rows did not retract rightward and hide.");
@@ -264,19 +292,37 @@ try {
 
   await page.getByRole("button", { name: "Minimize page" }).click();
   await page.locator("[data-site-wordmark]").waitFor({ state: "visible" });
+  const minimizedPlayerColorBorder = page.locator("[data-minimized-player-color-border]");
+  await minimizedPlayerColorBorder.waitFor({ state: "visible" });
+  const minimizedPlayerColorBorderStyle = await minimizedPlayerColorBorder.evaluate((border) => ({
+    colors: Array.from(border.children).map((segment) => getComputedStyle(segment).backgroundColor),
+    hitTargetHeight: border.getBoundingClientRect().height,
+    visibleHeight: border.firstElementChild?.getBoundingClientRect().height ?? 0,
+  }));
   const sameVideoOnMinimizedHome = await page.evaluate(
     () =>
       (window as Window & { continuityVideo?: HTMLVideoElement }).continuityVideo ===
       document.querySelector("video")
   );
-  if (!sameVideoOnMinimizedHome) throw new Error("Homepage minimize remounted ComboPlayer.");
+  if (
+    !sameVideoOnMinimizedHome ||
+    Math.abs(minimizedPlayerColorBorderStyle.visibleHeight - 2) > 0.5 ||
+    minimizedPlayerColorBorderStyle.hitTargetHeight < 20 ||
+    minimizedPlayerColorBorderStyle.colors.join("|") !==
+      "rgb(233, 204, 0)|rgb(250, 1, 0)|rgb(253, 71, 0)|rgb(0, 134, 186)"
+  ) {
+    throw new Error(
+      `Homepage minimize remounted ComboPlayer or lost its color edge: ${JSON.stringify(minimizedPlayerColorBorderStyle)}`
+    );
+  }
   const homeRestoreButton = page.getByRole("button", { name: "Restore page" });
   if ((await homeRestoreButton.locator("svg rect").count()) !== 1) {
     throw new Error("Homepage restore control does not use the same square outline as minimize.");
   }
-  await homeRestoreButton.click();
+  await minimizedPlayerColorBorder.click();
   await page.locator("[data-site-wordmark]").waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Minimize page" }).waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "Hide navigation" }).waitFor({ state: "visible" });
 
   await page.getByRole("button", { name: "Explore combinations by tone" }).click();
   await page.getByRole("button", { name: "OK" }).click();

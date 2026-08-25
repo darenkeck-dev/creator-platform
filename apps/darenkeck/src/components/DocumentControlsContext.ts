@@ -1,6 +1,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 
 export type DocumentControls = {
+  center?: ReactNode;
   dockedTone: ReactNode;
   leading: ReactNode;
   navHidden?: boolean;

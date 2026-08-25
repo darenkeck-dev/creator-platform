@@ -53,17 +53,22 @@ export function DocumentShell({
   }, [documentControls?.onStickyChange]);
   const bottomControls = !documentControls?.navHidden ? (
     <div
-      className="fixed inset-x-0 bottom-0 z-[135] flex h-[max(4rem,calc(env(safe-area-inset-bottom)+3.5rem))] items-center gap-2 border-t border-white/25 bg-black/40 px-4 pb-[env(safe-area-inset-bottom)] text-sm leading-none text-white/65 shadow-[0_-8px_24px_rgba(0,0,0,0.3)] backdrop-blur-md sm:px-6 print:hidden"
+      className="fixed bottom-0 left-1/2 z-[135] grid h-[max(4rem,calc(env(safe-area-inset-bottom)+3.5rem))] w-full max-w-4xl -translate-x-1/2 grid-cols-[5.5rem_minmax(0,1fr)_5.5rem] items-center gap-2 border-t border-white/25 bg-black/40 px-4 pb-[env(safe-area-inset-bottom)] text-sm leading-none text-white/65 shadow-[0_-8px_24px_rgba(0,0,0,0.3)] backdrop-blur-md min-[360px]:grid-cols-[7rem_minmax(0,1fr)_7rem] sm:px-6 print:hidden"
       data-media-controls
       data-document-bottom-controls
     >
       {documentControls?.leading ? (
-        <div className="flex shrink-0 items-center gap-2" data-document-audio-control>
+        <div className="col-start-1 flex shrink-0 items-center gap-2" data-document-audio-control>
           {documentControls.leading}
         </div>
       ) : null}
+      {documentControls?.center ? (
+        <div className="col-start-2 min-w-0 justify-self-center text-center" data-document-center-control>
+          {documentControls.center}
+        </div>
+      ) : null}
       {trailingAction ? (
-        <div className="ml-auto flex shrink-0 items-center gap-2">
+        <div className="col-start-3 flex shrink-0 items-center justify-self-end gap-2">
           {trailingAction}
         </div>
       ) : null}

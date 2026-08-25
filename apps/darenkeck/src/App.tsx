@@ -68,6 +68,7 @@ type MusicPlayback = {
 type PublishedAudioReference = {
   releaseId: string;
   releaseTitle: string;
+  trackId: string;
   trackTitle: string;
 };
 
@@ -499,6 +500,7 @@ export function App() {
             references.set(track.audioAssetId, {
               releaseId: release.id,
               releaseTitle: release.title,
+              trackId: track.id,
               trackTitle: track.title,
             });
           }
@@ -864,6 +866,19 @@ export function App() {
   const ambientAudioReference = slotAssignment
     ? publishedAudioReferences.get(slotAssignment.combo.audioAssetId) ?? null
     : null;
+  const ambientTrackLabel = ambientAudioReference ? (
+    <Link
+      aria-label={`View ${ambientAudioReference.releaseTitle} on the Music page`}
+      className="pointer-events-auto block min-w-0 text-center text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.95)] transition hover:text-cyan-100"
+      onClick={handleMenuNavigate}
+      to={`/music#release-${ambientAudioReference.releaseId}`}
+    >
+      <strong className="block truncate text-sm">{ambientAudioReference.trackTitle}</strong>
+      <span className="mt-1 hidden truncate text-[11px] text-white/60 sm:block">
+        {ambientAudioReference.releaseTitle}
+      </span>
+    </Link>
+  ) : null;
   const documentHeaderDocked =
     documentNavStuck && isDocumentPath(location.pathname) && !isContentMinimized;
   const documentDockVisible =
@@ -974,12 +989,29 @@ export function App() {
             />
           ) : (
             <>
-              <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[125] h-28 bg-gradient-to-t from-black/65 to-transparent" />
+              <div className="pointer-events-none fixed bottom-0 left-1/2 z-[125] h-28 w-full max-w-4xl -translate-x-1/2 bg-gradient-to-t from-black/65 to-transparent" />
               {!documentDockVisible ? (
                 <div
-                  className="pointer-events-none fixed inset-x-0 bottom-0 z-[140] grid h-[max(4rem,calc(env(safe-area-inset-bottom)+3.5rem))] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-t border-white/25 bg-black/40 px-4 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(0,0,0,0.3)] backdrop-blur-md sm:gap-3 sm:px-6"
+                  className="pointer-events-none fixed bottom-0 left-1/2 z-[140] grid h-[max(4rem,calc(env(safe-area-inset-bottom)+3.5rem))] w-full max-w-4xl -translate-x-1/2 grid-cols-[5.5rem_minmax(0,1fr)_5.5rem] items-center gap-2 border-t border-white/25 bg-black/40 px-4 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(0,0,0,0.3)] backdrop-blur-md min-[360px]:grid-cols-[7rem_minmax(0,1fr)_7rem] sm:gap-3 sm:px-6"
                   data-media-controls
                 >
+                  {isContentMinimized ? (
+                    <button
+                      aria-label="Restore Home and open navigation"
+                      className="pointer-events-auto absolute inset-x-0 top-0 grid h-5 cursor-pointer grid-cols-4 border-0 bg-transparent p-0"
+                      data-minimized-player-color-border
+                      onClick={() => {
+                        handleMenuNavigate();
+                        setHomeNavigationOpen(true);
+                      }}
+                      type="button"
+                    >
+                      <span className="h-0.5 bg-[var(--primary-yellow)]" />
+                      <span className="h-0.5 bg-[var(--primary-red)]" />
+                      <span className="h-0.5 bg-[var(--primary-orange)]" />
+                      <span className="h-0.5 bg-[var(--primary-blue)]" />
+                    </button>
+                  ) : null}
                   <div className="pointer-events-auto col-start-1 flex items-center gap-2">
                     <MusicPlayButton
                       context="combo"
@@ -988,24 +1020,14 @@ export function App() {
                     />
                     {audioControl}
                   </div>
-                  {ambientAudioReference ? (
-                    <Link
-                      aria-label={`View ${ambientAudioReference.releaseTitle} on the Music page`}
-                      className="pointer-events-auto col-start-2 min-w-0 justify-self-center text-center text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.95)] transition hover:text-cyan-100"
-                      onClick={handleMenuNavigate}
-                      to={`/music#release-${ambientAudioReference.releaseId}`}
-                    >
-                      <strong className="block truncate text-sm">
-                        {ambientAudioReference.trackTitle}
-                      </strong>
-                      <span className="mt-1 hidden truncate text-[11px] text-white/60 sm:block">
-                        {ambientAudioReference.releaseTitle}
-                      </span>
-                    </Link>
+                  {ambientTrackLabel ? (
+                    <div className="col-start-2 min-w-0 justify-self-center">
+                      {ambientTrackLabel}
+                    </div>
                   ) : (
                     <span className="col-start-2" />
                   )}
-                  <div className="pointer-events-auto col-start-3 flex items-center gap-2">
+                  <div className="pointer-events-auto col-start-3 flex items-center justify-self-end gap-2">
                     {isContentMinimized ? (
                       <ContentSizeButton expanded={false} onClick={handleMenuNavigate} />
                     ) : null}
@@ -1062,6 +1084,7 @@ export function App() {
       >
         <DocumentControlsProvider
           value={{
+            center: ambientTrackLabel,
             dockedTone: !musicPlayback && !musicLoading ? toneControl : null,
             leading: (
               <>
@@ -1086,7 +1109,7 @@ export function App() {
         >
           <MusicPlaybackContext.Provider
             value={{
-              currentTrackId: activeTrack?.id ?? null,
+              currentTrackId: activeTrack?.id ?? ambientAudioReference?.trackId ?? null,
               error: musicError,
               loadingTrackId: musicLoadingTrackId,
               playing: isMusicPlaying,
@@ -1237,6 +1260,21 @@ export function App() {
                     className="relative z-10 rounded-none border-y bg-black/65 px-6 pb-0 pt-3 shadow-2xl shadow-black/30 backdrop-blur-[10px] sm:px-10 lg:border lg:px-14"
                     data-home-panel-surface
                   >
+                    <button
+                      aria-hidden={homeNavigationOpen}
+                      aria-label="Open navigation from color border"
+                      className={`absolute inset-x-0 top-0 grid h-5 cursor-pointer grid-cols-4 border-0 bg-transparent p-0 transition-opacity duration-200 ${homeNavigationOpen ? "pointer-events-none opacity-0" : "opacity-100"}`}
+                      data-home-color-border
+                      inert={homeNavigationOpen}
+                      onClick={() => setHomeNavigationOpen(true)}
+                      tabIndex={homeNavigationOpen ? -1 : undefined}
+                      type="button"
+                    >
+                      <span className="h-0.5 bg-[var(--primary-yellow)]" />
+                      <span className="h-0.5 bg-[var(--primary-red)]" />
+                      <span className="h-0.5 bg-[var(--primary-orange)]" />
+                      <span className="h-0.5 bg-[var(--primary-blue)]" />
+                    </button>
                     <header className="relative" data-home-header-controls data-home-intro>
                       <p className="max-w-xl pr-20 text-sm leading-relaxed text-white/85">
                         <strong className="text-base font-bold text-white">Hey!</strong> I'm a
@@ -1270,7 +1308,16 @@ export function App() {
                             viewBox="0 0 24 24"
                             width="20"
                           >
-                            <path d="M5 7h14M5 12h14M5 17h14" />
+                            <path
+                              className={`origin-center transition-[opacity,transform] duration-200 ${homeNavigationOpen ? "rotate-90 opacity-0" : "rotate-0 opacity-100"}`}
+                              d="M5 7h14M5 12h14M5 17h14"
+                              data-home-navigation-icon="hamburger"
+                            />
+                            <path
+                              className={`origin-center transition-[opacity,transform] duration-200 ${homeNavigationOpen ? "rotate-0 opacity-100" : "-rotate-90 opacity-0"}`}
+                              d="m6 9 6 6 6-6"
+                              data-home-navigation-icon="caret"
+                            />
                           </svg>
                         </button>
                         <ContentSizeButton

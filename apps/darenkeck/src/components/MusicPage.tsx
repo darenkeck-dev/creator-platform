@@ -112,14 +112,22 @@ export function MusicPage() {
                     <li key={track.id}>
                       <button
                         aria-current={current ? "true" : undefined}
-                        className={`group flex w-full items-center gap-3 px-2 py-3 text-left transition hover:bg-white/[0.05] ${current ? "text-cyan-100" : "text-white"}`}
+                        className={`group flex w-full items-center gap-3 px-2 py-3 text-left transition hover:bg-white/[0.05] ${current ? "font-semibold text-[var(--primary-red)]" : "text-white"}`}
+                        data-current-music-track={current ? "" : undefined}
                         disabled={loading}
                         onClick={() => playback.playTrack(release, trackIndex)}
                         type="button"
                       >
                         <span className="flex w-5 shrink-0 justify-end text-xs tabular-nums text-white/45">
-                          {current && playback.playing ? (
-                            <svg aria-hidden="true" fill="currentColor" height="16" viewBox="0 0 24 24" width="16">
+                          {current ? (
+                            <svg
+                              aria-hidden="true"
+                              data-current-track-playing
+                              fill="currentColor"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              width="16"
+                            >
                               <path d="M8 5v14l11-7z" />
                             </svg>
                           ) : (

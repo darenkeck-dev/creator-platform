@@ -131,6 +131,27 @@ try {
   await page
     .getByRole("link", { name: "View Moonlit Home on the Music page" })
     .waitFor({ state: "visible" });
+  const homeAmbientAlignment = await page.evaluate(() => {
+    const controls = document.querySelector<HTMLElement>("[data-media-controls]");
+    const label = document.querySelector<HTMLElement>(
+      '[aria-label="View Moonlit Home on the Music page"]'
+    );
+    if (!controls || !label) return null;
+    const controlsBox = controls.getBoundingClientRect();
+    const labelBox = label.getBoundingClientRect();
+    return {
+      controlsCenter: controlsBox.x + controlsBox.width / 2,
+      labelCenter: labelBox.x + labelBox.width / 2,
+    };
+  });
+  if (
+    !homeAmbientAlignment ||
+    Math.abs(homeAmbientAlignment.controlsCenter - homeAmbientAlignment.labelCenter) > 1
+  ) {
+    throw new Error(
+      `Homepage ambient metadata is not centered: ${JSON.stringify(homeAmbientAlignment)}`
+    );
+  }
   if ((await page.getByRole("link", { name: "Wayfarer Records", exact: true }).count()) !== 1) {
     throw new Error("Homepage must expose one inline Wayfarer Records link.");
   }
@@ -207,6 +228,23 @@ try {
     throw new Error(`Music navigation uses the wrong palette color: ${musicNavigationColor}.`);
   }
   await page
+    .locator("[data-document-center-control]")
+    .getByRole("link", { name: "View Moonlit Home on the Music page" })
+    .waitFor({ state: "visible" });
+  const ambientCurrentTrack = page.locator("[data-current-music-track]");
+  const ambientCurrentTrackColor = await ambientCurrentTrack.evaluate(
+    (button) => getComputedStyle(button).color
+  );
+  if (
+    (await ambientCurrentTrack.getAttribute("aria-current")) !== "true" ||
+    ambientCurrentTrackColor !== "rgb(250, 1, 0)" ||
+    (await ambientCurrentTrack.locator("[data-current-track-playing]").count()) !== 1
+  ) {
+    throw new Error(
+      `Ambient released track is not identified in the Music page: ${ambientCurrentTrackColor}.`
+    );
+  }
+  await page
     .getByRole("button", { name: "Moonlit Home" })
     .evaluate((button) => (button as HTMLElement).click());
   const initialMusicLoader = page.locator("[data-music-transport-loading]");
@@ -221,10 +259,32 @@ try {
   await page.getByRole("button", { name: "Mute music" }).waitFor({ state: "visible" });
   const musicControlsBeforeScroll = await page.locator('[aria-label="Music player"]').boundingBox();
   const musicProgressRail = await page.locator("[data-music-progress-rail]").boundingBox();
+  const musicTrackLabelBox = await page.locator("[data-music-track-label]").boundingBox();
+  const musicControlStyles = await page
+    .locator('[aria-label="Music player"] [data-player-control]')
+    .evaluateAll((controls) =>
+      controls.map((control) => {
+        const style = getComputedStyle(control);
+        return { backgroundColor: style.backgroundColor, boxShadow: style.boxShadow };
+      })
+    );
   if (
     !musicControlsBeforeScroll ||
     !musicProgressRail ||
+    !musicTrackLabelBox ||
+    Math.abs(musicControlsBeforeScroll.width - 896) > 1 ||
+    Math.abs(musicProgressRail.width - musicControlsBeforeScroll.width) > 1 ||
+    Math.abs(musicProgressRail.x - musicControlsBeforeScroll.x) > 1 ||
     Math.abs(musicProgressRail.height - 4) > 0.5 ||
+    Math.abs(
+      musicTrackLabelBox.x + musicTrackLabelBox.width / 2 -
+        (musicControlsBeforeScroll.x + musicControlsBeforeScroll.width / 2)
+    ) > 1 ||
+    musicControlStyles.length !== 3 ||
+    musicControlStyles.some(
+      (style) => style.backgroundColor !== "rgba(0, 0, 0, 0)" || style.boxShadow !== "none"
+    ) ||
+    (await page.locator('[aria-label="Music player"] [data-music-size-slot]').count()) !== 1 ||
     Math.abs(musicProgressRail.y + musicProgressRail.height - page.viewportSize()!.height) > 0.5
   ) {
     throw new Error(
@@ -257,8 +317,48 @@ try {
   await page.getByRole("button", { name: "Mute music" }).waitFor({ state: "visible" });
   await page.locator(".track-loading-ellipsis").waitFor({ state: "visible" });
   await page.locator('[aria-label="Music player"] .app-shell-loader').waitFor({ state: "hidden" });
+  const stopBeforeMinimize = await page
+    .getByRole("button", { name: "Stop music and return to ambient playback" })
+    .boundingBox();
   await page.getByRole("button", { name: "Minimize page" }).click();
+  await page
+    .locator('[aria-label="Music player"] [data-minimized-player-color-border]')
+    .waitFor({ state: "visible" });
+  const stopAfterMinimize = await page
+    .getByRole("button", { name: "Stop music and return to ambient playback" })
+    .boundingBox();
+  if (
+    !stopBeforeMinimize ||
+    !stopAfterMinimize ||
+    Math.abs(stopBeforeMinimize.x - stopAfterMinimize.x) > 1 ||
+    Math.abs(stopBeforeMinimize.y - stopAfterMinimize.y) > 1
+  ) {
+    throw new Error(
+      `Music Stop moved when content minimized: ${JSON.stringify({ stopAfterMinimize, stopBeforeMinimize })}`
+    );
+  }
   await page.getByRole("button", { name: "Restore page" }).click();
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await page.getByRole("button", { name: "Minimize page" }).waitFor({ state: "visible" });
+  const musicControlsWithMinimize = await page.locator('[aria-label="Music player"]').boundingBox();
+  const musicLabelWithMinimize = await page.locator("[data-music-track-label]").boundingBox();
+  const stopWithMinimize = await page
+    .getByRole("button", { name: "Stop music and return to ambient playback" })
+    .boundingBox();
+  if (
+    !musicControlsWithMinimize ||
+    !musicLabelWithMinimize ||
+    !stopWithMinimize ||
+    Math.abs(
+      musicLabelWithMinimize.x + musicLabelWithMinimize.width / 2 -
+        (musicControlsWithMinimize.x + musicControlsWithMinimize.width / 2)
+    ) > 1 ||
+    Math.abs(stopWithMinimize.x - stopBeforeMinimize.x) > 1
+  ) {
+    throw new Error(
+      `Music metadata or Stop shifted when the minimize slot appeared: ${JSON.stringify({ musicControlsWithMinimize, musicLabelWithMinimize, stopBeforeMinimize, stopWithMinimize })}`
+    );
+  }
   await page.getByRole("link", { name: "View Moonlit Home on the Music page" }).click();
   await page.waitForURL("**/music#release-c4cd15e3-5ba5-4d5b-99ad-91fcf082a3aa");
   await page
