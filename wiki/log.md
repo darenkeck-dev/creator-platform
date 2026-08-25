@@ -2,6 +2,14 @@
 
 ## [2026-08-24] web | experimental homepage navigation
 
+- Extended symmetric side-slot geometry to ambient and document docks, keeping metadata centered before controls exist and when `-` appears.
+- Animated the Home hamburger into a rotating down caret while navigation is open, with the reverse transition on close.
+- Centered dedicated music metadata with equal transport side columns, permanently reserved the rightmost size-control slot so Stop stays fixed, and removed circular fills/shadows from Play/Pause, Mute, and Stop.
+- Made Home's expanded and minimized color edges open navigation, using a 20px tap target around the visible 2px line; the minimized edge also restores content.
+- Added the 2px yellow/red/orange/blue edge to ambient and dedicated music players while content is minimized.
+- Added an equal 2px yellow/red/orange/blue Home shelf top edge while navigation is closed; it fades while the row stack is open.
+- Constrained ambient, document, and music bottom players plus progress/seek rails to the content shelf's centered `max-w-4xl` width.
+- Carried ambient released-track metadata into document bottom docks and MusicPage active-row identity; the current row now keeps its play indicator and uses Music red.
 - Published Darenkeck production from content revision `9e6eb043f4a05729771d569057edda3f7f746a66`; CloudFront invalidation `I4PU4ZXG0UEA7OXEXS1RE68VJU` completed and the live shell serves the new application bundle.
 - Deployed `MediaManagerApiStack` with public `audioAssetId`, verified all 15 tracks across two live releases expose identity, joined a live random combo to its release, removed the temporary URL/title fallback, and made the client contract require asset identity.
 - Changed the Home navigation transition from a vertical rise to a right-to-left clip-path expansion that retracts toward the hamburger.
