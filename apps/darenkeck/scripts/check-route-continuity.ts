@@ -114,8 +114,8 @@ try {
     return state;
   });
   const homeNewsBox = await page.getByRole("region", { name: "Latest news" }).boundingBox();
-  const homeNewsDateBox = await page.locator("[data-home-bulletin] time").first().boundingBox();
   const homeNavigationRows = page.locator("[data-home-navigation-rows]");
+  const homeNavigationToggle = page.locator("[data-home-navigation-toggle]");
   const homeColorBorder = page.locator("[data-home-color-border]");
   const initialHomeColorBorder = await homeColorBorder.evaluate((border) => ({
     colors: Array.from(border.children).map((segment) => getComputedStyle(segment).backgroundColor),
@@ -127,6 +127,9 @@ try {
     clipPath: getComputedStyle(navigation).clipPath,
     opacity: getComputedStyle(navigation).opacity,
   }));
+  const initialHomeNavigationToggleColor = await homeNavigationToggle.evaluate(
+    (button) => getComputedStyle(button).color
+  );
   await page.getByRole("button", { name: "Open navigation from color border" }).click();
   await page.waitForTimeout(250);
   const homeNavigationRowsBox = await homeNavigationRows.boundingBox();
@@ -139,6 +142,9 @@ try {
   const openHomeNavigationIconOpacities = await page
     .locator("[data-home-navigation-toggle] [data-home-navigation-icon]")
     .evaluateAll((icons) => icons.map((icon) => getComputedStyle(icon).opacity));
+  const openHomeNavigationToggleColor = await homeNavigationToggle.evaluate(
+    (button) => getComputedStyle(button).color
+  );
   const homePanelSurfaceBoxAfterOpen = await homePanelSurface.boundingBox();
   const homeNavigationRowBoxes = await homeNavigationRows.locator("a").evaluateAll((links) =>
     links.map((link) => {
@@ -184,23 +190,38 @@ try {
     .evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).borderTopWidth));
   const homeHeaderControlsBox = await page.locator("[data-home-header-controls]").boundingBox();
   const homeMediaBox = await page.locator("[data-media-controls]").boundingBox();
-  const homeMinimizeBox = await page.getByRole("button", { name: "Minimize page" }).boundingBox();
+  const homeMinimizeButton = page.getByRole("button", { name: "Minimize page" });
+  const homeMinimizeBox = await homeMinimizeButton.boundingBox();
+  const homeMinimizeColor = await homeMinimizeButton.evaluate(
+    (button) => getComputedStyle(button).color
+  );
+  const homeMinimizeIcon = await homeMinimizeButton.locator("svg").evaluate((icon) => ({
+    filter: getComputedStyle(icon.parentElement!).filter,
+    height: icon.getAttribute("height"),
+    strokeWidth: icon.getAttribute("stroke-width"),
+    width: icon.getAttribute("width"),
+  }));
+  const homeNavigationToggleBox = await page
+    .locator("[data-home-navigation-toggle]")
+    .boundingBox();
   const homeTitleBox = await page.locator("[data-home-panel] header strong").boundingBox();
   if (
     !homePanelBox ||
     !homeMediaBox ||
     !homeMinimizeBox ||
     !homeNewsBox ||
-    !homeNewsDateBox ||
     !homeNavigationRowsBox ||
     !homePanelSurfaceBox ||
     !homePanelSurfaceBoxAfterOpen ||
     !homeHeaderControlsBox ||
+    !homeNavigationToggleBox ||
     !homeTitleBox ||
-    initialHomeNavigationStyle.opacity !== "0" ||
+    initialHomeNavigationStyle.opacity !== "1" ||
     !initialHomeNavigationStyle.clipPath.includes("100%") ||
+    initialHomeNavigationToggleColor !== "rgb(253, 71, 0)" ||
     openHomeNavigationClipPath.includes("100%") ||
     openHomeNavigationIconOpacities.join("|") !== "0|1" ||
+    openHomeNavigationToggleColor !== "rgb(233, 204, 0)" ||
     initialHomeColorBorder.opacity !== "1" ||
     Math.abs(initialHomeColorBorder.visibleHeight - 2) > 0.5 ||
     initialHomeColorBorder.hitTargetHeight < 20 ||
@@ -218,6 +239,11 @@ try {
     homePanelSurfaceBottomRadius !== "0px" ||
     homeMediaBackground === "rgba(0, 0, 0, 0)" ||
     homeCircleBorders.some((borderWidth) => borderWidth !== "0px") ||
+    homeMinimizeColor !== "rgb(250, 1, 0)" ||
+    homeMinimizeIcon.height !== "24" ||
+    homeMinimizeIcon.width !== "24" ||
+    homeMinimizeIcon.strokeWidth !== "2.5" ||
+    !homeMinimizeIcon.filter.includes("drop-shadow") ||
     (await page.getByRole("heading", { name: "Latest news" }).count()) !== 0 ||
     homeNavigationRowBoxes.length !== 4 ||
     homeNavigationRowBoxes.some((box) => !box.backdropFilter.includes("blur")) ||
@@ -256,27 +282,36 @@ try {
       homePanelSurfaceBox.y - (homeNavigationRowsBox.y + homeNavigationRowsBox.height)
     ) > 1 ||
     Math.abs(
-      homeMinimizeBox.x +
-        homeMinimizeBox.width -
-        (homeNewsDateBox.x + homeNewsDateBox.width)
+      homeNavigationToggleBox.x +
+        homeNavigationToggleBox.width -
+        (homeMinimizeBox.x + homeMinimizeBox.width)
     ) >
       1 ||
     Math.abs(
-      homeMinimizeBox.y + homeMinimizeBox.height / 2 - (homeTitleBox.y + homeTitleBox.height / 2)
+      homeNavigationToggleBox.y +
+        homeNavigationToggleBox.height / 2 -
+        (homeTitleBox.y + homeTitleBox.height / 2)
     ) > 2 ||
+    Math.abs(
+      homeMinimizeBox.x + homeMinimizeBox.width - (homeMediaBox.x + homeMediaBox.width - 24)
+    ) > 1 ||
+    Math.abs(
+      homeMinimizeBox.y + homeMinimizeBox.height / 2 -
+        (homeMediaBox.y + homeMediaBox.height / 2)
+    ) > 1 ||
     Math.abs(homeNewsBox.y + homeNewsBox.height - (homePanelBox.y + homePanelBox.height)) > 1 ||
     Math.abs(homePanelBox.y + homePanelBox.height - homeMediaBox.y) > 1
   ) {
     throw new Error(
-      `Homepage row navigation, shelf controls, or viewport lock are invalid: ${JSON.stringify({ homeHeaderControlsBox, homeMinimizeBox, homeNavigationMaskLabels, homeNavigationMaskPositions, homeNavigationRowBoxes, homeNavigationRowFills, homeNavigationRowsBox, homeNewsDateBox, homePageScroll, homePanelBackground, homePanelBox, homePanelSurfaceBackground, homePanelSurfaceBottomRadius, homePanelSurfaceBox, homeMediaBox, homePanelShellPosition, homeTitleBox })}`
+      `Homepage row navigation, shelf controls, or viewport lock are invalid: ${JSON.stringify({ homeHeaderControlsBox, homeMinimizeBox, homeNavigationMaskLabels, homeNavigationMaskPositions, homeNavigationRowBoxes, homeNavigationRowFills, homeNavigationRowsBox, homeNavigationToggleBox, homePageScroll, homePanelBackground, homePanelBox, homePanelSurfaceBackground, homePanelSurfaceBottomRadius, homePanelSurfaceBox, homeMediaBox, homePanelShellPosition, homeTitleBox })}`
     );
   }
 
   await page.getByRole("button", { name: "Hide navigation" }).click();
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(350);
   if (
     (await homeNavigationRows.evaluate((navigation) => getComputedStyle(navigation).opacity)) !==
-      "0" ||
+      "1" ||
     !(await homeNavigationRows.evaluate((navigation) =>
       getComputedStyle(navigation).clipPath.includes("100%")
     )) ||
@@ -284,10 +319,12 @@ try {
       .locator("[data-home-navigation-toggle] [data-home-navigation-icon]")
       .evaluateAll((icons) => icons.map((icon) => getComputedStyle(icon).opacity).join("|"))) !==
       "1|0" ||
+    (await homeNavigationToggle.evaluate((button) => getComputedStyle(button).color)) !==
+      "rgb(253, 71, 0)" ||
     (await homeColorBorder.evaluate((border) => getComputedStyle(border).opacity)) !== "1" ||
     (await homeNavigationRows.getAttribute("aria-hidden")) !== "true"
   ) {
-    throw new Error("Homepage navigation rows did not retract rightward and hide.");
+    throw new Error("Homepage navigation rows did not wipe from left to right and hide.");
   }
 
   await page.getByRole("button", { name: "Minimize page" }).click();
@@ -316,8 +353,14 @@ try {
     );
   }
   const homeRestoreButton = page.getByRole("button", { name: "Restore page" });
-  if ((await homeRestoreButton.locator("svg rect").count()) !== 1) {
-    throw new Error("Homepage restore control does not use the same square outline as minimize.");
+  const homeRestoreColor = await homeRestoreButton.evaluate(
+    (button) => getComputedStyle(button).color
+  );
+  if (
+    (await homeRestoreButton.locator("svg rect").count()) !== 0 ||
+    homeRestoreColor !== "rgb(0, 134, 186)"
+  ) {
+    throw new Error(`Homepage restore control is not an unframed blue plus: ${homeRestoreColor}.`);
   }
   await minimizedPlayerColorBorder.click();
   await page.locator("[data-site-wordmark]").waitFor({ state: "visible" });
@@ -347,7 +390,8 @@ try {
   ) {
     throw new Error(`Resume navigation is invalid: ${resumeNavigationColor}.`);
   }
-  await page.getByRole("link", { name: "Download" }).waitFor({ state: "visible" });
+  const resumeDownloadLink = page.getByRole("link", { name: "Download" });
+  await resumeDownloadLink.waitFor({ state: "visible" });
   const resumeCardBox = await page.locator(".resume-document").boundingBox();
   const resumeNavBox = await resumeDocumentNav.boundingBox();
   const resumeContentSurface = page.locator("[data-document-content-surface]");
@@ -358,8 +402,20 @@ try {
   const desktopMediaBox = await page.locator("[data-media-controls]").boundingBox();
   const desktopHomeLinkBox = await resumeHomeLink.boundingBox();
   const desktopSectionLinkBox = await resumeSectionLink.boundingBox();
+  const desktopDownloadBox = await resumeDownloadLink.boundingBox();
+  const desktopDownloadColors = await resumeDownloadLink.evaluate((link) => {
+    const style = getComputedStyle(link);
+    return { borderColor: style.borderColor, color: style.color };
+  });
+  const desktopResumeContactColors = await page
+    .locator("[data-resume-content] > p:first-of-type a")
+    .evaluateAll((links) => links.map((link) => getComputedStyle(link).color));
+  const desktopResumeHeadingBox = await page
+    .locator("[data-resume-content] > h1")
+    .boundingBox();
   const desktopMinimizeBox = await page
-    .locator("[data-document-minimize-control]")
+    .locator("[data-document-bottom-controls]")
+    .getByRole("button", { name: "Minimize page" })
     .boundingBox();
   const resumeNavPosition = await page
     .locator("[data-document-nav]")
@@ -392,19 +448,40 @@ try {
   }
   if (
     !desktopMinimizeBox ||
+    !desktopDownloadBox ||
+    !desktopResumeHeadingBox ||
     !desktopHomeLinkBox ||
     !desktopSectionLinkBox ||
     !resumeNavBox ||
+    desktopDownloadColors.borderColor !== "rgb(0, 134, 186)" ||
+    desktopDownloadColors.color !== "rgb(0, 134, 186)" ||
+    desktopResumeContactColors.length !== 4 ||
+    desktopResumeContactColors.some((color) => color !== "rgb(0, 134, 186)") ||
     Math.abs(desktopHomeLinkBox.x - (resumeNavBox.x + 16)) > 1 ||
     Math.abs(
       desktopSectionLinkBox.x + desktopSectionLinkBox.width - (resumeNavBox.x + resumeNavBox.width * 0.87)
     ) > 1 ||
+    (await resumeDocumentNav.getByRole("button", { name: "Minimize page" }).count()) !== 0 ||
     Math.abs(
-      desktopMinimizeBox.x + desktopMinimizeBox.width - (resumeNavBox.x + resumeNavBox.width - 8)
-    ) > 1
+      desktopMinimizeBox.x + desktopMinimizeBox.width -
+        (desktopMediaBox.x + desktopMediaBox.width - 24)
+    ) > 1 ||
+    Math.abs(
+      desktopMinimizeBox.y + desktopMinimizeBox.height / 2 -
+        (desktopMediaBox.y + desktopMediaBox.height / 2)
+    ) > 1 ||
+    Math.abs(
+      desktopDownloadBox.y + desktopDownloadBox.height / 2 -
+        (desktopResumeHeadingBox.y + desktopResumeHeadingBox.height / 2)
+    ) > 1 ||
+    Math.abs(
+      desktopDownloadBox.x + desktopDownloadBox.width -
+        (resumeContentSurfaceBox.x + resumeContentSurfaceBox.width - 56)
+    ) > 1 ||
+    desktopDownloadBox.y + desktopDownloadBox.height >= desktopMediaBox.y
   ) {
     throw new Error(
-      `Document links or minimize control are not aligned with upper navigation: ${JSON.stringify({ desktopHomeLinkBox, desktopMediaBox, desktopMinimizeBox, desktopSectionLinkBox, resumeNavBox })}`
+      `Document links, Resume download, or lower minimize control are invalid: ${JSON.stringify({ desktopDownloadBox, desktopDownloadColors, desktopHomeLinkBox, desktopMediaBox, desktopMinimizeBox, desktopResumeContactColors, desktopResumeHeadingBox, desktopSectionLinkBox, resumeNavBox })}`
     );
   }
   if (
@@ -583,14 +660,37 @@ try {
 
   await navigateFromHome(mobilePage, "Resume");
   const mobileResumeNav = mobilePage.locator("[data-document-nav]");
-  const mobileMinimizeControl = mobileResumeNav.getByRole("button", {
-    name: "Minimize page",
-  });
+  const mobileMinimizeControl = mobilePage
+    .locator("[data-document-bottom-controls]")
+    .getByRole("button", { name: "Minimize page" });
   await mobileMinimizeControl.waitFor({ state: "visible" });
   const mobileResumeCardBox = await mobilePage.locator(".resume-document").boundingBox();
-  if (!mobileResumeCardBox || Math.abs(mobileResumeCardBox.width - 390) > 1) {
+  const mobileResumeContentSurfaceBox = await mobilePage
+    .locator("[data-document-content-surface]")
+    .boundingBox();
+  const mobileResumeHeadingBox = await mobilePage
+    .locator("[data-resume-content] > h1")
+    .boundingBox();
+  const mobileDownloadBox = await mobilePage
+    .getByRole("link", { name: "Download" })
+    .boundingBox();
+  if (
+    !mobileResumeCardBox ||
+    !mobileResumeContentSurfaceBox ||
+    !mobileResumeHeadingBox ||
+    !mobileDownloadBox ||
+    Math.abs(mobileResumeCardBox.width - 390) > 1 ||
+    Math.abs(
+      mobileDownloadBox.y + mobileDownloadBox.height / 2 -
+        (mobileResumeHeadingBox.y + mobileResumeHeadingBox.height / 2)
+    ) > 1 ||
+    Math.abs(
+      mobileDownloadBox.x + mobileDownloadBox.width -
+        (mobileResumeContentSurfaceBox.x + mobileResumeContentSurfaceBox.width - 24)
+    ) > 1
+  ) {
     throw new Error(
-      `Mobile resume card did not fill the viewport: ${JSON.stringify(mobileResumeCardBox)}`
+      `Mobile Resume heading or Download action is misplaced: ${JSON.stringify({ mobileDownloadBox, mobileResumeCardBox, mobileResumeContentSurfaceBox, mobileResumeHeadingBox })}`
     );
   }
   const mobileHomeLink = mobileResumeNav.getByRole("link", { name: "Home" });
@@ -667,7 +767,7 @@ try {
     Math.abs(
       mobileDockedToneStyle.y +
         mobileDockedToneStyle.height / 2 -
-        (mobileDockedMinimizeBox.y + mobileDockedMinimizeBox.height / 2)
+        (mobileBottomNavBox.y + mobileBottomNavBox.height / 2)
     ) > 1 ||
     Math.abs(dockedHomeLinkBox.x - (mobileBottomNavBox.x + 8)) > 1 ||
     Math.abs(
@@ -677,7 +777,11 @@ try {
     ) > 1 ||
     Math.abs(mobileBottomNavBox.y) > 1 ||
     Math.abs(mobileBottomNavBox.height - 40) > 1 ||
-    Math.abs(mobileMediaBox.y + mobileMediaBox.height - 844) > 1
+    Math.abs(mobileMediaBox.y + mobileMediaBox.height - 844) > 1 ||
+    Math.abs(
+      mobileDockedMinimizeBox.x + mobileDockedMinimizeBox.width -
+        (mobileMediaBox.x + mobileMediaBox.width - 16)
+    ) > 1
   ) {
     throw new Error(
       `Upper document dock or bottom controls are misplaced: ${JSON.stringify({ dockedHomeLinkBox, dockedSectionLinkBox, mobileBottomNavBox, mobileDockedMinimizeBox, mobileDockedToneStyle, mobileMediaBox })}`
@@ -858,7 +962,9 @@ try {
     await mediumPage.locator(".blog-document h1").waitFor({ state: "visible" });
   }
   const mediumNav = mediumPage.locator("[data-document-nav]");
-  const mediumMinimize = mediumNav.getByRole("button", { name: "Minimize page" });
+  const mediumMinimize = mediumPage
+    .locator("[data-document-bottom-controls]")
+    .getByRole("button", { name: "Minimize page" });
   await mediumMinimize.waitFor({ state: "visible" });
   const mediumSectionLink = mediumNav.getByRole("link", { name: "Blog" });
   await mediumSectionLink.waitFor({ state: "visible" });

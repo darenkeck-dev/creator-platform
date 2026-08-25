@@ -14,7 +14,6 @@ type MusicTransportProps = {
   playing: boolean;
   releaseId: string;
   releaseTitle: string;
-  showBottomMinimize: boolean;
   track: PublicMusicTrack;
   onExit: () => void;
   onMuteToggle: () => void;
@@ -54,7 +53,6 @@ export function MusicTransportLoader({
   onNavigate,
   onPlayToggle,
   playing,
-  showBottomMinimize,
 }: {
   audioMuted: boolean;
   contentMinimized: boolean;
@@ -63,7 +61,6 @@ export function MusicTransportLoader({
   onNavigate: () => void;
   onPlayToggle: () => void;
   playing: boolean;
-  showBottomMinimize: boolean;
 }) {
   return (
     <>
@@ -80,13 +77,11 @@ export function MusicTransportLoader({
           <MusicMuteButton audioMuted={audioMuted} context="audio" onClick={onMuteToggle} />
         </div>
         <div className={centerClassName}><ShellLoader /></div>
-        <div className="pointer-events-auto flex items-center gap-2">
-          {contentMinimized || showBottomMinimize ? (
-            <ContentSizeButton
-              expanded={!contentMinimized}
-              onClick={contentMinimized ? onNavigate : onMinimize}
-            />
-          ) : null}
+        <div className="pointer-events-auto flex items-center justify-self-end gap-2">
+          <ContentSizeButton
+            expanded={!contentMinimized}
+            onClick={contentMinimized ? onNavigate : onMinimize}
+          />
         </div>
       </aside>
     </>
@@ -184,7 +179,6 @@ export function MusicTransport({
   playing,
   releaseId,
   releaseTitle,
-  showBottomMinimize,
   track,
   onExit,
   onMinimize,
@@ -226,14 +220,10 @@ export function MusicTransport({
           data-music-right-controls
         >
           <MusicExitButton onClick={onExit} />
-          {contentMinimized || showBottomMinimize ? (
-            <ContentSizeButton
-              expanded={!contentMinimized}
-              onClick={contentMinimized ? onNavigate : onMinimize}
-            />
-          ) : (
-            <span aria-hidden="true" className="h-8 w-8 shrink-0" data-music-size-slot />
-          )}
+          <ContentSizeButton
+            expanded={!contentMinimized}
+            onClick={contentMinimized ? onNavigate : onMinimize}
+          />
         </div>
       </aside>
       <div

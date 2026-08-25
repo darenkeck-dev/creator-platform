@@ -18,11 +18,15 @@ export function ContentSizeButton({
   return (
     <button
       aria-label={label}
-      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-white transition-all duration-200 ease-in-out hover:bg-black/35 print:hidden"
+      className="inline-flex h-8 w-8 items-center justify-center rounded-lg transition-[background-color] duration-200 ease-in-out hover:bg-black/35 print:hidden"
       data-content-minimize={expanded ? "" : undefined}
       data-content-restore={expanded ? undefined : ""}
       onClick={onClick}
       ref={buttonRef}
+      style={{
+        color: expanded ? "var(--primary-red)" : "var(--primary-blue)",
+        filter: `drop-shadow(0 0 2px ${expanded ? "var(--primary-red)" : "var(--primary-blue)"})`,
+      }}
       tabIndex={tabIndex}
       title={expanded ? "Minimize" : "Restore"}
       type="button"
@@ -30,15 +34,14 @@ export function ContentSizeButton({
       <svg
         aria-hidden="true"
         fill="none"
-        height="20"
+        height="24"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="1.8"
+        strokeWidth="2.5"
         viewBox="0 0 24 24"
-        width="20"
+        width="24"
       >
-        <rect height="16" rx="2.5" width="16" x="4" y="4" />
         {expanded ? <path d="M8 12h8" /> : <path d="M12 8v8M8 12h8" />}
       </svg>
     </button>

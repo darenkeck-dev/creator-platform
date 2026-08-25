@@ -18,18 +18,18 @@ export function DevPage() {
     <DocumentShell
       breadcrumbs={[{ label: "darenkeck", to: "/" }, { label: "resume" }]}
       className="resume-document"
-      trailingAction={
+    >
+      <div className="relative" data-resume-content>
         <a
-          className="inline-flex rounded-full border px-4 py-1.5 text-white/80 transition hover:bg-white/10 hover:text-white"
+          className="absolute right-0 top-5 inline-flex -translate-y-1/2 rounded-full border px-3 py-1.5 text-xs transition max-[359px]:px-2 max-[359px]:text-[11px] sm:top-6 sm:px-4 sm:text-sm print:hidden"
           data-resume-controls
           download
           href="/daren-keck-resume.pdf"
         >
           Download
         </a>
-      }
-    >
-      <DocumentMarkdown>{resumeMarkdown}</DocumentMarkdown>
+        <DocumentMarkdown>{resumeMarkdown}</DocumentMarkdown>
+      </div>
     </DocumentShell>
   );
 }

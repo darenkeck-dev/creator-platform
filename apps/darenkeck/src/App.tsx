@@ -307,9 +307,20 @@ async function fetchSelectedCombo(
   return parseComboPayload(payload);
 }
 
-function DarenKeckWordmark({ compact = false }: { compact?: boolean }) {
+function DarenKeckWordmark({
+  compact = false,
+  onClick,
+}: {
+  compact?: boolean;
+  onClick: () => void;
+}) {
   return (
-    <span className="relative inline-flex items-center">
+    <Link
+      aria-label="Daren Keck home"
+      className="pointer-events-auto relative inline-flex items-center"
+      onClick={onClick}
+      to="/"
+    >
       <img
         alt="Daren Keck"
         className={compact ? "h-8 w-auto" : "h-12 w-auto"}
@@ -325,7 +336,7 @@ function DarenKeckWordmark({ compact = false }: { compact?: boolean }) {
       >
         Daren Keck
       </span>
-    </span>
+    </Link>
   );
 }
 
@@ -973,7 +984,6 @@ export function App() {
               playing={isMusicPlaying}
               releaseId={musicPlayback.release.id}
               releaseTitle={musicPlayback.release.title}
-              showBottomMinimize={!isDocumentPath(location.pathname)}
               track={activeTrack}
             />
           ) : musicLoading ? (
@@ -985,7 +995,6 @@ export function App() {
               onNavigate={handleMenuNavigate}
               onPlayToggle={() => void playerRef.current?.togglePlayback()}
               playing={isMusicPlaying}
-              showBottomMinimize={!isDocumentPath(location.pathname)}
             />
           ) : (
             <>
@@ -1028,9 +1037,17 @@ export function App() {
                     <span className="col-start-2" />
                   )}
                   <div className="pointer-events-auto col-start-3 flex items-center justify-self-end gap-2">
-                    {isContentMinimized ? (
-                      <ContentSizeButton expanded={false} onClick={handleMenuNavigate} />
-                    ) : null}
+                    <ContentSizeButton
+                      expanded={!isContentMinimized}
+                      onClick={
+                        isContentMinimized
+                          ? handleMenuNavigate
+                          : () => {
+                              setHomeNavigationOpen(false);
+                              handleContentMinimize();
+                            }
+                      }
+                    />
                   </div>
                 </div>
               ) : null}
@@ -1050,7 +1067,7 @@ export function App() {
             className={`pointer-events-none fixed z-[140] [left:max(1rem,env(safe-area-inset-left))] [top:max(1rem,env(safe-area-inset-top))] min-[360px]:[left:max(1.5rem,env(safe-area-inset-left))] min-[360px]:[top:max(1.5rem,env(safe-area-inset-top))] ${documentHeaderDocked ? "hidden" : ""}`}
             data-site-wordmark
           >
-            <DarenKeckWordmark compact />
+            <DarenKeckWordmark compact onClick={handleMenuNavigate} />
           </div>
 
           {!musicPlayback ? (
@@ -1161,7 +1178,7 @@ export function App() {
                   <nav
                     aria-hidden={!homeNavigationOpen}
                     aria-label="Primary"
-                    className={`absolute inset-x-0 bottom-full z-0 grid h-40 grid-rows-4 gap-1 transition-[clip-path,opacity] duration-200 ease-out ${homeNavigationOpen ? "[clip-path:inset(0_0_0_0)] opacity-100" : "pointer-events-none [clip-path:inset(0_0_0_100%)] opacity-0"}`}
+                    className={`absolute inset-x-0 bottom-full z-0 grid h-40 grid-rows-4 gap-1 transition-[clip-path] duration-300 ${homeNavigationOpen ? "[clip-path:inset(0_0_0_0)] ease-out" : "pointer-events-none [clip-path:inset(0_0_0_100%)] ease-in"}`}
                     data-home-navigation-rows
                     inert={!homeNavigationOpen}
                   >
@@ -1289,13 +1306,21 @@ export function App() {
                         </a>
                         !
                       </p>
-                      <div className="absolute -top-1 right-3 flex items-center gap-1" data-home-minimize-control>
+                      <div
+                        className="absolute -right-2 -top-1 sm:-right-4 lg:-right-8"
+                        data-home-navigation-control
+                      >
                         <button
                           aria-expanded={homeNavigationOpen}
                           aria-label={homeNavigationOpen ? "Hide navigation" : "Show navigation"}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-white transition hover:bg-black/35"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg transition-[background-color,color] duration-200 hover:bg-black/35"
                           data-home-navigation-toggle
                           onClick={() => setHomeNavigationOpen((open) => !open)}
+                          style={{
+                            color: homeNavigationOpen
+                              ? "var(--primary-yellow)"
+                              : "var(--primary-orange)",
+                          }}
                           type="button"
                         >
                           <svg
@@ -1320,13 +1345,6 @@ export function App() {
                             />
                           </svg>
                         </button>
-                        <ContentSizeButton
-                          expanded
-                          onClick={() => {
-                            setHomeNavigationOpen(false);
-                            handleContentMinimize();
-                          }}
-                        />
                       </div>
                     </header>
                     <div className="mt-4">

@@ -10,7 +10,6 @@ type DocumentShellProps = {
   breadcrumbs: Array<{ label: string; to?: string }>;
   children: ReactNode;
   className?: string;
-  trailingAction?: ReactNode;
 };
 
 export function DocumentShell({
@@ -18,7 +17,6 @@ export function DocumentShell({
   breadcrumbs,
   children,
   className = "",
-  trailingAction,
 }: DocumentShellProps) {
   const documentControls = useDocumentControls();
   const stickySentinelRef = useRef<HTMLDivElement | null>(null);
@@ -51,7 +49,7 @@ export function DocumentShell({
       documentControls?.onStickyChange(false);
     };
   }, [documentControls?.onStickyChange]);
-  const bottomControls = !documentControls?.navHidden ? (
+  const bottomControls = documentControls && !documentControls.navHidden ? (
     <div
       className="fixed bottom-0 left-1/2 z-[135] grid h-[max(4rem,calc(env(safe-area-inset-bottom)+3.5rem))] w-full max-w-4xl -translate-x-1/2 grid-cols-[5.5rem_minmax(0,1fr)_5.5rem] items-center gap-2 border-t border-white/25 bg-black/40 px-4 pb-[env(safe-area-inset-bottom)] text-sm leading-none text-white/65 shadow-[0_-8px_24px_rgba(0,0,0,0.3)] backdrop-blur-md min-[360px]:grid-cols-[7rem_minmax(0,1fr)_7rem] sm:px-6 print:hidden"
       data-media-controls
@@ -67,11 +65,9 @@ export function DocumentShell({
           {documentControls.center}
         </div>
       ) : null}
-      {trailingAction ? (
-        <div className="col-start-3 flex shrink-0 items-center justify-self-end gap-2">
-          {trailingAction}
-        </div>
-      ) : null}
+      <div className="col-start-3 flex shrink-0 items-center justify-self-end gap-2">
+        <ContentSizeButton expanded onClick={documentControls.onMinimize} />
+      </div>
     </div>
   ) : null;
 
@@ -193,20 +189,14 @@ export function DocumentShell({
                 aria-hidden="true"
                 data-document-section-offset={sectionNavigation.offset}
               />
-              {documentControls ? (
+              {stuck && documentControls?.dockedTone ? (
                 <div
                   className="absolute right-2 top-1/2 z-20 flex -translate-y-1/2 items-center gap-1"
-                  data-document-minimize-control
+                  data-document-tone-control
                 >
-                  {stuck && documentControls.dockedTone ? (
-                    <div
-                      className="flex h-8 w-8 items-center justify-center leading-none [&_[data-tone-control]]:!h-8 [&_[data-tone-control]]:!w-8 [&_[data-tone-control]]:!rounded-none [&_[data-tone-control]]:!bg-transparent [&_[data-tone-control]]:!shadow-none [&_[data-tone-control]]:!backdrop-blur-none [&_[data-tone-control]]:hover:!bg-black/20"
-                      data-document-tone-control
-                    >
-                      {documentControls.dockedTone}
-                    </div>
-                  ) : null}
-                  <ContentSizeButton expanded onClick={documentControls.onMinimize} />
+                  <div className="flex h-8 w-8 items-center justify-center leading-none [&_[data-tone-control]]:!h-8 [&_[data-tone-control]]:!w-8 [&_[data-tone-control]]:!rounded-none [&_[data-tone-control]]:!bg-transparent [&_[data-tone-control]]:!shadow-none [&_[data-tone-control]]:!backdrop-blur-none [&_[data-tone-control]]:hover:!bg-black/20">
+                    {documentControls.dockedTone}
+                  </div>
                 </div>
               ) : null}
             </div>

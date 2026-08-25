@@ -2,6 +2,18 @@
 
 ## [2026-08-24] web | experimental homepage navigation
 
+- Applied Resume primary blue to the `Download` action and the contact links directly below the heading without changing later document links.
+- Increased primary-yellow participation in `yellow-50` through `yellow-300`, strengthening every News link and hover treatment while preserving `yellow-400: #e9cc00` for navigation bars and color edges.
+- Vertically centered Resume `Download` with the `Daren Keck` heading at mobile and desktop sizes.
+- Moved Resume `Download` out of the lower player dock and into the content surface's upper-right corner, aligned with the `Daren Keck` heading.
+- Colored the closed Home hamburger primary orange and its open caret state primary yellow, complementing the red `-` and blue `+` controls.
+- Made the persistent `Daren Keck` image a Home link that also restores minimized content.
+- Replaced Tailwind's default yellow scale with an OKLCH-mixed palette anchored at primary `#e9cc00` on `yellow-400`, and pointed `--primary-yellow` to that shared token.
+- Increased size-control glyphs to 24px with a 2.5px stroke and restrained color-matched glow for stronger visibility without restoring a frame.
+- Removed the square outline from size controls and colored expanded `-` primary red and minimized `+` primary blue.
+- Removed the Home navigation container fade so closing the caret visibly wipes the colored rows from left to right, reversing the right-to-left opening motion.
+- Aligned the Home hamburger's right edge with the lower-row `-`/`+` using the same responsive dock inset.
+- Moved expanded `-` out of Home and document upper navigation, keeping `-`/`+` permanently in the rightmost slot of every lower player row, including loading and music states.
 - Extended symmetric side-slot geometry to ambient and document docks, keeping metadata centered before controls exist and when `-` appears.
 - Animated the Home hamburger into a rotating down caret while navigation is open, with the reverse transition on close.
 - Centered dedicated music metadata with equal transport side columns, permanently reserved the rightmost size-control slot so Stop stays fixed, and removed circular fills/shadows from Play/Pause, Mute, and Stop.

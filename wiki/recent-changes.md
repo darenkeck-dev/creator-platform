@@ -14,7 +14,7 @@
 
 - Deployed `MediaManagerApiStack` with required public `audioAssetId` values, verified all 15 live release tracks expose identity, and joined a live random combo directly to its release metadata.
 - Added Media Manager-owned official track/release contracts, transactional catalog persistence and publication, asset lifecycle guards, read-only public catalog resolution, and a release administration workspace with batch uploads, ordering, purchase links, readiness, and HLS preview.
-- Unified Darenkeck minimization across the homepage, resume, blog, and news routes with a shared sticky-nav minus control, fixed `Daren Keck [+]` restore view, mounted route preservation, and exact scroll restoration.
+- Unified Darenkeck minimization across the homepage, resume, blog, news, and music states with a persistent lower-row `-`/`+`, mounted route preservation, and exact scroll restoration.
 - Replaced the hardcoded Darenkeck homepage announcement with Pages CMS-backed bulletins, including validated build-time extraction, latest-three homepage summaries, optional featured images, a chronological archive, and canonical bulletin detail routes.
 - Added maintained references for the ten tone dimensions, upload-processing dependency flow, curator review experience, and the current vector-backed walk algorithm.
 - Added optional authoritative predicted combo tone to public random/search/walk responses and mapped its ten signed dimensions into an animated Darenkeck polar wheel. Deployed the API and verified complete bounded profiles on production random and search responses.

@@ -128,6 +128,10 @@ try {
 
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
   await page.locator("[data-site-wordmark]").waitFor({ state: "visible" });
+  const wordmarkHomeLink = page.getByRole("link", { name: "Daren Keck home" });
+  if ((await wordmarkHomeLink.getAttribute("href")) !== "/") {
+    throw new Error("Daren Keck wordmark does not link to Home.");
+  }
   await page
     .getByRole("link", { name: "View Moonlit Home on the Music page" })
     .waitFor({ state: "visible" });
@@ -158,7 +162,10 @@ try {
   const homepagePrimaryNav = page.locator("[data-home-navigation-rows]");
   if (
     (await homepagePrimaryNav.getAttribute("aria-hidden")) !== "true" ||
-    (await homepagePrimaryNav.evaluate((navigation) => getComputedStyle(navigation).opacity)) !== "0"
+    (await homepagePrimaryNav.evaluate((navigation) => getComputedStyle(navigation).opacity)) !== "1" ||
+    !(await homepagePrimaryNav.evaluate((navigation) =>
+      getComputedStyle(navigation).clipPath.includes("100%")
+    ))
   ) {
     throw new Error("Homepage navigation rows are not hidden by default.");
   }
@@ -284,7 +291,10 @@ try {
     musicControlStyles.some(
       (style) => style.backgroundColor !== "rgba(0, 0, 0, 0)" || style.boxShadow !== "none"
     ) ||
-    (await page.locator('[aria-label="Music player"] [data-music-size-slot]').count()) !== 1 ||
+    (await page
+      .locator('[aria-label="Music player"]')
+      .getByRole("button", { name: "Minimize page" })
+      .count()) !== 1 ||
     Math.abs(musicProgressRail.y + musicProgressRail.height - page.viewportSize()!.height) > 0.5
   ) {
     throw new Error(

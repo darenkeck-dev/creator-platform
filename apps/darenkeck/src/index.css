@@ -1,6 +1,20 @@
 @import "tailwindcss";
 @source "../../../packages/shared/src";
 
+@theme {
+  --color-yellow-50: color-mix(in oklch, #e9cc00 20%, white);
+  --color-yellow-100: color-mix(in oklch, #e9cc00 40%, white);
+  --color-yellow-200: color-mix(in oklch, #e9cc00 60%, white);
+  --color-yellow-300: color-mix(in oklch, #e9cc00 80%, white);
+  --color-yellow-400: #e9cc00;
+  --color-yellow-500: color-mix(in oklch, #e9cc00 88%, black);
+  --color-yellow-600: color-mix(in oklch, #e9cc00 75%, black);
+  --color-yellow-700: color-mix(in oklch, #e9cc00 61%, black);
+  --color-yellow-800: color-mix(in oklch, #e9cc00 48%, black);
+  --color-yellow-900: color-mix(in oklch, #e9cc00 36%, black);
+  --color-yellow-950: color-mix(in oklch, #e9cc00 22%, black);
+}
+
 :root {
   color-scheme: dark;
   --ink: oklch(0.96 0.01 260);
@@ -8,7 +22,7 @@
   --panel-border: oklch(0.72 0.08 230 / 0.3);
   --primary-red: #fa0100;
   --primary-orange: #fd4700;
-  --primary-yellow: #e9cc00;
+  --primary-yellow: var(--color-yellow-400);
   --primary-blue: #0086ba;
 }
 
@@ -31,6 +45,25 @@ body {
 .glass-card {
   background: var(--panel);
   backdrop-filter: blur(10px);
+}
+
+[data-resume-controls] {
+  color: var(--primary-blue);
+  border-color: var(--primary-blue);
+}
+
+[data-resume-controls]:hover {
+  color: color-mix(in oklch, var(--primary-blue) 75%, white);
+  background: color-mix(in oklch, var(--primary-blue) 20%, transparent);
+}
+
+[data-resume-content] > p:first-of-type a {
+  color: var(--primary-blue);
+  text-decoration-color: color-mix(in oklch, var(--primary-blue) 45%, transparent);
+}
+
+[data-resume-content] > p:first-of-type a:hover {
+  color: color-mix(in oklch, var(--primary-blue) 75%, white);
 }
 
 .app-shell-loader {
