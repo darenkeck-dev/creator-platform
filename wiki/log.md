@@ -200,6 +200,11 @@
 - Fetched unchanged `darenkeck-content` revision `9e6eb043f4a05729771d569057edda3f7f746a66` and deployed the current Darenkeck production build.
 - Completed CloudFront invalidation `IEARPLIGYH8S465LOQK2G3XWZF` and verified live homepage-to-News navigation, the accessible Home breadcrumb, JavaScript MIME responses, robots, sitemap, and stale-chunk handling.
 
+## [2026-08-25] deploy | restore Darenkeck production from develop
+
+- Published Darenkeck production from `develop` at `e8a04ca` with content revision `9e6eb043f4a05729771d569057edda3f7f746a66`.
+- Completed CloudFront invalidation `IAX3M827F5FS647R6KTU69AEV9` and verified `https://darenkeck.com/` returns HTTP 200.
+
 ## [2026-08-17] docs | capture Darenkeck content and player ideas
 
 - Added future ideas for pinned News ordering, News links that target blog posts or future albums, album content routes, a traditional track player, coexistence rules with persistent combo playback, and track/album display metadata.
