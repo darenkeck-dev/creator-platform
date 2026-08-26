@@ -2,6 +2,7 @@
 
 ## [2026-08-25] web | strengthen player track hover
 
+- Replaced Darenkeck's fixed tone-picker seed with one random seed per page session, varying initial keywords without resetting state on close or route navigation.
 - Returned docked navigation cutout blur to 16px while retaining reduced brightness and saturation.
 - Moved docked inactive-row backdrop filtering to the clipped row groups so every expanded navigation row blurs the document behind its letter cutouts.
 - Increased docked inactive-row cutout isolation to 32px blur with 45% brightness and 55% saturation, further obscuring underlying document text.

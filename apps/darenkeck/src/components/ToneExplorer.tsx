@@ -30,8 +30,9 @@ export function ToneExplorer({
 }: ToneExplorerProps) {
   const closeTimerRef = useRef<number | null>(null);
   const [submitSucceeded, setSubmitSucceeded] = useState(false);
+  const [pickerSeed] = useState(() => `darenkeck-tone-explorer:${crypto.randomUUID()}`);
   const picker = useToneWordPicker({
-    seed: "darenkeck-tone-explorer",
+    seed: pickerSeed,
     explorationMode: "distinct-other-roots",
     maxSelectedWords: 6,
   });

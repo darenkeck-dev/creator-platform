@@ -390,7 +390,12 @@ try {
 
   await page.getByRole("button", { name: "Explore combinations by tone" }).click();
   await page.getByRole("button", { name: "OK" }).click();
-  await page.getByTitle("Soft, careful, and non-threatening.").click();
+  const selectedToneWord = page
+    .locator("[data-tone-explorer-suggestions] button:not([aria-label])")
+    .first();
+  const selectedToneWordLabel = (await selectedToneWord.textContent())?.trim();
+  if (!selectedToneWordLabel) throw new Error("Tone explorer did not provide an initial keyword.");
+  await selectedToneWord.click();
   await page.getByRole("button", { name: "Unmute audio" }).click();
   await page.getByRole("button", { name: "Close tone explorer" }).click();
   const requestCountBeforeNavigation = randomRequests;
@@ -678,7 +683,8 @@ try {
 
   await page.getByRole("button", { name: "Explore combinations by tone" }).click();
   const selectedClass = await page
-    .getByTitle("Soft, careful, and non-threatening.")
+    .locator("[data-tone-explorer-suggestions]")
+    .getByRole("button", { name: selectedToneWordLabel, exact: true })
     .getAttribute("class");
   if (!selectedClass?.includes("bg-white/85")) {
     throw new Error("Selected tone words were not preserved on /dev.");
