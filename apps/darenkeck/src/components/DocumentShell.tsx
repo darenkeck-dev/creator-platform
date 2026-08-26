@@ -208,10 +208,53 @@ export function DocumentShell({
           >
             <div aria-hidden="true" className="-mt-px h-px" ref={stickySentinelRef} />
             <div
-              className={`sticky top-0 z-20 w-full print:hidden ${stuck ? "h-10" : ""}`}
+              className={`sticky top-0 z-20 w-full print:hidden ${stuck ? "h-10 shadow-[0_6px_18px_rgba(0,0,0,0.3)]" : ""}`}
               data-document-nav
               data-document-nav-stuck={stuck ? "" : undefined}
             >
+              <div
+                className="absolute right-2 top-1 z-30 flex items-center gap-1"
+                data-document-navigation-controls
+              >
+                {stuck && documentControls?.dockedTone ? (
+                  <div
+                    className="flex h-8 w-8 items-center justify-center leading-none [&_[data-tone-control]]:!h-8 [&_[data-tone-control]]:!w-8 [&_[data-tone-control]]:!rounded-none [&_[data-tone-control]]:!bg-transparent [&_[data-tone-control]]:!shadow-none [&_[data-tone-control]]:!backdrop-blur-none [&_[data-tone-control]]:hover:!bg-black/20"
+                    data-document-tone-control
+                  >
+                    {documentControls.dockedTone}
+                  </div>
+                ) : null}
+                <button
+                  aria-expanded={navigationOpen}
+                  aria-label={navigationOpen ? "Hide navigation" : "Show navigation"}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-white transition-colors duration-200 hover:bg-black/25 motion-reduce:transition-none"
+                  data-document-navigation-toggle
+                  onClick={() => setNavigationOpen((open) => !open)}
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    fill="none"
+                    height="20"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeWidth="1.8"
+                    viewBox="0 0 24 24"
+                    width="20"
+                  >
+                    <path
+                      className={`origin-center transition-[opacity,transform] duration-200 motion-reduce:transition-none ${navigationOpen ? "rotate-90 opacity-0" : "rotate-0 opacity-100"}`}
+                      d="M5 7h14M5 12h14M5 17h14"
+                      data-document-navigation-icon="hamburger"
+                    />
+                    <path
+                      className={`origin-center transition-[opacity,transform] duration-200 motion-reduce:transition-none ${navigationOpen ? "rotate-0 opacity-100" : "-rotate-90 opacity-0"}`}
+                      d="m6 9 6 6 6-6"
+                      data-document-navigation-icon="caret"
+                    />
+                  </svg>
+                </button>
+              </div>
               <InactiveDocumentNavigationRows
                 currentLabel={sectionNavigation.label}
                 navigationOpen={navigationOpen}
@@ -327,49 +370,6 @@ export function DocumentShell({
                 aria-hidden="true"
                 data-document-section-offset={sectionNavigation.offset}
               />
-              <div
-                className="absolute right-2 top-1/2 z-20 flex -translate-y-1/2 items-center gap-1"
-                data-document-navigation-controls
-              >
-                {stuck && documentControls?.dockedTone ? (
-                  <div
-                    className="flex h-8 w-8 items-center justify-center leading-none [&_[data-tone-control]]:!h-8 [&_[data-tone-control]]:!w-8 [&_[data-tone-control]]:!rounded-none [&_[data-tone-control]]:!bg-transparent [&_[data-tone-control]]:!shadow-none [&_[data-tone-control]]:!backdrop-blur-none [&_[data-tone-control]]:hover:!bg-black/20"
-                    data-document-tone-control
-                  >
-                    {documentControls.dockedTone}
-                  </div>
-                ) : null}
-                <button
-                  aria-expanded={navigationOpen}
-                  aria-label={navigationOpen ? "Hide navigation" : "Show navigation"}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-white transition-colors duration-200 hover:bg-black/25 motion-reduce:transition-none"
-                  data-document-navigation-toggle
-                  onClick={() => setNavigationOpen((open) => !open)}
-                  type="button"
-                >
-                  <svg
-                    aria-hidden="true"
-                    fill="none"
-                    height="20"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeWidth="1.8"
-                    viewBox="0 0 24 24"
-                    width="20"
-                  >
-                    <path
-                      className={`origin-center transition-[opacity,transform] duration-200 motion-reduce:transition-none ${navigationOpen ? "rotate-90 opacity-0" : "rotate-0 opacity-100"}`}
-                      d="M5 7h14M5 12h14M5 17h14"
-                      data-document-navigation-icon="hamburger"
-                    />
-                    <path
-                      className={`origin-center transition-[opacity,transform] duration-200 motion-reduce:transition-none ${navigationOpen ? "rotate-0 opacity-100" : "-rotate-90 opacity-0"}`}
-                      d="m6 9 6 6 6-6"
-                      data-document-navigation-icon="caret"
-                    />
-                  </svg>
-                </button>
-              </div>
             </div>
               <InactiveDocumentNavigationRows
                 currentLabel={sectionNavigation.label}

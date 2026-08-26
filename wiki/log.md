@@ -2,6 +2,8 @@
 
 ## [2026-08-25] web | strengthen player track hover
 
+- Added a restrained downward shadow to the docked document navigation, mirroring the lower control bar's upward separation from page content.
+- Anchored document navigation's right-side controls to its top row so expanding a docked menu does not move the hamburger/caret away from the pointer.
 - Replaced Darenkeck's fixed tone-picker seed with one random seed per page session, varying initial keywords without resetting state on close or route navigation.
 - Returned docked navigation cutout blur to 16px while retaining reduced brightness and saturation.
 - Moved docked inactive-row backdrop filtering to the clipped row groups so every expanded navigation row blurs the document behind its letter cutouts.

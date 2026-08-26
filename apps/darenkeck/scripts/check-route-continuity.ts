@@ -754,9 +754,13 @@ try {
     const documentNav = page.locator("[data-document-nav]");
     await scrollDocument(page, "Desktop blog");
     const fixedNavBox = await documentNav.boundingBox();
+    const fixedNavShadow = await documentNav.evaluate(
+      (navigation) => getComputedStyle(navigation).boxShadow
+    );
     if (
       !fixedNavBox ||
       Math.abs(fixedNavBox.y) > 1 ||
+      !fixedNavShadow.includes("0px 6px 18px") ||
       (await documentNav.locator("[data-document-nav-fill]").getAttribute("fill-opacity")) !==
         "0.94" ||
       !(await documentNav.locator("[data-document-current-nav]").evaluate((navigation) =>
@@ -764,12 +768,15 @@ try {
       )) ||
       (await documentNav.getByRole("button", { name: "Show navigation" }).count()) !== 1
     ) {
-      throw new Error(`Document navigation did not dock at the top: ${JSON.stringify(fixedNavBox)}`);
+      throw new Error(
+        `Document navigation did not dock with separation: ${JSON.stringify({ fixedNavBox, fixedNavShadow })}`
+      );
     }
     const dockedContentBeforeNavigation = await page
       .locator("[data-document-content-surface]")
       .boundingBox();
     const dockedNavigationToggle = documentNav.getByRole("button", { name: "Show navigation" });
+    const dockedNavigationToggleBeforeBox = await dockedNavigationToggle.boundingBox();
     await dockedNavigationToggle.click();
     await page.waitForTimeout(350);
     const dockedOpenNavBox = await documentNav.boundingBox();
@@ -798,9 +805,11 @@ try {
       !dockedOpenNavBox ||
       !dockedCurrentNavBox ||
       !dockedContentWithNavigation ||
+      !dockedNavigationToggleBeforeBox ||
       Math.abs(dockedOpenNavBox.height - 40) > 1 ||
       Math.abs(dockedContentWithNavigation.y - dockedContentBeforeNavigation.y) > 1 ||
       Math.abs(dockedCurrentNavBox.y - 44) > 1 ||
+      Math.abs(dockedNavigationToggleBeforeBox.y - 4) > 1 ||
       dockedInactiveRows.map((row) => row.label).join("|") !== "resume|music|news" ||
       dockedInactiveGroupFilters.some(
         (filter) => {
@@ -814,6 +823,18 @@ try {
     ) {
       throw new Error(
         `Docked navigation moved content or lacked cutout blur: ${JSON.stringify({ dockedContentBeforeNavigation, dockedContentWithNavigation, dockedCurrentNavBox, dockedInactiveGroupFilters, dockedInactiveRows, dockedOpenNavBox })}`
+      );
+    }
+    const dockedNavigationToggleOpenBox = await documentNav
+      .getByRole("button", { name: "Hide navigation" })
+      .boundingBox();
+    if (
+      !dockedNavigationToggleOpenBox ||
+      Math.abs(dockedNavigationToggleOpenBox.x - dockedNavigationToggleBeforeBox.x) > 1 ||
+      Math.abs(dockedNavigationToggleOpenBox.y - dockedNavigationToggleBeforeBox.y) > 1
+    ) {
+      throw new Error(
+        `Docked navigation toggle moved while expanding: ${JSON.stringify({ dockedNavigationToggleBeforeBox, dockedNavigationToggleOpenBox })}`
       );
     }
     await documentNav.getByRole("button", { name: "Hide navigation" }).click();
