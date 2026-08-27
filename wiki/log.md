@@ -7,6 +7,7 @@
 
 ## [2026-08-26] web | match Home navigation animation
 
+- Deployed Darenkeck production from `b7ec042` with content revision `9e6eb043f4a05729771d569057edda3f7f746a66`; CloudFront invalidation `I6VAGNNDXAP2LN3ME7HZILEOVG` completed and the public homepage returned HTTP 200.
 - Added an experimental 24% white tint inside every navigation cutout label while retaining the row-color mask and dark exterior edge.
 - Extracted shared Home/document navigation metadata and SVG artwork, then added a measured layout that preserves 10% outer insets and evenly interpolates visible label centers as the container resizes.
 - Made every expanded document row opaque, moved Resume's docked Tone beside Home, and hid Tone while menus expand.
