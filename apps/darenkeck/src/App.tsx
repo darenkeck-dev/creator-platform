@@ -22,6 +22,11 @@ import {
   MusicTransportLoader,
 } from "./components/MusicTransport";
 import { ShellLoader } from "./components/ShellLoader";
+import {
+  NavigationRowGraphic,
+  SITE_NAVIGATION_ITEMS,
+  useSiteNavigationLayout,
+} from "./components/SiteNavigation";
 import { ToneExplorer, ToneExplorerExplainer, ToneExplorerIcon } from "./components/ToneExplorer";
 import {
   advanceJourney,
@@ -464,6 +469,7 @@ export function App() {
   const [isToneExplorerOpen, setIsToneExplorerOpen] = useState(false);
   const [toneExplorerOpenedFromDock, setToneExplorerOpenedFromDock] = useState(false);
   const [showToneExplorerExplainer, setShowToneExplorerExplainer] = useState(false);
+  const homeNavigationLayout = useSiteNavigationLayout<HTMLElement>();
   const [toneExplorerAcknowledged, setToneExplorerAcknowledged] = useState(false);
   const [playerEnabled, setPlayerEnabled] = useState(false);
   const [managerEnabled, setManagerEnabled] = useState(false);
@@ -1191,98 +1197,30 @@ export function App() {
                     className={`absolute inset-x-0 bottom-full z-0 grid overflow-hidden transition-[clip-path,gap,grid-template-rows] duration-300 motion-reduce:transition-none ${homeNavigationOpen ? "[clip-path:inset(0_0_0_0)] ease-out" : "pointer-events-none [clip-path:inset(0_0_0_100%)] ease-in"}`}
                     data-home-navigation-rows
                     inert={!homeNavigationOpen}
+                    ref={homeNavigationLayout.containerRef}
                     style={{
                       gap: homeNavigationOpen ? "4px" : "0px",
                       gridTemplateRows: `repeat(4, ${homeNavigationOpen ? "40px" : "0px"})`,
                     }}
                   >
-                    {[
-                      { color: "var(--primary-blue)", label: "Resume", offset: 87, route: "/dev" },
-                      {
-                        color: "var(--primary-orange)",
-                        label: "Blog",
-                        offset: 56,
-                        route: "/blog",
-                      },
-                      {
-                        color: "var(--primary-red)",
-                        label: "Music",
-                        offset: 35,
-                        route: "/music",
-                      },
-                      { color: "var(--primary-yellow)", label: "News", offset: 10, route: "/news" },
-                    ].map(({ color, label, offset, route }) => {
-                      const maskId = `home-navigation-${label.toLowerCase()}-mask`;
-                      const edgeMaskId = `home-navigation-${label.toLowerCase()}-edge-mask`;
+                    {SITE_NAVIGATION_ITEMS.map((item) => {
+                      const maskId = `home-navigation-${item.key}-mask`;
+                      const edgeMaskId = `home-navigation-${item.key}-edge-mask`;
                       return (
                         <Link
                           className="group relative block min-h-0 overflow-hidden backdrop-blur-[4px] transition hover:brightness-110"
-                          key={route}
+                          key={item.route}
                           onClick={() => setHomeNavigationOpen(false)}
-                          to={route}
+                          to={item.route}
                         >
-                          <svg aria-hidden="true" className="h-full w-full">
-                            <defs>
-                              <mask id={maskId}>
-                                <rect fill="white" height="100%" width="100%" />
-                                <text
-                                  dominantBaseline="central"
-                                  fill="#333333"
-                                  fontFamily="inherit"
-                                  fontSize="44"
-                                  fontWeight="900"
-                                  letterSpacing="0.5"
-                                  textAnchor={offset === 10 ? "start" : offset === 87 ? "end" : "middle"}
-                                  x={`${offset}%`}
-                                  y="50%"
-                                >
-                                  {label.toUpperCase()}
-                                </text>
-                              </mask>
-                              <mask id={edgeMaskId}>
-                                <rect fill="white" height="100%" width="100%" />
-                                <text
-                                  dominantBaseline="central"
-                                  fill="black"
-                                  fontFamily="inherit"
-                                  fontSize="44"
-                                  fontWeight="900"
-                                  letterSpacing="0.5"
-                                  textAnchor={offset === 10 ? "start" : offset === 87 ? "end" : "middle"}
-                                  x={`${offset}%`}
-                                  y="50%"
-                                >
-                                  {label.toUpperCase()}
-                                </text>
-                              </mask>
-                            </defs>
-                            <rect
-                              data-navigation-row-fill
-                              fill={color}
-                              height="100%"
-                              mask={`url(#${maskId})`}
-                              width="100%"
-                            />
-                            <text
-                              data-navigation-label-edge="dark"
-                              dominantBaseline="central"
-                              fill="none"
-                              fontFamily="inherit"
-                              fontSize="44"
-                              fontWeight="900"
-                              letterSpacing="0.5"
-                              mask={`url(#${edgeMaskId})`}
-                              stroke="rgba(0,0,0,0.62)"
-                              strokeLinejoin="round"
-                              strokeWidth="1"
-                              textAnchor={offset === 10 ? "start" : offset === 87 ? "end" : "middle"}
-                              x={`${offset}%`}
-                              y="50%"
-                            >
-                              {label.toUpperCase()}
-                            </text>
-                          </svg>
-                          <span className="sr-only">{label}</span>
+                          <NavigationRowGraphic
+                            edgeMaskId={edgeMaskId}
+                            item={item}
+                            maskId={maskId}
+                            position={homeNavigationLayout.positions[item.key]}
+                            variant="home"
+                          />
+                          <span className="sr-only">{`${item.label[0]}${item.label.slice(1).toLowerCase()}`}</span>
                         </Link>
                       );
                     })}

@@ -179,13 +179,24 @@ try {
   const homeNavigationMaskPositions = await homeNavigationRows
     .locator("mask[id$='-mask']:not([id$='-edge-mask']) text")
     .evaluateAll((labels) =>
-      labels.map((label) => ({
-        baseline: label.getAttribute("dominant-baseline"),
-        fill: label.getAttribute("fill"),
-        fontSize: label.getAttribute("font-size"),
-        x: label.getAttribute("x"),
-      }))
+      labels.map((label) => {
+        const text = label as SVGTextElement;
+        const x = Number(text.getAttribute("x"));
+        const width = text.getComputedTextLength();
+        const anchor = text.getAttribute("text-anchor");
+        return {
+          anchor,
+          baseline: text.getAttribute("dominant-baseline"),
+          center: anchor === "start" ? x + width / 2 : anchor === "end" ? x - width / 2 : x,
+          fill: text.getAttribute("fill"),
+          fontSize: text.getAttribute("font-size"),
+          x,
+        };
+      })
     );
+  const homeNavigationVisualGaps = homeNavigationMaskPositions
+    .slice(0, -1)
+    .map((label, index) => label.center - homeNavigationMaskPositions[index + 1]!.center);
   const homePanelShellPosition = await page
     .locator("[data-home-panel-shell]")
     .evaluate((shell) => getComputedStyle(shell).position);
@@ -290,8 +301,9 @@ try {
     (await homeNavigationRows.locator("mask[id$='-edge-mask']").count()) !== 4 ||
     (await homeNavigationRows.locator('[data-navigation-label-edge="light"]').count()) !== 0 ||
     homeNavigationMaskLabels.join("|") !== "RESUME|BLOG|MUSIC|NEWS" ||
-    homeNavigationMaskPositions.map((label) => label.x).join("|") !==
-      "87%|56%|35%|10%" ||
+    Math.abs(homeNavigationMaskPositions[0]!.x - homeNavigationRowsBox.width * 0.9) > 1 ||
+    Math.abs(homeNavigationMaskPositions[3]!.x - homeNavigationRowsBox.width * 0.1) > 1 ||
+    Math.max(...homeNavigationVisualGaps) - Math.min(...homeNavigationVisualGaps) > 1 ||
     homeNavigationMaskPositions.some((label) => label.baseline !== "central") ||
     homeNavigationMaskPositions.some((label) => label.fill !== "#333333") ||
     homeNavigationMaskPositions.some((label) => label.fontSize !== "44") ||
@@ -528,6 +540,12 @@ try {
   const documentNavigationRowColors = await documentNavigationRows
     .locator("[data-document-navigation-row-fill]")
     .evaluateAll((fills) => fills.map((fill) => getComputedStyle(fill).fill));
+  const documentNavigationRowOpacities = await documentNavigationRows
+    .locator("[data-document-navigation-row-fill]")
+    .evaluateAll((fills) => fills.map((fill) => fill.getAttribute("fill-opacity")));
+  const openDocumentCurrentOpacity = await resumeDocumentNav
+    .locator("[data-document-nav-fill]")
+    .getAttribute("fill-opacity");
   const documentNavigationParentBox = await resumeDocumentNav.boundingBox();
   const documentCurrentNavigationBox = await resumeDocumentNav
     .locator("[data-document-current-nav]")
@@ -553,6 +571,8 @@ try {
     documentNavigationRowBoxes.map((row) => row.label).join("|") !== "blog|music|news" ||
     documentNavigationRowColors.join("|") !==
       "rgb(253, 71, 0)|rgb(250, 1, 0)|rgb(233, 204, 0)" ||
+    documentNavigationRowOpacities.some((opacity) => opacity !== "1") ||
+    openDocumentCurrentOpacity !== "1" ||
     documentNavigationRowBoxes.some(
       (box) =>
         Math.abs(box.x - documentNavigationParentBox.x) > 1 ||
@@ -656,7 +676,7 @@ try {
       .locator('[data-document-label-edge="dark"][stroke-linejoin="round"]')
       .count()) !== 1 ||
     (await resumeDocumentNav
-      .locator("[data-document-current-nav] > svg mask[id$='-edge-mask']")
+      .locator("[data-document-current-nav] svg mask[id$='-edge-mask']")
       .count()) !== 1 ||
     (await resumeDocumentNav.locator('[data-document-label-edge="light"]').count()) !== 0 ||
     Math.abs(desktopMediaBox.y + desktopMediaBox.height - 720) > 1
@@ -678,7 +698,7 @@ try {
     desktopResumeContactColors.some((color) => color !== "rgb(0, 134, 186)") ||
     Math.abs(desktopHomeLinkBox.x - (resumeNavBox.x + 16)) > 1 ||
     Math.abs(
-      desktopSectionLinkBox.x + desktopSectionLinkBox.width - (resumeNavBox.x + resumeNavBox.width * 0.87)
+      desktopSectionLinkBox.x + desktopSectionLinkBox.width - (resumeNavBox.x + resumeNavBox.width * 0.9)
     ) > 1 ||
     (await resumeDocumentNav.getByRole("button", { name: "Minimize page" }).count()) !== 0 ||
     Math.abs(
@@ -887,6 +907,7 @@ try {
       Math.abs(dockedContentWithNavigation.y - dockedContentBeforeNavigation.y) > 1 ||
       Math.abs(dockedCurrentNavBox.y - 44) > 1 ||
       Math.abs(dockedNavigationToggleBeforeBox.y - 4) > 1 ||
+      (await documentNav.locator("[data-document-tone-control]").count()) !== 0 ||
       Math.abs(dockedHomeLinkOpenBox.x - dockedHomeLinkBeforeBox.x) > 1 ||
       Math.abs(dockedHomeLinkOpenBox.y - dockedHomeLinkBeforeBox.y) > 1 ||
       dockedInactiveRows.map((row) => row.label).join("|") !== "resume|music|news" ||
@@ -1014,10 +1035,43 @@ try {
   await mobileHomeLink.waitFor({ state: "visible" });
   await mobileSectionLink.waitFor({ state: "visible" });
   await mobileDocumentNavigationToggle.waitFor({ state: "visible" });
+  await mobileDocumentNavigationToggle.click();
+  await mobilePage.waitForTimeout(350);
+  const mobileNavigationPositions = await mobileResumeNav
+    .locator('[data-document-label-edge="dark"], [data-document-navigation-label-edge="dark"]')
+    .evaluateAll((labels) =>
+      labels.map((label) => {
+        const text = label as SVGTextElement;
+        const x = Number(text.getAttribute("x"));
+        const width = text.getComputedTextLength();
+        const anchor = text.getAttribute("text-anchor");
+        return {
+          center: anchor === "start" ? x + width / 2 : anchor === "end" ? x - width / 2 : x,
+          key: text.getAttribute("data-navigation-label-position"),
+          x,
+        };
+      })
+    );
+  const mobileNavigationVisualGaps = mobileNavigationPositions
+    .slice(0, -1)
+    .map((label, index) => label.center - mobileNavigationPositions[index + 1]!.center);
+  const mobileExpandedFillOpacities = await mobileResumeNav
+    .locator("[data-document-navigation-row-fill], [data-document-nav-fill]")
+    .evaluateAll((fills) => fills.map((fill) => fill.getAttribute("fill-opacity")));
+  const mobileExpandedNavBox = await mobileResumeNav.boundingBox();
+  await mobileDocumentNavigationToggle.click();
+  await mobilePage.waitForTimeout(350);
   if (
     (await mobileResumeNav.locator("[data-document-audio-control]").count()) !== 0 ||
     (await mobileResumeNav.locator("[data-document-tone-control]").count()) !== 0 ||
-    (await mobileResumeNav.getByRole("navigation", { name: "Breadcrumb" }).count()) !== 0
+    (await mobileResumeNav.getByRole("navigation", { name: "Breadcrumb" }).count()) !== 0 ||
+    !mobileExpandedNavBox ||
+    mobileNavigationPositions.map((position) => position.key).join("|") !==
+      "resume|blog|music|news" ||
+    Math.abs(mobileNavigationPositions[0]!.x - mobileExpandedNavBox.width * 0.9) > 1 ||
+    Math.abs(mobileNavigationPositions[3]!.x - mobileExpandedNavBox.width * 0.1) > 1 ||
+    Math.max(...mobileNavigationVisualGaps) - Math.min(...mobileNavigationVisualGaps) > 1 ||
+    mobileExpandedFillOpacities.some((opacity) => opacity !== "1")
   ) {
     throw new Error("Mobile upper navigation still contains media controls.");
   }
@@ -1041,7 +1095,7 @@ try {
     Math.abs(
       mobileUndockedSectionBox.x +
         mobileUndockedSectionBox.width -
-        (mobileUndockedNavBox.x + mobileUndockedNavBox.width * 0.87)
+        (mobileUndockedNavBox.x + mobileUndockedNavBox.width * 0.9)
     ) > 1 ||
     Math.abs(
       mobileUndockedNavigationToggleBox.x + mobileUndockedNavigationToggleBox.width -
@@ -1094,14 +1148,14 @@ try {
     mobileDockedToneStyle.borderRadius !== "0px" ||
     Math.abs(mobileDockedToneStyle.height - 32) > 1 ||
     Math.abs(mobileDockedToneStyle.width - 32) > 1 ||
+    mobileDockedToneStyle.x + mobileDockedToneStyle.width > dockedSectionLinkBox.x ||
     Math.abs(
       mobileDockedToneStyle.y +
         mobileDockedToneStyle.height / 2 -
         (mobileBottomNavBox.y + mobileBottomNavBox.height / 2)
     ) > 1 ||
     Math.abs(
-      mobileDockedToneStyle.x + mobileDockedToneStyle.width -
-        (mobileDockedNavigationToggleBox.x - 4)
+      mobileDockedToneStyle.x - (dockedHomeLinkBox.x + dockedHomeLinkBox.width + 8)
     ) > 1 ||
     Math.abs(
       mobileDockedNavigationToggleBox.x + mobileDockedNavigationToggleBox.width -
@@ -1111,7 +1165,7 @@ try {
     Math.abs(
       dockedSectionLinkBox.x +
         dockedSectionLinkBox.width -
-        (mobileBottomNavBox.x + mobileBottomNavBox.width * 0.87)
+        (mobileBottomNavBox.x + mobileBottomNavBox.width * 0.9)
     ) > 1 ||
     Math.abs(mobileBottomNavBox.y) > 1 ||
     Math.abs(mobileBottomNavBox.height - 40) > 1 ||
@@ -1313,17 +1367,19 @@ try {
     mediumNav.boundingBox(),
     mediumSectionLink.boundingBox(),
   ]);
+  const mediumBlogCenterRatio =
+    mediumNavBox && mediumSectionLinkBox
+      ? (mediumSectionLinkBox.x + mediumSectionLinkBox.width / 2 - mediumNavBox.x) /
+        mediumNavBox.width
+      : 0;
   if (
     !mediumNavBox ||
     !mediumSectionLinkBox ||
-    Math.abs(
-      mediumSectionLinkBox.x +
-        mediumSectionLinkBox.width / 2 -
-        (mediumNavBox.x + mediumNavBox.width * 0.56)
-    ) > 1
+    mediumBlogCenterRatio <= 0.51 ||
+    mediumBlogCenterRatio >= 0.62
   ) {
     throw new Error(
-      `Medium section navigation is misplaced: ${JSON.stringify({ mediumNavBox, mediumSectionLinkBox })}`
+      `Medium section navigation is misplaced: ${JSON.stringify({ mediumBlogCenterRatio, mediumNavBox, mediumSectionLinkBox })}`
     );
   }
   await scrollDocument(mediumPage, "Medium blog");

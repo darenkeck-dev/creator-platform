@@ -12,6 +12,8 @@
 
 ## Recent operational updates
 
+- Added width-aware navigation geometry that measures label widths and evenly spaces visible centers between fixed News/Resume insets, preventing Blog/Resume gaps from growing on wider screens.
+- Made expanded document navigation fills opaque, separated compact Resume/Blog positions, and prevented docked Tone from overlapping Resume.
 - Anchored the document Home icon alongside Tone and hamburger/caret in the stable top control layer so opening section navigation no longer moves it vertically.
 - Made minimized bottom bars transparent while retaining blurred translucent circles behind Play/Pause and Mute plus a matching square behind Restore; expanded bars keep their existing surface.
 - Aligned the floating `Daren Keck` wordmark and Tone control to the centered `max-w-4xl` content rail on wide viewports while preserving mobile safe-area insets.

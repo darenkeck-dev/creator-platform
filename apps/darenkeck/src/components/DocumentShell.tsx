@@ -4,6 +4,12 @@ import { Link } from "react-router-dom";
 
 import { ContentSizeButton } from "./ContentSizeButton";
 import { useDocumentControls } from "./DocumentControlsContext";
+import {
+  NavigationRowGraphic,
+  SITE_NAVIGATION_ITEMS,
+  type SiteNavigationItem,
+  useSiteNavigationLayout,
+} from "./SiteNavigation";
 
 type DocumentShellProps = {
   bottomAligned?: boolean;
@@ -12,25 +18,12 @@ type DocumentShellProps = {
   className?: string;
 };
 
-type DocumentNavigationRow = {
-  color: string;
-  label: string;
-  offset: number;
-  to: string;
-};
-
-const documentNavigationRows: DocumentNavigationRow[] = [
-  { color: "var(--primary-blue)", label: "RESUME", offset: 87, to: "/dev" },
-  { color: "var(--primary-orange)", label: "BLOG", offset: 56, to: "/blog" },
-  { color: "var(--primary-red)", label: "MUSIC", offset: 35, to: "/music" },
-  { color: "var(--primary-yellow)", label: "NEWS", offset: 10, to: "/news" },
-];
-
 function InactiveDocumentNavigationRows({
   currentLabel,
   navigationOpen,
   onNavigate,
   position,
+  positions,
   rows,
   stuck,
 }: {
@@ -38,7 +31,8 @@ function InactiveDocumentNavigationRows({
   navigationOpen: boolean;
   onNavigate: () => void;
   position: "above" | "below";
-  rows: DocumentNavigationRow[];
+  positions: Partial<Record<SiteNavigationItem["key"], number>>;
+  rows: SiteNavigationItem[];
   stuck: boolean;
 }) {
   if (rows.length === 0) return null;
@@ -56,81 +50,26 @@ function InactiveDocumentNavigationRows({
         marginTop: position === "below" && navigationOpen ? "4px" : "0px",
       }}
     >
-      {rows.map(({ color, label, offset, to }) => {
-        const textAnchor = offset === 10 ? "start" : offset === 87 ? "end" : "middle";
-        const maskId = `document-menu-${currentLabel.toLowerCase()}-${label.toLowerCase()}-mask`;
-        const edgeMaskId = `document-menu-${currentLabel.toLowerCase()}-${label.toLowerCase()}-edge-mask`;
+      {rows.map((item) => {
+        const maskId = `document-menu-${currentLabel.toLowerCase()}-${item.key}-mask`;
+        const edgeMaskId = `document-menu-${currentLabel.toLowerCase()}-${item.key}-edge-mask`;
         return (
           <Link
             className={`group relative block min-h-0 overflow-hidden transition-[backdrop-filter,filter] hover:brightness-110 ${stuck && navigationOpen ? "" : "backdrop-blur-[4px]"}`}
-            data-document-navigation-row={label.toLowerCase()}
-            key={to}
+            data-document-navigation-row={item.key}
+            key={item.route}
             onClick={onNavigate}
-            to={to}
+            to={item.route}
           >
-            <svg aria-hidden="true" className="h-full w-full overflow-hidden">
-              <defs>
-                <mask id={maskId}>
-                  <rect fill="white" height="100%" width="100%" />
-                  <text
-                    dominantBaseline="central"
-                    fill="#333333"
-                    fontFamily="inherit"
-                    fontSize="44"
-                    fontWeight="900"
-                    letterSpacing="0.5"
-                    textAnchor={textAnchor}
-                    x={`${offset}%`}
-                    y="50%"
-                  >
-                    {label}
-                  </text>
-                </mask>
-                <mask id={edgeMaskId}>
-                  <rect fill="white" height="100%" width="100%" />
-                  <text
-                    dominantBaseline="central"
-                    fill="black"
-                    fontFamily="inherit"
-                    fontSize="44"
-                    fontWeight="900"
-                    letterSpacing="0.5"
-                    textAnchor={textAnchor}
-                    x={`${offset}%`}
-                    y="50%"
-                  >
-                    {label}
-                  </text>
-                </mask>
-              </defs>
-              <rect
-                data-document-navigation-row-fill
-                fill={color}
-                fillOpacity={stuck ? "0.94" : "0.72"}
-                height="100%"
-                mask={`url(#${maskId})`}
-                width="100%"
-              />
-              <text
-                data-document-navigation-label-edge="dark"
-                dominantBaseline="central"
-                fill="none"
-                fontFamily="inherit"
-                fontSize="44"
-                fontWeight="900"
-                letterSpacing="0.5"
-                mask={`url(#${edgeMaskId})`}
-                stroke="rgba(0,0,0,0.62)"
-                strokeLinejoin="round"
-                strokeWidth="1"
-                textAnchor={textAnchor}
-                x={`${offset}%`}
-                y="50%"
-              >
-                {label}
-              </text>
-            </svg>
-            <span className="sr-only">{`${label[0]}${label.slice(1).toLowerCase()}`}</span>
+            <NavigationRowGraphic
+              edgeMaskId={edgeMaskId}
+              fillOpacity={navigationOpen ? "1" : stuck ? "0.94" : "0.72"}
+              item={item}
+              maskId={maskId}
+              position={positions[item.key]}
+              variant="document-inactive"
+            />
+            <span className="sr-only">{`${item.label[0]}${item.label.slice(1).toLowerCase()}`}</span>
           </Link>
         );
       })}
@@ -148,16 +87,17 @@ export function DocumentShell({
   const stickySentinelRef = useRef<HTMLDivElement | null>(null);
   const [stuck, setStuck] = useState(false);
   const [navigationOpen, setNavigationOpen] = useState(false);
+  const navigationLayout = useSiteNavigationLayout<HTMLDivElement>();
   const breadcrumbLabels = breadcrumbs.map((breadcrumb) => breadcrumb.label.toLowerCase());
   const sectionNavigation =
-    documentNavigationRows.find((row) => breadcrumbLabels.includes(row.label.toLowerCase())) ??
-    documentNavigationRows[0]!;
-  const sectionNavigationIndex = documentNavigationRows.indexOf(sectionNavigation);
-  const navigationRowsAbove = documentNavigationRows.slice(0, sectionNavigationIndex);
-  const navigationRowsBelow = documentNavigationRows.slice(sectionNavigationIndex + 1);
+    SITE_NAVIGATION_ITEMS.find((row) => breadcrumbLabels.includes(row.label.toLowerCase())) ??
+    SITE_NAVIGATION_ITEMS[0]!;
+  const sectionNavigationIndex = SITE_NAVIGATION_ITEMS.indexOf(sectionNavigation);
+  const navigationRowsAbove = SITE_NAVIGATION_ITEMS.slice(0, sectionNavigationIndex);
+  const navigationRowsBelow = SITE_NAVIGATION_ITEMS.slice(sectionNavigationIndex + 1);
   const sectionMaskId = `document-navigation-${sectionNavigation.label.toLowerCase()}-mask`;
   const sectionEdgeMaskId = `document-navigation-${sectionNavigation.label.toLowerCase()}-edge-mask`;
-  const sectionTextAnchor = sectionNavigation.offset === 10 ? "start" : sectionNavigation.offset === 87 ? "end" : "middle";
+  const sectionTextAnchor = sectionNavigation.textAnchor;
 
   useEffect(() => {
     const sentinel = stickySentinelRef.current;
@@ -211,12 +151,16 @@ export function DocumentShell({
               className={`sticky top-0 z-20 w-full print:hidden ${stuck ? "h-10 shadow-[0_6px_18px_rgba(0,0,0,0.3)]" : ""}`}
               data-document-nav
               data-document-nav-stuck={stuck ? "" : undefined}
+              ref={navigationLayout.containerRef}
             >
               <div
                 className="absolute right-2 top-1 z-30 flex items-center gap-1"
                 data-document-navigation-controls
               >
-                {stuck && documentControls?.dockedTone ? (
+                {stuck &&
+                !navigationOpen &&
+                sectionNavigation.label !== "RESUME" &&
+                documentControls?.dockedTone ? (
                   <div
                     className="flex h-8 w-8 items-center justify-center leading-none [&_[data-tone-control]]:!h-8 [&_[data-tone-control]]:!w-8 [&_[data-tone-control]]:!rounded-none [&_[data-tone-control]]:!bg-transparent [&_[data-tone-control]]:!shadow-none [&_[data-tone-control]]:!backdrop-blur-none [&_[data-tone-control]]:hover:!bg-black/20"
                     data-document-tone-control
@@ -275,6 +219,17 @@ export function DocumentShell({
                   />
                 </svg>
               </Link>
+              {stuck &&
+              !navigationOpen &&
+              sectionNavigation.label === "RESUME" &&
+              documentControls?.dockedTone ? (
+                <div
+                  className="absolute left-12 top-1 z-30 flex h-8 w-8 items-center justify-center leading-none sm:left-14 [&_[data-tone-control]]:!h-8 [&_[data-tone-control]]:!w-8 [&_[data-tone-control]]:!rounded-none [&_[data-tone-control]]:!bg-transparent [&_[data-tone-control]]:!shadow-none [&_[data-tone-control]]:!backdrop-blur-none [&_[data-tone-control]]:hover:!bg-black/20"
+                  data-document-tone-control
+                >
+                  {documentControls.dockedTone}
+                </div>
+              ) : null}
               <InactiveDocumentNavigationRows
                 currentLabel={sectionNavigation.label}
                 navigationOpen={navigationOpen}
@@ -282,95 +237,47 @@ export function DocumentShell({
                 position="above"
                 rows={navigationRowsAbove}
                 stuck={stuck}
+                positions={navigationLayout.positions}
               />
               <div
                 className={`relative flex h-10 w-full items-center transition-[backdrop-filter] duration-200 ${stuck ? "backdrop-blur-xl" : "backdrop-blur-sm"}`}
                 data-document-current-nav
               >
-                <svg aria-hidden="true" className="absolute inset-0 h-full w-full overflow-hidden">
-                <defs>
-                  <mask id={sectionMaskId}>
-                    <rect fill="white" height="100%" width="100%" />
-                    <text
-                      dominantBaseline="central"
-                      fill="#333333"
-                      fontFamily="inherit"
-                      fontSize="44"
-                      fontWeight="900"
-                      letterSpacing="0.5"
-                      textAnchor={sectionTextAnchor}
-                      x={`${sectionNavigation.offset}%`}
-                      y="50%"
-                    >
-                      {sectionNavigation.label}
-                    </text>
-                  </mask>
-                  <mask id={sectionEdgeMaskId}>
-                    <rect fill="white" height="100%" width="100%" />
-                    <text
-                      dominantBaseline="central"
-                      fill="black"
-                      fontFamily="inherit"
-                      fontSize="44"
-                      fontWeight="900"
-                      letterSpacing="0.5"
-                      textAnchor={sectionTextAnchor}
-                      x={`${sectionNavigation.offset}%`}
-                      y="50%"
-                    >
-                      {sectionNavigation.label}
-                    </text>
-                  </mask>
-                </defs>
-                <rect
-                  data-document-nav-fill
-                  fill={sectionNavigation.color}
-                  fillOpacity={stuck ? "0.94" : "0.72"}
-                  height="100%"
-                  mask={`url(#${sectionMaskId})`}
-                  width="100%"
-                />
-                <text
-                  data-document-label-edge="dark"
-                  dominantBaseline="central"
-                  fill="none"
-                  fontFamily="inherit"
-                  fontSize="44"
-                  fontWeight="900"
-                  letterSpacing="0.5"
-                  mask={`url(#${sectionEdgeMaskId})`}
-                  stroke="rgba(0,0,0,0.62)"
-                  strokeLinejoin="round"
-                  strokeWidth="1"
-                  textAnchor={sectionTextAnchor}
-                  x={`${sectionNavigation.offset}%`}
-                  y="50%"
+                <div className="absolute inset-0">
+                  <NavigationRowGraphic
+                    edgeMaskId={sectionEdgeMaskId}
+                    fillOpacity={navigationOpen ? "1" : stuck ? "0.94" : "0.72"}
+                    item={sectionNavigation}
+                    maskId={sectionMaskId}
+                    position={navigationLayout.positions[sectionNavigation.key]}
+                    variant="document-current"
+                  />
+                </div>
+                <Link
+                  aria-label={`${sectionNavigation.label[0]}${sectionNavigation.label.slice(1).toLowerCase()}`}
+                  className="absolute top-0 z-10 flex h-full items-center text-[44px] font-black leading-none tracking-[0.5px] text-transparent no-underline"
+                  data-document-section-link={sectionNavigation.key}
+                  style={{
+                    left:
+                      navigationLayout.positions[sectionNavigation.key] === undefined
+                        ? `${sectionNavigation.x}%`
+                        : `${navigationLayout.positions[sectionNavigation.key]}px`,
+                    transform:
+                      sectionTextAnchor === "start"
+                        ? undefined
+                        : sectionTextAnchor === "end"
+                          ? "translateX(-100%)"
+                          : "translateX(-50%)",
+                  }}
+                  to={sectionNavigation.route}
                 >
                   {sectionNavigation.label}
-                </text>
-              </svg>
-              <Link
-                aria-label={`${sectionNavigation.label[0]}${sectionNavigation.label.slice(1).toLowerCase()}`}
-                className="absolute top-0 z-10 flex h-full items-center text-[44px] font-black leading-none tracking-[0.5px] text-transparent no-underline"
-                data-document-section-link
-                style={{
-                  left: `${sectionNavigation.offset}%`,
-                  transform:
-                    sectionTextAnchor === "start"
-                      ? undefined
-                      : sectionTextAnchor === "end"
-                        ? "translateX(-100%)"
-                        : "translateX(-50%)",
-                }}
-                to={sectionNavigation.to}
-              >
-                {sectionNavigation.label}
-              </Link>
-              <span
-                aria-hidden="true"
-                data-document-section-offset={sectionNavigation.offset}
-              />
-            </div>
+                </Link>
+                <span
+                  aria-hidden="true"
+                  data-document-section-position={sectionNavigation.key}
+                />
+              </div>
               <InactiveDocumentNavigationRows
                 currentLabel={sectionNavigation.label}
                 navigationOpen={navigationOpen}
@@ -378,6 +285,7 @@ export function DocumentShell({
                 position="below"
                 rows={navigationRowsBelow}
                 stuck={stuck}
+                positions={navigationLayout.positions}
               />
             </div>
             <div
