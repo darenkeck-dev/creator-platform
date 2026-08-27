@@ -26,7 +26,9 @@ type MusicTransportProps = {
 const controlClassName =
   "flex h-10 w-10 shrink-0 items-center justify-center text-white transition hover:text-white/70 min-[360px]:h-12 min-[360px]:w-12";
 const controlsClassName =
-  "pointer-events-none fixed bottom-0 left-1/2 z-[140] grid h-[max(4rem,calc(env(safe-area-inset-bottom)+3.5rem))] w-full max-w-4xl -translate-x-1/2 grid-cols-[5.5rem_minmax(0,1fr)_5.5rem] items-center gap-2 border-t border-white/25 bg-black/40 px-4 pb-[env(safe-area-inset-bottom)] backdrop-blur-md min-[360px]:grid-cols-[7rem_minmax(0,1fr)_7rem] sm:gap-3 sm:px-6";
+  "pointer-events-none fixed bottom-0 left-1/2 z-[140] grid h-[max(4rem,calc(env(safe-area-inset-bottom)+3.5rem))] w-full max-w-4xl -translate-x-1/2 grid-cols-[5.5rem_minmax(0,1fr)_5.5rem] items-center gap-2 px-4 pb-[env(safe-area-inset-bottom)] min-[360px]:grid-cols-[7rem_minmax(0,1fr)_7rem] sm:gap-3 sm:px-6";
+const expandedControlsClassName =
+  "border-t border-white/25 bg-black/40 shadow-[0_-8px_24px_rgba(0,0,0,0.3)] backdrop-blur-md";
 const centerClassName =
   "flex min-w-0 justify-center px-1 text-center text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.95)]";
 
@@ -72,14 +74,24 @@ export function MusicTransportLoader({
       ) : null}
       <aside
         aria-label="Music player loading"
-        className={`${controlsClassName} ${contentMinimized ? "" : "shadow-[0_-8px_24px_rgba(0,0,0,0.3)]"}`}
+        className={`${controlsClassName} ${contentMinimized ? "" : expandedControlsClassName}`}
         data-music-transport
         data-music-transport-loading
       >
         {contentMinimized ? <MinimizedPlayerColorBorder /> : null}
         <div className="pointer-events-auto flex items-center gap-2">
-          <MusicPlayButton context="combo" onClick={onPlayToggle} playing={playing} />
-          <MusicMuteButton audioMuted={audioMuted} context="audio" onClick={onMuteToggle} />
+          <MusicPlayButton
+            backed={contentMinimized}
+            context="combo"
+            onClick={onPlayToggle}
+            playing={playing}
+          />
+          <MusicMuteButton
+            audioMuted={audioMuted}
+            backed={contentMinimized}
+            context="audio"
+            onClick={onMuteToggle}
+          />
         </div>
         <div className={centerClassName}><ShellLoader /></div>
         <div className="pointer-events-auto flex items-center justify-self-end gap-2">
@@ -94,10 +106,12 @@ export function MusicTransportLoader({
 }
 
 export function MusicPlayButton({
+  backed = false,
   context = "music",
   playing,
   onClick,
 }: {
+  backed?: boolean;
   context?: "combo" | "music";
   playing: boolean;
   onClick: () => void;
@@ -105,7 +119,7 @@ export function MusicPlayButton({
   return (
     <button
       aria-label={playing ? `Pause ${context}` : `Play ${context}`}
-      className={controlClassName}
+      className={`${controlClassName} ${backed ? "rounded-full bg-black/55 shadow-lg backdrop-blur-md hover:bg-black/65 supports-[backdrop-filter]:bg-black/35" : ""}`}
       data-player-control
       onClick={onClick}
       type="button"
@@ -125,17 +139,19 @@ export function MusicPlayButton({
 
 export function MusicMuteButton({
   audioMuted,
+  backed = false,
   context = "music",
   onClick,
 }: {
   audioMuted: boolean;
+  backed?: boolean;
   context?: "audio" | "music";
   onClick: () => void;
 }) {
   return (
     <button
       aria-label={audioMuted ? `Unmute ${context}` : `Mute ${context}`}
-      className={controlClassName}
+      className={`${controlClassName} ${backed ? "rounded-full bg-black/55 shadow-lg backdrop-blur-md hover:bg-black/65 supports-[backdrop-filter]:bg-black/35" : ""}`}
       data-player-control
       onClick={onClick}
       type="button"
@@ -204,13 +220,21 @@ export function MusicTransport({
       ) : null}
       <aside
         aria-label="Music player"
-        className={`${controlsClassName} ${contentMinimized ? "" : "shadow-[0_-8px_24px_rgba(0,0,0,0.3)]"}`}
+        className={`${controlsClassName} ${contentMinimized ? "" : expandedControlsClassName}`}
         data-music-transport
       >
         {contentMinimized ? <MinimizedPlayerColorBorder /> : null}
         <div className="pointer-events-auto col-start-1 flex items-center gap-2">
-          <MusicPlayButton onClick={onPlayToggle} playing={playing} />
-          <MusicMuteButton audioMuted={audioMuted} onClick={onMuteToggle} />
+          <MusicPlayButton
+            backed={contentMinimized}
+            onClick={onPlayToggle}
+            playing={playing}
+          />
+          <MusicMuteButton
+            audioMuted={audioMuted}
+            backed={contentMinimized}
+            onClick={onMuteToggle}
+          />
         </div>
         <div className={`${centerClassName} col-start-2`} data-music-track-label>
           {loading ? (

@@ -12,6 +12,8 @@
 
 ## Recent operational updates
 
+- Anchored the document Home icon alongside Tone and hamburger/caret in the stable top control layer so opening section navigation no longer moves it vertically.
+- Made minimized bottom bars transparent while retaining blurred translucent circles behind Play/Pause and Mute plus a matching square behind Restore; expanded bars keep their existing surface.
 - Aligned the floating `Daren Keck` wordmark and Tone control to the centered `max-w-4xl` content rail on wide viewports while preserving mobile safe-area insets.
 - Matched Home navigation to document menus by combining the horizontal clip reveal with bottom-anchored upward row expansion.
 - Added a small dry-run-first media orphan inventory with exact original-key comparison, derived-prefix ownership checks, related metadata findings, account/resource guards, and optional S3-only deletion after a second metadata-matched scan.

@@ -18,7 +18,7 @@ export function ContentSizeButton({
   return (
     <button
       aria-label={label}
-      className="inline-flex h-8 w-8 items-center justify-center rounded-lg transition-[background-color] duration-200 ease-in-out hover:bg-black/35 print:hidden"
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-[background-color] duration-200 ease-in-out print:hidden ${expanded ? "hover:bg-black/35" : "bg-black/55 shadow-lg backdrop-blur-md hover:bg-black/65 supports-[backdrop-filter]:bg-black/35"}`}
       data-content-minimize={expanded ? "" : undefined}
       data-content-restore={expanded ? undefined : ""}
       onClick={onClick}

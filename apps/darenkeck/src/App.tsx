@@ -343,18 +343,20 @@ function DarenKeckWordmark({
 type AudioControlProps = {
   audioButtonTitle: string;
   audioLevel: AudioLevel;
+  backed?: boolean;
   onAudioToggle: () => void;
 };
 
 function AudioControl({
   audioButtonTitle,
   audioLevel,
+  backed = false,
   onAudioToggle,
 }: AudioControlProps) {
   return (
     <button
       aria-label={audioButtonTitle}
-      className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center text-white transition hover:text-white/70 min-[360px]:h-12 min-[360px]:w-12 print:hidden"
+      className={`pointer-events-auto inline-flex h-10 w-10 items-center justify-center text-white transition hover:text-white/70 min-[360px]:h-12 min-[360px]:w-12 print:hidden ${backed ? "rounded-full bg-black/55 shadow-lg backdrop-blur-md hover:bg-black/65 supports-[backdrop-filter]:bg-black/35" : ""}`}
       data-audio-control
       onClick={(event) => {
         event.preventDefault();
@@ -906,6 +908,7 @@ export function App() {
     <AudioControl
       audioButtonTitle={audioButtonTitle}
       audioLevel={audioLevel}
+      backed={isContentMinimized}
       onAudioToggle={handleAudioLevelToggle}
     />
   );
@@ -1006,7 +1009,7 @@ export function App() {
               ) : null}
               {!documentDockVisible ? (
                 <div
-                  className={`pointer-events-none fixed bottom-0 left-1/2 z-[140] grid h-[max(4rem,calc(env(safe-area-inset-bottom)+3.5rem))] w-full max-w-4xl -translate-x-1/2 grid-cols-[5.5rem_minmax(0,1fr)_5.5rem] items-center gap-2 border-t border-white/25 bg-black/40 px-4 pb-[env(safe-area-inset-bottom)] backdrop-blur-md min-[360px]:grid-cols-[7rem_minmax(0,1fr)_7rem] sm:gap-3 sm:px-6 ${isContentMinimized ? "" : "shadow-[0_-8px_24px_rgba(0,0,0,0.3)]"}`}
+                  className={`pointer-events-none fixed bottom-0 left-1/2 z-[140] grid h-[max(4rem,calc(env(safe-area-inset-bottom)+3.5rem))] w-full max-w-4xl -translate-x-1/2 grid-cols-[5.5rem_minmax(0,1fr)_5.5rem] items-center gap-2 px-4 pb-[env(safe-area-inset-bottom)] min-[360px]:grid-cols-[7rem_minmax(0,1fr)_7rem] sm:gap-3 sm:px-6 ${isContentMinimized ? "" : "border-t border-white/25 bg-black/40 shadow-[0_-8px_24px_rgba(0,0,0,0.3)] backdrop-blur-md"}`}
                   data-media-controls
                 >
                   {isContentMinimized ? (
@@ -1028,6 +1031,7 @@ export function App() {
                   ) : null}
                   <div className="pointer-events-auto col-start-1 flex items-center gap-2">
                     <MusicPlayButton
+                      backed={isContentMinimized}
                       context="combo"
                       onClick={() => void playerRef.current?.togglePlayback()}
                       playing={isMusicPlaying}
@@ -1111,6 +1115,7 @@ export function App() {
             leading: (
               <>
                 <MusicPlayButton
+                  backed={isContentMinimized}
                   context="combo"
                   onClick={() => void playerRef.current?.togglePlayback()}
                   playing={isMusicPlaying}

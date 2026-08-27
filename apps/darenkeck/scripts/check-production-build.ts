@@ -400,19 +400,28 @@ try {
   const stopAfterMinimize = await page
     .getByRole("button", { name: "Stop music and return to ambient playback" })
     .boundingBox();
-  const minimizedMusicShadow = await page
-    .locator('[aria-label="Music player"]')
-    .evaluate((controls) => getComputedStyle(controls).boxShadow);
+  const minimizedMusicSurface = await page.locator('[aria-label="Music player"]').evaluate((controls) => {
+    const style = getComputedStyle(controls);
+    return {
+      backdropFilter: style.backdropFilter,
+      backgroundColor: style.backgroundColor,
+      borderTopWidth: style.borderTopWidth,
+      boxShadow: style.boxShadow,
+    };
+  });
   if (
     !stopBeforeMinimize ||
     !stopAfterMinimize ||
-    minimizedMusicShadow !== "none" ||
+    minimizedMusicSurface.backgroundColor !== "rgba(0, 0, 0, 0)" ||
+    minimizedMusicSurface.backdropFilter !== "none" ||
+    minimizedMusicSurface.borderTopWidth !== "0px" ||
+    minimizedMusicSurface.boxShadow !== "none" ||
     (await page.locator("[data-player-depth-gradient]").count()) !== 0 ||
     Math.abs(stopBeforeMinimize.x - stopAfterMinimize.x) > 1 ||
     Math.abs(stopBeforeMinimize.y - stopAfterMinimize.y) > 1
   ) {
     throw new Error(
-      `Minimized music controls retained depth treatment or moved Stop: ${JSON.stringify({ minimizedMusicShadow, stopAfterMinimize, stopBeforeMinimize })}`
+      `Minimized music controls retained a bar surface or moved Stop: ${JSON.stringify({ minimizedMusicSurface, stopAfterMinimize, stopBeforeMinimize })}`
     );
   }
   await page.getByRole("button", { name: "Restore page" }).click();

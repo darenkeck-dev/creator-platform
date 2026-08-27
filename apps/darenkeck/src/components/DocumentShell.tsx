@@ -255,6 +255,26 @@ export function DocumentShell({
                   </svg>
                 </button>
               </div>
+              <Link
+                aria-label="Home"
+                className="absolute left-2 top-1 z-30 inline-flex h-8 w-8 items-center justify-center rounded-lg text-white transition hover:bg-black/25 sm:left-4"
+                data-document-home-link
+                to="/"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="currentColor"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  width="20"
+                >
+                  <path
+                    clipRule="evenodd"
+                    d="M1.5 11.5 12 2.5l10.5 9H18V20H6v-8.5zM9.75 20v-6.5h4.5V20z"
+                    fillRule="evenodd"
+                  />
+                </svg>
+              </Link>
               <InactiveDocumentNavigationRows
                 currentLabel={sectionNavigation.label}
                 navigationOpen={navigationOpen}
@@ -329,26 +349,6 @@ export function DocumentShell({
                   {sectionNavigation.label}
                 </text>
               </svg>
-              <Link
-                aria-label="Home"
-                className="absolute left-2 top-1/2 z-10 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-white transition hover:bg-black/25 sm:left-4"
-                data-document-home-link
-                to="/"
-              >
-                <svg
-                  aria-hidden="true"
-                  fill="currentColor"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  width="20"
-                >
-                  <path
-                    clipRule="evenodd"
-                    d="M1.5 11.5 12 2.5l10.5 9H18V20H6v-8.5zM9.75 20v-6.5h4.5V20z"
-                    fillRule="evenodd"
-                  />
-                </svg>
-              </Link>
               <Link
                 aria-label={`${sectionNavigation.label[0]}${sectionNavigation.label.slice(1).toLowerCase()}`}
                 className="absolute top-0 z-10 flex h-full items-center text-[44px] font-black leading-none tracking-[0.5px] text-transparent no-underline"

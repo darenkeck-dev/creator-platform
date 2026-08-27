@@ -2,6 +2,8 @@
 
 ## [2026-08-26] web | match Home navigation animation
 
+- Moved the document Home icon out of the shifting current-section row and into the stable top control layer, matching the fixed vertical behavior of Tone and hamburger/caret.
+- Added an experimental minimized-player treatment with a transparent bar and dark blurred circle/circle/square backing for Play, audio, and Restore while leaving expanded controls unchanged.
 - Moved the floating wordmark and Tone control from viewport corners onto the centered `max-w-4xl` shelf/player rail with responsive safe-area padding.
 - Matched document menus by combining Home's horizontal clip reveal with four bottom-anchored rows that expand upward and collapse downward without moving the shelf.
 - Updated route-continuity and production browser assertions to verify both clip and row-height states.

@@ -366,6 +366,7 @@ try {
 
   await page.getByRole("button", { name: "Minimize page" }).click();
   await page.locator("[data-site-wordmark]").waitFor({ state: "visible" });
+  await page.waitForTimeout(250);
   const minimizedPlayerColorBorder = page.locator("[data-minimized-player-color-border]");
   await minimizedPlayerColorBorder.waitFor({ state: "visible" });
   const minimizedPlayerColorBorderStyle = await minimizedPlayerColorBorder.evaluate((border) => ({
@@ -373,28 +374,75 @@ try {
     hitTargetHeight: border.getBoundingClientRect().height,
     visibleHeight: border.firstElementChild?.getBoundingClientRect().height ?? 0,
   }));
-  const minimizedPlayerShadow = await page
-    .locator("[data-media-controls]")
-    .evaluate((controls) => getComputedStyle(controls).boxShadow);
+  const minimizedPlayerSurface = await page.locator("[data-media-controls]").evaluate((controls) => {
+    const style = getComputedStyle(controls);
+    return {
+      backdropFilter: style.backdropFilter,
+      backgroundColor: style.backgroundColor,
+      borderTopWidth: style.borderTopWidth,
+      boxShadow: style.boxShadow,
+    };
+  });
   const sameVideoOnMinimizedHome = await page.evaluate(
     () =>
       (window as Window & { continuityVideo?: HTMLVideoElement }).continuityVideo ===
       document.querySelector("video")
   );
+  const minimizedHomeControls = page.locator("[data-media-controls]");
+  const minimizedPlayStyle = await minimizedHomeControls
+    .getByRole("button", { name: /^(Play|Pause) combo$/ })
+    .evaluate((button) => {
+      const style = getComputedStyle(button);
+      return {
+        backdropFilter: style.backdropFilter,
+        backgroundColor: style.backgroundColor,
+        borderRadius: style.borderRadius,
+      };
+    });
+  const minimizedAudioStyle = await minimizedHomeControls
+    .locator("[data-audio-control]")
+    .evaluate((button) => {
+      const style = getComputedStyle(button);
+      return {
+        backdropFilter: style.backdropFilter,
+        backgroundColor: style.backgroundColor,
+        borderRadius: style.borderRadius,
+      };
+    });
+  const homeRestoreButton = page.getByRole("button", { name: "Restore page" });
+  const minimizedRestoreStyle = await homeRestoreButton.evaluate((button) => {
+    const style = getComputedStyle(button);
+    return {
+      backdropFilter: style.backdropFilter,
+      backgroundColor: style.backgroundColor,
+      borderRadius: style.borderRadius,
+    };
+  });
   if (
     !sameVideoOnMinimizedHome ||
-    minimizedPlayerShadow !== "none" ||
+    minimizedPlayerSurface.backgroundColor !== "rgba(0, 0, 0, 0)" ||
+    minimizedPlayerSurface.backdropFilter !== "none" ||
+    minimizedPlayerSurface.borderTopWidth !== "0px" ||
+    minimizedPlayerSurface.boxShadow !== "none" ||
     (await page.locator("[data-player-depth-gradient]").count()) !== 0 ||
     Math.abs(minimizedPlayerColorBorderStyle.visibleHeight - 2) > 0.5 ||
     minimizedPlayerColorBorderStyle.hitTargetHeight < 20 ||
     minimizedPlayerColorBorderStyle.colors.join("|") !==
-      "rgb(233, 204, 0)|rgb(250, 1, 0)|rgb(253, 71, 0)|rgb(0, 134, 186)"
+      "rgb(233, 204, 0)|rgb(250, 1, 0)|rgb(253, 71, 0)|rgb(0, 134, 186)" ||
+    minimizedPlayStyle.backgroundColor === "rgba(0, 0, 0, 0)" ||
+    Number.parseFloat(minimizedPlayStyle.borderRadius) < 20 ||
+    !minimizedPlayStyle.backdropFilter.includes("blur") ||
+    minimizedAudioStyle.backgroundColor === "rgba(0, 0, 0, 0)" ||
+    Number.parseFloat(minimizedAudioStyle.borderRadius) < 20 ||
+    !minimizedAudioStyle.backdropFilter.includes("blur") ||
+    minimizedRestoreStyle.backgroundColor === "rgba(0, 0, 0, 0)" ||
+    minimizedRestoreStyle.borderRadius !== "8px" ||
+    !minimizedRestoreStyle.backdropFilter.includes("blur")
   ) {
     throw new Error(
-      `Homepage minimize retained depth treatment, remounted ComboPlayer, or lost its color edge: ${JSON.stringify({ minimizedPlayerColorBorderStyle, minimizedPlayerShadow })}`
+      `Homepage minimized controls, depth, or color edge are invalid: ${JSON.stringify({ minimizedAudioStyle, minimizedPlayStyle, minimizedPlayerColorBorderStyle, minimizedPlayerSurface, minimizedRestoreStyle })}`
     );
   }
-  const homeRestoreButton = page.getByRole("button", { name: "Restore page" });
   const homeRestoreColor = await homeRestoreButton.evaluate(
     (button) => getComputedStyle(button).color
   );
@@ -798,6 +846,9 @@ try {
       .boundingBox();
     const dockedNavigationToggle = documentNav.getByRole("button", { name: "Show navigation" });
     const dockedNavigationToggleBeforeBox = await dockedNavigationToggle.boundingBox();
+    const dockedHomeLinkBeforeBox = await documentNav
+      .getByRole("link", { name: "Home" })
+      .boundingBox();
     await dockedNavigationToggle.click();
     await page.waitForTimeout(350);
     const dockedOpenNavBox = await documentNav.boundingBox();
@@ -821,16 +872,23 @@ try {
     const dockedInactiveGroupFilters = await documentNav
       .locator("[data-document-navigation-rows]")
       .evaluateAll((groups) => groups.map((group) => getComputedStyle(group).backdropFilter));
+    const dockedHomeLinkOpenBox = await documentNav
+      .getByRole("link", { name: "Home" })
+      .boundingBox();
     if (
       !dockedContentBeforeNavigation ||
       !dockedOpenNavBox ||
       !dockedCurrentNavBox ||
       !dockedContentWithNavigation ||
       !dockedNavigationToggleBeforeBox ||
+      !dockedHomeLinkBeforeBox ||
+      !dockedHomeLinkOpenBox ||
       Math.abs(dockedOpenNavBox.height - 40) > 1 ||
       Math.abs(dockedContentWithNavigation.y - dockedContentBeforeNavigation.y) > 1 ||
       Math.abs(dockedCurrentNavBox.y - 44) > 1 ||
       Math.abs(dockedNavigationToggleBeforeBox.y - 4) > 1 ||
+      Math.abs(dockedHomeLinkOpenBox.x - dockedHomeLinkBeforeBox.x) > 1 ||
+      Math.abs(dockedHomeLinkOpenBox.y - dockedHomeLinkBeforeBox.y) > 1 ||
       dockedInactiveRows.map((row) => row.label).join("|") !== "resume|music|news" ||
       dockedInactiveGroupFilters.some(
         (filter) => {
@@ -843,7 +901,7 @@ try {
       dockedInactiveRows.some((row, index) => Math.abs(row.y - [0, 88, 132][index]!) > 1)
     ) {
       throw new Error(
-        `Docked navigation moved content or lacked cutout blur: ${JSON.stringify({ dockedContentBeforeNavigation, dockedContentWithNavigation, dockedCurrentNavBox, dockedInactiveGroupFilters, dockedInactiveRows, dockedOpenNavBox })}`
+        `Docked navigation moved content or controls, or lacked cutout blur: ${JSON.stringify({ dockedContentBeforeNavigation, dockedContentWithNavigation, dockedCurrentNavBox, dockedHomeLinkBeforeBox, dockedHomeLinkOpenBox, dockedInactiveGroupFilters, dockedInactiveRows, dockedOpenNavBox })}`
       );
     }
     const dockedNavigationToggleOpenBox = await documentNav
