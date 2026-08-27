@@ -173,6 +173,14 @@ try {
         mask: fill.getAttribute("mask"),
       }))
     );
+  const homeNavigationWhiteTints = await homeNavigationRows
+    .locator('[data-navigation-label-tint="white"]')
+    .evaluateAll((labels) =>
+      labels.map((label) => ({
+        fill: label.getAttribute("fill"),
+        opacity: label.getAttribute("fill-opacity"),
+      }))
+    );
   const homeNavigationMaskLabels = await homeNavigationRows
     .locator("mask[id$='-mask']:not([id$='-edge-mask']) text")
     .allTextContents();
@@ -293,6 +301,10 @@ try {
     homeNavigationRowFills.map((fill) => fill.color).join("|") !==
       "rgb(0, 134, 186)|rgb(253, 71, 0)|rgb(250, 1, 0)|rgb(233, 204, 0)" ||
     homeNavigationRowFills.some((fill) => !fill.mask?.startsWith("url(#home-navigation-")) ||
+    homeNavigationWhiteTints.length !== 4 ||
+    homeNavigationWhiteTints.some(
+      (label) => label.fill !== "white" || label.opacity !== "0.24"
+    ) ||
     (await homeNavigationRows.locator('[data-navigation-label-edge="dark"]').count()) !== 4 ||
     (await homeNavigationRows.locator('[data-navigation-label-edge="dark"][stroke-width="1"]').count()) !== 4 ||
     (await homeNavigationRows

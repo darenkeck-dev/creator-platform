@@ -12,6 +12,7 @@
 
 ## Recent operational updates
 
+- Added a 24% white tint inside Home and document navigation cutout letters to improve contrast without removing the background reveal.
 - Added width-aware navigation geometry that measures label widths and evenly spaces visible centers between fixed News/Resume insets, preventing Blog/Resume gaps from growing on wider screens.
 - Made expanded document navigation fills opaque, separated compact Resume/Blog positions, and prevented docked Tone from overlapping Resume.
 - Anchored the document Home icon alongside Tone and hamburger/caret in the stable top control layer so opening section navigation no longer moves it vertically.

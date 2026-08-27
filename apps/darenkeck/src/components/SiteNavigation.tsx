@@ -188,6 +188,22 @@ export function NavigationRowGraphic({
         width="100%"
       />
       <text
+        data-navigation-label-position={item.key}
+        data-navigation-label-tint="white"
+        dominantBaseline="central"
+        fill="white"
+        fillOpacity="0.24"
+        fontFamily="inherit"
+        fontSize="44"
+        fontWeight="900"
+        letterSpacing="0.5"
+        textAnchor={item.textAnchor}
+        x={position ?? `${item.x}%`}
+        y="50%"
+      >
+        {item.label}
+      </text>
+      <text
         {...edgeAttributes}
         data-navigation-label-position={item.key}
         dominantBaseline="central"

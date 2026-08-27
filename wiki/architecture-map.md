@@ -83,6 +83,7 @@ Darenkeck homepage explorer:
 - Every document route exposes the same white general-navigation hamburger at the active row's far right. Opening preserves the canonical Resume/Blog/Music/News stack: earlier sections appear above the active row and later sections below it. Undocked expansion runs in normal flow and moves the content surface down; once sticky, the container remains 40px and the expanded stack overlays content without shifting it. Inactive rows combine grid-height expansion with a horizontal clip reveal; Home now uses the same combined animation. Docked expansion applies 16px backdrop blur plus reduced brightness and saturation at each clipped inactive-row group, ensuring every row obscures underlying text inside its letter cutouts. When sticky, Tone occupies a fixed 32px slot immediately left of the hamburger.
 - Expanded section fills are opaque. Docked Tone relocates beside Home on Resume and hides during expansion so it cannot overlap section labels.
 - `SiteNavigation` owns route metadata, measured layout, and row artwork for both Home and document menus. One observer combines container width with `getComputedTextLength()` measurements and writes concrete SVG `x` attributes, avoiding Safari mask-geometry inconsistencies.
+- Shared row artwork overlays cutout letters with 24% white before drawing the clipped dark exterior stroke.
 
 ## Public developer profile
 

@@ -7,6 +7,7 @@
 
 ## [2026-08-26] web | match Home navigation animation
 
+- Added an experimental 24% white tint inside every navigation cutout label while retaining the row-color mask and dark exterior edge.
 - Extracted shared Home/document navigation metadata and SVG artwork, then added a measured layout that preserves 10% outer insets and evenly interpolates visible label centers as the container resizes.
 - Made every expanded document row opaque, moved Resume's docked Tone beside Home, and hid Tone while menus expand.
 - Moved the document Home icon out of the shifting current-section row and into the stable top control layer, matching the fixed vertical behavior of Tone and hamburger/caret.
