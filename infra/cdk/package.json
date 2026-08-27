@@ -51,6 +51,7 @@
     "backfill:asset-schema-version": "bunx ts-node src/backfill-asset-schema-version.ts",
     "backfill:tone-analysis-display": "bunx ts-node src/backfill-tone-analysis-display.ts",
     "reconcile:asset-vectors": "bun src/reconcile-asset-vectors.ts",
+    "reconcile:media-orphans": "bun src/reconcile-media-orphans.ts",
     "purge:tone-reviews": "bunx ts-node src/purge-tone-reviews.ts"
   }
 }

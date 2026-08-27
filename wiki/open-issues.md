@@ -8,6 +8,7 @@
 ## Current high-priority follow-ups
 
 - Validate recursive delete in prod-like data after deployment; the new job worker should delete folder descendants and storage objects deepest-first.
+- Signed uploads and processors can recreate S3 objects after reconciliation. Keep the default seven-day grace period and review dry-run output before apply; generation fencing remains future hardening if media volume grows.
 - Upload/delete UI context should consistently respect active folder path.
 - Queued tone/conversion reprocessing jobs currently report queueing completion, not downstream tone/MediaConvert completion; link downstream worker progress to jobs if richer completion tracking is needed.
 - Publish and validate the Media Manager `/combos` controlled explorer; the source build is complete but this repository has no web deployment target.

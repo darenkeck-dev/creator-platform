@@ -169,17 +169,35 @@ try {
     throw new Error("Homepage must expose one inline Wayfarer Records link.");
   }
   const homepagePrimaryNav = page.locator("[data-home-navigation-rows]");
+  const initialHomepageNavigation = await homepagePrimaryNav.evaluate((navigation) => ({
+    clipPath: getComputedStyle(navigation).clipPath,
+    height: navigation.getBoundingClientRect().height,
+    rows: getComputedStyle(navigation).gridTemplateRows,
+  }));
   if (
     (await homepagePrimaryNav.getAttribute("aria-hidden")) !== "true" ||
     (await homepagePrimaryNav.evaluate((navigation) => getComputedStyle(navigation).opacity)) !== "1" ||
-    !(await homepagePrimaryNav.evaluate((navigation) =>
-      getComputedStyle(navigation).clipPath.includes("100%")
-    ))
+    !initialHomepageNavigation.clipPath.includes("100%") ||
+    initialHomepageNavigation.height > 1 ||
+    initialHomepageNavigation.rows.split(" ").some((row) => row !== "0px")
   ) {
     throw new Error("Homepage navigation rows are not hidden by default.");
   }
   await page.getByRole("button", { name: "Show navigation" }).click();
   await homepagePrimaryNav.getByRole("link", { name: "Resume" }).waitFor({ state: "visible" });
+  await page.waitForTimeout(350);
+  const openHomepageNavigation = await homepagePrimaryNav.evaluate((navigation) => ({
+    clipPath: getComputedStyle(navigation).clipPath,
+    rows: getComputedStyle(navigation).gridTemplateRows,
+  }));
+  if (
+    openHomepageNavigation.clipPath.includes("100%") ||
+    openHomepageNavigation.rows.split(" ").some((row) => row !== "40px")
+  ) {
+    throw new Error(
+      `Homepage navigation did not reveal and expand: ${JSON.stringify(openHomepageNavigation)}.`
+    );
+  }
   if ((await homepagePrimaryNav.getByRole("link", { name: "Home" }).count()) !== 0) {
     throw new Error("Homepage primary navigation still includes Home.");
   }

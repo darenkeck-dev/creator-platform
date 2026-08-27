@@ -1061,15 +1061,15 @@ export function App() {
 
           {!musicPlayback && !musicLoading && !documentHeaderDocked ? (
             <div
-              className="fixed z-[140] [right:max(1rem,env(safe-area-inset-right))] [top:max(1rem,env(safe-area-inset-top))] min-[360px]:[right:max(1.5rem,env(safe-area-inset-right))] min-[360px]:[top:max(1.5rem,env(safe-area-inset-top))]"
+              className="pointer-events-none fixed left-1/2 z-[140] flex w-full max-w-4xl -translate-x-1/2 justify-end [padding-right:max(1rem,env(safe-area-inset-right))] [top:max(1rem,env(safe-area-inset-top))] min-[360px]:[padding-right:max(1.5rem,env(safe-area-inset-right))] min-[360px]:[top:max(1.5rem,env(safe-area-inset-top))]"
               data-tone-floating
             >
-              {toneControl}
+              <div className="pointer-events-auto">{toneControl}</div>
             </div>
           ) : null}
 
           <div
-            className={`pointer-events-none fixed z-[140] [left:max(1rem,env(safe-area-inset-left))] [top:max(1rem,env(safe-area-inset-top))] min-[360px]:[left:max(1.5rem,env(safe-area-inset-left))] min-[360px]:[top:max(1.5rem,env(safe-area-inset-top))] ${documentHeaderDocked ? "hidden" : ""}`}
+            className={`pointer-events-none fixed left-1/2 z-[140] flex w-full max-w-4xl -translate-x-1/2 [padding-left:max(1rem,env(safe-area-inset-left))] [top:max(1rem,env(safe-area-inset-top))] min-[360px]:[padding-left:max(1.5rem,env(safe-area-inset-left))] min-[360px]:[top:max(1.5rem,env(safe-area-inset-top))] ${documentHeaderDocked ? "hidden" : ""}`}
             data-site-wordmark
           >
             <DarenKeckWordmark compact onClick={handleMenuNavigate} />
@@ -1183,9 +1183,13 @@ export function App() {
                   <nav
                     aria-hidden={!homeNavigationOpen}
                     aria-label="Primary"
-                    className={`absolute inset-x-0 bottom-full z-0 grid h-40 grid-rows-4 gap-1 transition-[clip-path] duration-300 ${homeNavigationOpen ? "[clip-path:inset(0_0_0_0)] ease-out" : "pointer-events-none [clip-path:inset(0_0_0_100%)] ease-in"}`}
+                    className={`absolute inset-x-0 bottom-full z-0 grid overflow-hidden transition-[clip-path,gap,grid-template-rows] duration-300 motion-reduce:transition-none ${homeNavigationOpen ? "[clip-path:inset(0_0_0_0)] ease-out" : "pointer-events-none [clip-path:inset(0_0_0_100%)] ease-in"}`}
                     data-home-navigation-rows
                     inert={!homeNavigationOpen}
+                    style={{
+                      gap: homeNavigationOpen ? "4px" : "0px",
+                      gridTemplateRows: `repeat(4, ${homeNavigationOpen ? "40px" : "0px"})`,
+                    }}
                   >
                     {[
                       { color: "var(--primary-blue)", label: "Resume", offset: 87, route: "/dev" },

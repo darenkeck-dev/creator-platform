@@ -1,5 +1,16 @@
 # Wiki Log
 
+## [2026-08-26] web | match Home navigation animation
+
+- Moved the floating wordmark and Tone control from viewport corners onto the centered `max-w-4xl` shelf/player rail with responsive safe-area padding.
+- Matched document menus by combining Home's horizontal clip reveal with four bottom-anchored rows that expand upward and collapse downward without moving the shelf.
+- Updated route-continuity and production browser assertions to verify both clip and row-height states.
+
+## [2026-08-26] ops | add narrow media orphan inventory
+
+- Replaced the uncommitted broad cleanup work with a standalone dry-run inventory for S3 orphan objects, missing referenced media, invalid asset records, and dangling music references.
+- Added optional account- and stage-guarded S3 deletion with a seven-day grace period, second metadata-matched scan, immediate consistent `META` check, and conditional ETag delete; DynamoDB findings remain report-only.
+
 ## [2026-08-25] web | strengthen player track hover
 
 - Added a restrained downward shadow to the docked document navigation, mirroring the lower control bar's upward separation from page content.

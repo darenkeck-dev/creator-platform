@@ -149,4 +149,12 @@ For MVP release smoke, confirm exact search, exact walk, random fallback, indexe
 - Recursive delete expands selected folders through the asset container GSI, deletes deepest descendants first, removes original/derived S3 objects for media assets, and removes asset DynamoDB records.
 - The web app uses `/api/jobs/*` proxy routes and polls active jobs for bottom-bar progress.
 
+## Media orphan inventory
+
+- Dry run: `bun run --cwd infra/cdk reconcile:media-orphans`.
+- The JSON report includes unreferenced canonical originals, derived objects without asset `META`, malformed storage keys, missing referenced originals/derived artifacts, invalid asset records, and dangling music asset/track references.
+- Apply: `bun run --cwd infra/cdk reconcile:media-orphans -- --apply --expected-account <12-digit-account> --confirm-production`.
+- Apply requires exact stage-derived table/bucket names, verifies the DynamoDB table account, passes S3 `ExpectedBucketOwner`, retains a seven-day grace period by default, and repeats the full inventory before deletion. Each candidate gets an immediate consistent `META` lookup and conditional S3 `If-Match` delete.
+- The command never mutates DynamoDB. Malformed keys and all metadata findings remain report-only.
+
 Related: [Current State](current-state.md), [Architecture Map](architecture-map.md), [Open Issues](open-issues.md).

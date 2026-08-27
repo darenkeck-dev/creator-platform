@@ -114,6 +114,10 @@ try {
     return state;
   });
   const homeNewsBox = await page.getByRole("region", { name: "Latest news" }).boundingBox();
+  const homeWordmarkBox = await page.getByRole("link", { name: "Daren Keck home" }).boundingBox();
+  const homeToneButtonBox = await page
+    .getByRole("button", { name: "Explore combinations by tone" })
+    .boundingBox();
   const homeNavigationRows = page.locator("[data-home-navigation-rows]");
   const homeNavigationToggle = page.locator("[data-home-navigation-toggle]");
   const homeColorBorder = page.locator("[data-home-color-border]");
@@ -125,17 +129,20 @@ try {
   }));
   const initialHomeNavigationStyle = await homeNavigationRows.evaluate((navigation) => ({
     clipPath: getComputedStyle(navigation).clipPath,
+    height: navigation.getBoundingClientRect().height,
     opacity: getComputedStyle(navigation).opacity,
+    rows: getComputedStyle(navigation).gridTemplateRows,
   }));
   const initialHomeNavigationToggleColor = await homeNavigationToggle.evaluate(
     (button) => getComputedStyle(button).color
   );
   await page.getByRole("button", { name: "Open navigation from color border" }).click();
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(350);
   const homeNavigationRowsBox = await homeNavigationRows.boundingBox();
-  const openHomeNavigationClipPath = await homeNavigationRows.evaluate(
-    (navigation) => getComputedStyle(navigation).clipPath
-  );
+  const openHomeNavigationStyle = await homeNavigationRows.evaluate((navigation) => ({
+    clipPath: getComputedStyle(navigation).clipPath,
+    rows: getComputedStyle(navigation).gridTemplateRows,
+  }));
   const openHomeColorBorderOpacity = await homeColorBorder.evaluate(
     (border) => getComputedStyle(border).opacity
   );
@@ -221,6 +228,8 @@ try {
     !homeMediaBox ||
     !homeMinimizeBox ||
     !homeNewsBox ||
+    !homeWordmarkBox ||
+    !homeToneButtonBox ||
     !homeNavigationRowsBox ||
     !homePanelSurfaceBox ||
     !homePanelSurfaceBoxAfterOpen ||
@@ -229,8 +238,11 @@ try {
     !homeTitleBox ||
     initialHomeNavigationStyle.opacity !== "1" ||
     !initialHomeNavigationStyle.clipPath.includes("100%") ||
+    initialHomeNavigationStyle.height > 1 ||
+    initialHomeNavigationStyle.rows.split(" ").some((row) => row !== "0px") ||
     initialHomeNavigationToggleColor !== "rgb(255, 255, 255)" ||
-    openHomeNavigationClipPath.includes("100%") ||
+    openHomeNavigationStyle.clipPath.includes("100%") ||
+    openHomeNavigationStyle.rows.split(" ").some((row) => row !== "40px") ||
     openHomeNavigationIconOpacities.join("|") !== "0|1" ||
     openHomeNavigationToggleColor !== "rgb(255, 255, 255)" ||
     initialHomeColorBorder.opacity !== "1" ||
@@ -248,6 +260,10 @@ try {
     homePanelBackground !== "rgba(0, 0, 0, 0)" ||
     homePanelSurfaceBackground === "rgba(0, 0, 0, 0)" ||
     homePanelSurfaceBottomRadius !== "0px" ||
+    Math.abs(homeWordmarkBox.x - (homePanelBox.x + 24)) > 1 ||
+    Math.abs(
+      homeToneButtonBox.x + homeToneButtonBox.width - (homePanelBox.x + homePanelBox.width - 24)
+    ) > 1 ||
     homeMediaBackground === "rgba(0, 0, 0, 0)" ||
     homeMediaShadow === "none" ||
     (await page.locator("[data-player-depth-gradient]").count()) !== 1 ||
@@ -319,18 +335,23 @@ try {
     Math.abs(homePanelBox.y + homePanelBox.height - homeMediaBox.y) > 1
   ) {
     throw new Error(
-      `Homepage row navigation, shelf controls, or viewport lock are invalid: ${JSON.stringify({ homeHeaderControlsBox, homeMinimizeBox, homeNavigationMaskLabels, homeNavigationMaskPositions, homeNavigationRowBoxes, homeNavigationRowFills, homeNavigationRowsBox, homeNavigationToggleBox, homePageScroll, homePanelBackground, homePanelBox, homePanelSurfaceBackground, homePanelSurfaceBottomRadius, homePanelSurfaceBox, homeMediaBox, homePanelShellPosition, homeTitleBox })}`
+      `Homepage row navigation, shelf controls, or viewport lock are invalid: ${JSON.stringify({ homeHeaderControlsBox, homeMinimizeBox, homeNavigationMaskLabels, homeNavigationMaskPositions, homeNavigationRowBoxes, homeNavigationRowFills, homeNavigationRowsBox, homeNavigationToggleBox, homePageScroll, homePanelBackground, homePanelBox, homePanelSurfaceBackground, homePanelSurfaceBottomRadius, homePanelSurfaceBox, homeMediaBox, homePanelShellPosition, homeTitleBox, homeToneButtonBox, homeWordmarkBox })}`
     );
   }
 
   await page.getByRole("button", { name: "Hide navigation" }).click();
   await page.waitForTimeout(350);
+  const closedHomeNavigationStyle = await homeNavigationRows.evaluate((navigation) => ({
+    clipPath: getComputedStyle(navigation).clipPath,
+    height: navigation.getBoundingClientRect().height,
+    rows: getComputedStyle(navigation).gridTemplateRows,
+  }));
   if (
     (await homeNavigationRows.evaluate((navigation) => getComputedStyle(navigation).opacity)) !==
       "1" ||
-    !(await homeNavigationRows.evaluate((navigation) =>
-      getComputedStyle(navigation).clipPath.includes("100%")
-    )) ||
+    !closedHomeNavigationStyle.clipPath.includes("100%") ||
+    closedHomeNavigationStyle.height > 1 ||
+    closedHomeNavigationStyle.rows.split(" ").some((row) => row !== "0px") ||
     (await page
       .locator("[data-home-navigation-toggle] [data-home-navigation-icon]")
       .evaluateAll((icons) => icons.map((icon) => getComputedStyle(icon).opacity).join("|"))) !==
@@ -340,7 +361,7 @@ try {
     (await homeColorBorder.evaluate((border) => getComputedStyle(border).opacity)) !== "1" ||
     (await homeNavigationRows.getAttribute("aria-hidden")) !== "true"
   ) {
-    throw new Error("Homepage navigation rows did not wipe from left to right and hide.");
+    throw new Error("Homepage navigation rows did not wipe and collapse into the shelf.");
   }
 
   await page.getByRole("button", { name: "Minimize page" }).click();
